@@ -1,10 +1,9 @@
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Verylog.Transform.InitialPass ( initialPass
                                      ) where
 
-import           Control.Exception
+--import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Lazy
 import qualified Data.HashSet             as S
@@ -14,16 +13,6 @@ import           Text.PrettyPrint
 
 import           Verylog.Language.Types
 import           Verylog.Language.Utils
-
-data St = St { _registers :: S.HashSet Id
-             , _wires     :: S.HashSet Id
-             , _ufs       :: M.HashMap Id [Id]
-             , _sources   :: S.HashSet Id
-             , _sinks     :: S.HashSet Id
-             , _irs       :: [IR]
-             }
-
-makeLenses ''St
 
 initialPass input = evalState pipeline initialSt
   where
@@ -65,14 +54,19 @@ dropIRs = irs %= filter pass2Filter
 -- 3. Check IR elements
 -- -----------------------------------------------------------------------------
 checkIR :: State St ()
-checkIR = do uses irs $ flip forM_ _checkIR
-             return ()
+checkIR = use irs >>= sequence_ . (map _checkIR)
 
 _checkIR :: IR -> State St ()
-_checkIR (Always{..})   = undefined
-_checkIR (ContAsgn{..}) = undefined
-_checkIR ir             = when (not $ pass2Filter ir)
-                         (throw $ PassError "pass2Filter filter is wrong")
+_checkIR (Always{..})   = checkStmt alwaysStmt
+_checkIR (ContAsgn{..}) = return ()
+_checkIR _              = return ()
+
+checkStmt                       :: Stmt -> State St ()
+checkStmt (Block{..})           = sequence_ $ checkStmt <$> blockStmts
+checkStmt (BlockingAsgn{..})    = return ()
+checkStmt (NonBlockingAsgn{..}) = return ()
+checkStmt (IfStmt{..})          = checkStmt thenStmt >> checkStmt elseStmt
+checkStmt Skip                  = return ()
 
 instance PPrint St where
   toDoc st = vcat $ stDoc : space : st^.irs.to (map toDoc)

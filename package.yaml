@@ -56,7 +56,7 @@ executables:
     - verylog-hs
 
 tests:
-  test:
+  vcgen-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:

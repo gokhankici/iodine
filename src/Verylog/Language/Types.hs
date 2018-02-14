@@ -1,20 +1,14 @@
-{-# language RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RecordWildCards #-}
 
-module Verylog.Language.Types (
-  Id,
+module Verylog.Language.Types where
 
-  IR    (..),
-  Event (..),
-  Stmt  (..),
-
-  PPrint (..),
-
-  PassError (..)
-  ) where
-
-import Text.PrettyPrint hiding (sep)
-import Control.Exception
-import Data.Typeable
+import           Control.Exception
+import           Control.Lens
+import qualified Data.HashSet             as S
+import qualified Data.HashMap.Lazy        as M
+import           Data.Typeable
+import           Text.PrettyPrint hiding (sep)
 
 type Id = String
 
@@ -48,6 +42,16 @@ data Stmt = Block           { blockStmts :: [Stmt] }
                             , elseStmt   :: Stmt
                             }
           | Skip
+
+data St = St { _registers :: S.HashSet Id
+             , _wires     :: S.HashSet Id
+             , _ufs       :: M.HashMap Id [Id]
+             , _sources   :: S.HashSet Id
+             , _sinks     :: S.HashSet Id
+             , _irs       :: [IR]
+             }
+
+makeLenses ''St
 
 class PPrint a where
   toDoc :: a -> Doc

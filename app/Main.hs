@@ -12,10 +12,13 @@ import Verylog.Language.Types
 import Verylog.Transform.InitialPass
 
 main :: IO ()
-main =  vcgen `catch` esHandle
+main =  vcgen `catch` peHandle `catch` passHandle
 
-esHandle :: IRParseError -> IO ()
-esHandle e = renderError e >>= hPutStrLn stderr >> exitFailure
+peHandle :: IRParseError -> IO ()
+peHandle e = renderError e >>= hPutStrLn stderr >> exitFailure
+
+passHandle :: PassError -> IO ()
+passHandle (PassError msg) = hPutStrLn stderr msg >> exitFailure
 
 pipeline f = parse f >>> initialPass
 
