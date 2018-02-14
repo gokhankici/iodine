@@ -1,0 +1,174 @@
+#!/usr/bin/env zsh
+
+if [[ "$(uname)" != "Darwin" &&  "$(expr substr $(uname -s) 1 5)" != "Linux"  ]]; then
+    echo "${0:t} is not supported in your platform" 1>&2
+    exit 1
+fi
+
+THIS_DIR=${0:A:h}
+APP=vcgen
+MAIN_MODULE='verylog' 
+MAIN_PL="src/${MAIN_MODULE}.pl" 
+
+zparseopts -D -E -- \
+           -just-ir=JUST_IR -just-vcgen=JUST_VCGEN \
+           M:=TOPLEVEL_MODULE \
+           -emacs=EMACS \
+           h=HELP -help=HELP
+
+if [[ $# -eq 0 || -n "$HELP" ]]; then
+    echo "usage: $0 [options] <verilog file>"
+    echo "
+verylog options:
+  --just-ir
+      Just generate the IR file and print it
+  --just-vcgen
+      Just generate the file that will be fed to qarmc and print it
+  --plot
+      Plots the assignment graph (doesn't make sense atm)
+  --race
+      Checks race conditions
+  --emacs
+      Opens the output (IR or VC) in emacs
+  -h, --help
+      Prints this help
+
+parser options:
+  -M <toplevel module name>
+      When the verilog file contains multiple modules, this is used to denote the toplevel one"
+    [[ -n "$HELP" ]] && exit 0 || exit 1
+fi
+
+FILENAME="${@[-1]}"
+shift -p 1
+
+if [[ ! -f $FILENAME ]]; then
+    echo "'$FILENAME' is not a regular file" 1>&2
+    exit 1
+elif  [[ "${FILENAME:t:e}" != "v" ]]; then
+    echo "'$FILENAME' does not have the verilog extension (.v)" 1>&2
+    exit 1
+elif [[ $# -ne 0 ]]; then
+    echo "unrecognized arguments: $@" 1>&2
+    exit 1
+fi
+
+PREPROCESSED_FILE=${FILENAME:A:h}/.${FILENAME:t:r}.preproc.v
+IR_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.pl
+HSF_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.hsf.pl
+LOGFILE="$THIS_DIR/.log.$(date +%F-%H-%M-%S)"
+
+CONF_FILE="${THIS_DIR}/configuration.sh"
+CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
+
+if [[ -f "$CONF_FILE" ]]; then
+    source $CONF_FILE
+
+    IVL=${IVL_DIR:A}/ivl
+    IVLPP=${IVL_DIR:A}/ivlpp/ivlpp
+    
+    if [[ -z "${IVL_DIR}" || ! -x "$IVL" || ! -x "$IVLPP" ]]; then
+        echo "IVL_DIR variable in ${CONF_FILE:t} does not seem right" 1>&2
+        echo "currently it's set to ${IVL_DIR:A}" 1>&2
+        exit 1
+    fi
+    
+    QARMC=${HORN_SOLVE_DIR:A}/qarmc5/qarmc
+    
+    if [[ -z "${HORN_SOLVE_DIR}" || ! -x "$QARMC" ]]; then
+        echo "HORN_SOLVE_DIR variable in ${CONF_FILE:t} does not seem right" 1>&2
+        echo "currently it's set to ${HORN_SOLVE_DIR:A}" 1>&2
+        exit 1
+    fi
+
+else
+    echo "missing ${CONF_FILE}" 1>&2
+    echo "please use the file ${CONF_SKELETON_FILE:t} as a skeleton to create that file" 1>&2
+    exit 1
+fi
+
+# output of this function is redirected to the IR_FILE
+print_IR() {
+    predicates='register/1, wire/1, module_inst/3, always/2, link/2, asn/2, taint_source/1, taint_sink/1'
+    cat <<EOF
+% -*- mode: prolog -*-
+% vim: set ft=prolog:
+:- multifile     $predicates.
+:- dynamic       $predicates.
+:- discontiguous $predicates.
+
+EOF
+    
+    pushd ${FILENAME:A:h}
+    
+    this_filename=${FILENAME:t}
+
+    $IVLPP $this_filename 1>$PREPROCESSED_FILE && \
+        $IVL $@ -O >(cat) $PREPROCESSED_FILE &>$LOGFILE && \
+        sed -n 's|^[ \t]*//[ \t]*@annot{\(.*\)}[^}]*|\1.|p' $this_filename
+    
+    last_err=$?
+
+    if [[ $last_err -ne 0 ]]; then
+        if [[ -f "$LOGFILE" && "$(wc -l $LOGFILE | cut -d' ' -f1)" -gt 0 ]]; then
+            cat $LOGFILE 1>&2
+        else
+            echo "error while running $IVL $@ -O >(cat) $PREPROCESSED_FILE, running again ..." 1>&2
+            $IVL $@ -O >(cat 1>&2) $PREPROCESSED_FILE
+        fi
+        echo "\n[PARSER ERROR]" 1>&2
+        exit 1
+    fi
+    
+    popd
+
+    rm -f "$LOGFILE" "$PREPROCESSED_FILE"
+}
+
+function check_race() {
+    echo "not implemented"
+    return 1
+}
+
+print_IR $TOPLEVEL_MODULE > $IR_FILE
+
+if [[ -n "$JUST_IR" ]]; then
+    [[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $IR_FILE || cat $IR_FILE
+    exit 0
+fi
+
+pushd $THIS_DIR
+stack exec -- $APP $IR_FILE > $HSF_FILE
+last_err=$?
+popd
+
+if [[ $last_err -ne 0 ]]; then
+    echo "[VCGEN ERROR]" 1>&2
+    exit 1 
+fi
+
+if [[ -n "$JUST_VCGEN" ]]; then
+    [[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $HSF_FILE || cat $HSF_FILE
+    exit 0
+fi
+
+if [[ "$(uname)" == "Darwin" ]]; then
+    $QARMC $HSF_FILE
+else
+    $QARMC $HSF_FILE | \
+        awk '{ print $0; } /program is correct/ {correct = 1;} END {if(correct) {exit 0;} else {exit 1;}}'
+fi
+
+last_err=$?
+
+echo
+echo '################################################################################'
+echo '# TEMPORARY FILES ##############################################################'
+echo '################################################################################'
+echo "IR  file : ${IR_FILE}"
+echo "HSF file : ${HSF_FILE}"
+echo '################################################################################'
+
+exit $last_err
+
+

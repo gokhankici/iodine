@@ -1,0 +1,66 @@
+name:                verylog-hs
+version:             0.1.0.0
+github:              "gokhankici/verylog-hs"
+license:             MIT
+author:              "Rami Gokhan Kici"
+maintainer:          "gokhankici@gmail.com"
+copyright:           "2018 Rami Gokhan Kici"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on Github at <https://github.com/gokhankici/verylog-hs#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- array
+- cmdargs
+- containers
+- directory
+- filepath
+- lens
+- megaparsec
+- mtl
+- pretty
+- process
+- semigroups
+
+library:
+  source-dirs:           src
+  ghc-options:
+  - -W
+  exposed-modules:
+  - Verylog.Language.Parser
+  - Verylog.Language.Types
+  - Verylog.Transform.InitialPass
+
+executables:
+  vcgen:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -O2
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - verylog-hs
+
+tests:
+  test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - verylog-hs
