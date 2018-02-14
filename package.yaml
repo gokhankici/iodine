@@ -32,6 +32,7 @@ dependencies:
 - pretty
 - process
 - semigroups
+- unordered-containers
 
 library:
   source-dirs:           src

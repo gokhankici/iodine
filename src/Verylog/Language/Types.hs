@@ -7,26 +7,30 @@ module Verylog.Language.Types (
   Event (..),
   Stmt  (..),
 
-  PPrint (..)
+  PPrint (..),
+
+  PassError (..)
   ) where
 
 import Text.PrettyPrint hiding (sep)
+import Control.Exception
+import Data.Typeable
 
 type Id = String
 
-data IR = Register     { varName :: Id }
-        | Wire         { varName :: Id }
-        | UF           { varName :: Id
-                       , ufArgs  :: [Id]
-                       }
-        | Always       { event      :: Event
-                       , alwaysStmt :: Stmt
-                       }
-        | ContAsgn     { caLhs      :: Id
-                       , caRhs      :: Id
-                       }
-        | TaintSource  { sourceName :: Id }
-        | TaintSink    { sinkName   :: Id }
+data IR = Register { varName :: Id }
+        | Wire     { varName :: Id }
+        | UF       { varName :: Id
+                   , ufArgs  :: [Id]
+                   }
+        | Always   { event      :: Event
+                   , alwaysStmt :: Stmt
+                   }
+        | ContAsgn { caLhs      :: Id
+                   , caRhs      :: Id
+                   }
+        | Source   { sourceName :: Id }
+        | Sink     { sinkName   :: Id }
 
 data Event = Star
            | PosEdge Id
@@ -39,7 +43,7 @@ data Stmt = Block           { blockStmts :: [Stmt] }
           | NonBlockingAsgn { lhs        :: Id
                             , rhs        :: Id
                             }
-          | If              { ifCond     :: Id
+          | IfStmt          { ifCond     :: Id
                             , thenStmt   :: Stmt
                             , elseStmt   :: Stmt
                             }
@@ -61,8 +65,8 @@ instance PPrint IR where
                             <> text ")."
   toDoc (Always{..})      = text "always(" <> vcat [toDoc event <> comma, toDoc alwaysStmt] <> text ")."
   toDoc (ContAsgn{..})    = text "asn(" <> text caLhs <> comma <+> text caRhs <> text ")."
-  toDoc (TaintSource{..}) = text "taint_source(" <> text sourceName <> text ")."
-  toDoc (TaintSink{..})   = text "taint_sink(" <> text sinkName <> text ")."
+  toDoc (Source{..}) = text "taint_source(" <> text sourceName <> text ")."
+  toDoc (Sink{..})   = text "taint_sink(" <> text sinkName <> text ")."
   
 instance PPrint Stmt where
   toDoc (Block [])     = brackets empty
@@ -71,11 +75,11 @@ instance PPrint Stmt where
     text "b_asn(" <> text lhs <> comma <+> text rhs <> rparen
   toDoc (NonBlockingAsgn{..}) = 
     text "nb_asn(" <> text lhs <> comma <+> text rhs <> rparen
-  toDoc (If{..}) = text "ite" <> vcat [ lparen <+> text ifCond
-                                      , comma  <+> toDoc thenStmt
-                                      , comma  <+> toDoc elseStmt
-                                      , rparen
-                                      ]
+  toDoc (IfStmt{..}) = text "ite" <> vcat [ lparen <+> text ifCond
+                                          , comma  <+> toDoc thenStmt
+                                          , comma  <+> toDoc elseStmt
+                                          , rparen
+                                          ]
   toDoc Skip = text "skip"
 
 instance PPrint Event where
@@ -85,3 +89,8 @@ instance PPrint Event where
 
 instance PPrint a => PPrint [a] where
   toDoc = vcat . (map toDoc)
+
+data PassError = PassError !String
+               deriving (Show, Typeable)
+
+instance Exception PassError

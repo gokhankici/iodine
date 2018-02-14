@@ -1,3 +1,5 @@
+{-# language RecordWildCards #-}
+
 module Verylog.Language.Utils where
 
 import qualified Data.Map  as M
@@ -16,6 +18,26 @@ import           System.Process
 import           System.Timeout
 import           System.Console.CmdArgs.Verbosity (whenLoud)
 import           Debug.Trace (trace)
+
+import           Verylog.Language.Types
+
+(.||.) :: (a -> Bool) -> (a -> Bool) -> (a -> Bool)
+(.||.) = liftM2 (||)
+
+(.&&.) :: (a -> Bool) -> (a -> Bool) -> (a -> Bool)
+(.&&.) = liftM2 (&&)
+
+isGate                :: IR -> Bool
+isGate (ContAsgn{..}) = True
+isGate _              = False
+
+isProcess              :: IR -> Bool
+isProcess (Always{..}) = True
+isProcess _            = False
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 (>->) :: (a -> Either e b) -> (b -> c) -> a -> Either e c

@@ -45,20 +45,20 @@ _parseIR = rWord "register"         *> parens (Register    <$> identifier)
            <|> rWord "link"         *> parens (UF          <$> identifier <*> (comma *> list identifier))
            <|> rWord "always"       *> parens (Always      <$> parseEvent <*> (comma *> parseStmt))
            <|> rWord "asn"          *> parens (ContAsgn    <$> identifier <*> (comma *> identifier))
-           <|> rWord "taint_source" *> parens (TaintSource <$> identifier)
-           <|> rWord "taint_sink"   *> parens (TaintSink   <$> identifier)
+           <|> rWord "taint_source" *> parens (Source      <$> identifier)
+           <|> rWord "taint_sink"   *> parens (Sink        <$> identifier)
 
 parseStmt :: Parser Stmt  
 parseStmt = rWord "block"      *> parens (Block        <$> list parseStmt)
             <|> rWord "b_asn"  *> parens (BlockingAsgn <$> identifier <*> (comma *> identifier))
             <|> rWord "nb_asn" *> parens (BlockingAsgn <$> identifier <*> (comma *> identifier))
-            <|> rWord "ite"    *> parens (If <$> identifier <*> (comma *> parseStmt) <*> (comma *> parseStmt))
+            <|> rWord "ite"    *> parens (IfStmt       <$> identifier <*> (comma *> parseStmt) <*> (comma *> parseStmt))
             <|> rWord "skip"   *> return Skip
 
 parseEvent :: Parser Event
 parseEvent = rWord "event1(star)" *> return Star
              <|> rWord "event2(posedge" *> comma *> (PosEdge <$> identifier) <* rWord ")"
-             <|> rWord "event2(negedge" *> comma *> (PosEdge <$> identifier) <* rWord ")"
+             <|> rWord "event2(negedge" *> comma *> (NegEdge <$> identifier) <* rWord ")"
 
 --------------------------------------------------------------------------------
 -- | Tokenisers and Whitespace
@@ -98,14 +98,9 @@ betweenS l r = between (symbol l) (symbol r)
 lexeme :: Parser a -> Parser a
 lexeme p = L.lexeme spaceConsumer p
 
--- -- | 'integer' parses an integer.
--- integer :: Parser Integer
--- integer = lexeme L.decimal
-
 -- | `rWord`
 rWord   :: String -> Parser String
 rWord w = string w <* notFollowedBy alphaNumChar <* spaceConsumer
-
 
 -- | list of reserved words
 keywords :: [String]
