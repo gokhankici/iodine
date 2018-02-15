@@ -3,11 +3,10 @@
 module Verylog.Transform.InitialPass ( initialPass
                                      ) where
 
---import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Lazy
 import qualified Data.HashSet             as S
-import qualified Data.HashMap.Lazy        as M
+import qualified Data.HashMap.Strict      as M
 import           Data.List
 import           Text.PrettyPrint
 
@@ -23,15 +22,14 @@ initialPass input = evalState pipeline initialSt
                    , _sinks     = S.empty
                    , _irs       = input
                    }
-    pipeline  = collectVars >> dropIRs >> checkIR >> lastpass
-    lastpass  = get -- use irs
+    pipeline  = collectVars >> dropIRs >> checkIR >> get
 
 -- -----------------------------------------------------------------------------
 -- 1. Collect vars
 -- -----------------------------------------------------------------------------
 
 collectVars :: State St ()
-collectVars = use irs >>= sequence_ . (map collectVar)
+collectVars = runIRs_ collectVar
 
 collectVar :: IR -> State St ()
 collectVar (Register id) = registers %= S.insert id
@@ -54,7 +52,7 @@ dropIRs = irs %= filter pass2Filter
 -- 3. Check IR elements
 -- -----------------------------------------------------------------------------
 checkIR :: State St ()
-checkIR = use irs >>= sequence_ . (map _checkIR)
+checkIR = runIRs_ _checkIR
 
 _checkIR :: IR -> State St ()
 _checkIR (Always{..})   = checkStmt alwaysStmt
@@ -73,10 +71,10 @@ instance PPrint St where
     where
       stDoc = text "St" <+>
               vcat [ lbrace <+> text "regs " <+> equals <+> st^.registers.to printSet
-                   , comma  <+> text "wires" <+> equals <+> st^.wires.to printSet
-                   , comma  <+> text "ufs  " <+> equals <+> st^.ufs.to printMap
-                   , comma  <+> text "srcs " <+> equals <+> st^.sources.to printSet
-                   , comma  <+> text "sinks" <+> equals <+> st^.sinks.to printSet
+                   , comma  <+> text "wires" <+> equals <+> st^.wires.to     printSet
+                   , comma  <+> text "ufs  " <+> equals <+> st^.ufs.to       printMap
+                   , comma  <+> text "srcs " <+> equals <+> st^.sources.to   printSet
+                   , comma  <+> text "sinks" <+> equals <+> st^.sinks.to     printSet
                    , rbrace
                    ]
       printList   = brackets . text . (intercalate ", ")

@@ -10,13 +10,9 @@ extra-source-files:
 - README.md
 - ChangeLog.md
 
-# Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
+synopsis:            Generates the transition relation & verification conditions from a Verilog IR
+category:            Hardware Verification
 
-# To avoid duplicated efforts in documentation and dealing with the
-# complications of embedding Haddock markup inside cabal files, it is
-# common to point users to the README.md file.
 description:         Please see the README on Github at <https://github.com/gokhankici/verylog-hs#readme>
 
 dependencies:
@@ -41,7 +37,7 @@ library:
   exposed-modules:
   - Verylog.Language.Parser
   - Verylog.Language.Types
-  - Verylog.Transform.InitialPass
+  - Verylog.VCGen
 
 executables:
   vcgen:

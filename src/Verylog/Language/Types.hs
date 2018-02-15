@@ -5,8 +5,10 @@ module Verylog.Language.Types where
 
 import           Control.Exception
 import           Control.Lens
+import           Control.Monad.Reader
+import           Control.Monad.State.Lazy
 import qualified Data.HashSet             as S
-import qualified Data.HashMap.Lazy        as M
+import qualified Data.HashMap.Strict      as M
 import           Data.Typeable
 import           Text.PrettyPrint hiding (sep)
 
@@ -53,11 +55,35 @@ data St = St { _registers :: S.HashSet Id
 
 makeLenses ''St
 
+done_atom :: Id
+done_atom = "done"
+
+runIRs :: (IR -> State St a) -> State St [a]
+runIRs f = use irs >>= sequence . (map f)
+
+runIRs_ :: (IR -> State St a) -> State St ()
+runIRs_ f = use irs >>= sequence_ . (map f)
+
+readIRs :: St -> (IR -> Reader St a) -> [a]
+readIRs st f = st^.irs.to (map (r . f))
+  where
+    r m = runReader m st
+
+
+data PassError = PassError !String
+               deriving (Show, Typeable)
+
+instance Exception PassError
+
+-- -----------------------------------------------------------------------------  
+-- Pretty printing
+-- -----------------------------------------------------------------------------  
+
 class PPrint a where
   toDoc :: a -> Doc
 
   pprint :: a -> String
-  pprint = render . toDoc
+  pprint = (renderStyle style{lineLength = 150}) . toDoc
 
 instance PPrint IR where
   toDoc (Register{..})    = text "register(" <> text varName <> text ")."
@@ -93,8 +119,3 @@ instance PPrint Event where
 
 instance PPrint a => PPrint [a] where
   toDoc = vcat . (map toDoc)
-
-data PassError = PassError !String
-               deriving (Show, Typeable)
-
-instance Exception PassError

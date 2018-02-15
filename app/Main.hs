@@ -2,33 +2,29 @@ module Main where
 
 import Control.Exception  (catch)
 import Control.Monad
-import Control.Arrow ((>>>))
 import System.Environment (getArgs)
 import System.Exit
 import System.IO (stderr, hPutStrLn)
 
+import Verylog.VCGen
 import Verylog.Language.Parser
 import Verylog.Language.Types
-import Verylog.Transform.InitialPass
 
 main :: IO ()
-main =  vcgen `catch` peHandle `catch` passHandle
+main =  do
+  f <- getSrcFile
+  printResults f `catch` peHandle `catch` passHandle
+  where
+    printResults f = do putStrLn "/* -*- mode: prolog -*- */"
+                        putStrLn "/* vim: set ft=prolog: */\n" 
+                        cs <- vcgen f
+                        forM_ cs (putStrLn . pprint)
 
 peHandle :: IRParseError -> IO ()
 peHandle e = renderError e >>= hPutStrLn stderr >> exitFailure
 
 passHandle :: PassError -> IO ()
 passHandle (PassError msg) = hPutStrLn stderr msg >> exitFailure
-
-pipeline f = parse f >>> initialPass
-
-vcgen :: IO ()
-vcgen = do
-  f <- getSrcFile
-  s <- readFile f
-  let out = pipeline f s
-  putStrLn (pprint out)
-  exitSuccess
 
 getSrcFile :: IO FilePath
 getSrcFile = do

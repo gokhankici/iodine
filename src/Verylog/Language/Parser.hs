@@ -151,14 +151,6 @@ lineString n = replicate (10 - nD) ' ' ++ nS
     nS       = show n
     nD       = Li.length nS
 
-data IRParseError = IRParseError
-  { eMsg :: !String
-  , ePos :: !SourcePos
-  }
-  deriving (Show, Typeable)
-
-instance Exception IRParseError
-
 renderError :: IRParseError -> IO String
 renderError e = do
   let pos = ePos e
@@ -166,6 +158,13 @@ renderError e = do
   snippet <- readFilePos pos
   return $ printf "%s%s" snippet msg
 
-
 instance ShowErrorComponent SourcePos where
   showErrorComponent pos = "parse error in file " ++ (M.sourceName pos)
+
+data IRParseError = IRParseError
+  { eMsg :: !String
+  , ePos :: !M.SourcePos
+  }
+  deriving (Show, Typeable)
+
+instance Exception IRParseError
