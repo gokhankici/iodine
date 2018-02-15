@@ -5,6 +5,10 @@
 First copy the `configuration-skeleton.sh` file into `configuration.sh`, and
 fill the missing parts.
 
+To build, you need to install
+[stack](https://docs.haskellstack.org/en/stable/README/#how-to-install). When
+installed, just run `stack build`.
+
 ## Command Line Options
 
 ``` sh
