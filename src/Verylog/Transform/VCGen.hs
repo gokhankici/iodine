@@ -106,8 +106,8 @@ invMainIssueNewBit = do
 invMainNextStep :: R HSFExpr
 invMainNextStep = do
   -- both take a single step
-  largs <- asks (invArgs fmt{leftVar=True})
-  rargs <- asks (invArgs fmt{rightVar=True})
+  largs <- asks (nextArgs fmt{leftVar=True})
+  rargs <- asks (nextArgs fmt{rightVar=True})
 
   -- conditions are the same
   cs <- getCondAtoms

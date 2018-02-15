@@ -20,6 +20,7 @@ data VarFormat = VarFormat { taggedVar :: Bool
                            , rightVar  :: Bool
                            , atomVar   :: Bool
                            }
+                 deriving (Show)
 
 fmt = VarFormat { taggedVar = False
                 , primedVar = False
@@ -29,7 +30,7 @@ fmt = VarFormat { taggedVar = False
                 } 
 
 makeVarName :: VarFormat -> Id -> HSFVar
-makeVarName (VarFormat{..}) v = printf "%sV%s%s%s_%s" atom pos tag prime v
+makeVarName fmt@(VarFormat{..}) v = printf "%sV%s%s%s_%s" atom pos tag prime v
   where
     atom | atomVar   = "v"
          | otherwise = ""
@@ -40,10 +41,10 @@ makeVarName (VarFormat{..}) v = printf "%sV%s%s%s_%s" atom pos tag prime v
     prime | primedVar = "1"
           | otherwise = ""
 
-    pos   | leftVar             = "L"
-          | rightVar            = "R"
-          | leftVar && rightVar = throw (PassError "Both left & right requested from makeVarName")
-          | otherwise           = ""
+    pos   | (leftVar && rightVar) = throw (PassError $ "Both left & right requested from makeVarName for " ++ v ++ " " ++ show fmt)
+          | leftVar               = "L"
+          | rightVar              = "R"
+          | otherwise             = ""
 
 allArgs        :: VarFormat -> St -> [Id]
 allArgs fmt st = let rs = st^.registers.to S.toList 

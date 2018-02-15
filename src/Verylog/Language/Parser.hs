@@ -251,9 +251,14 @@ makeIR :: State ParseSt ()
 makeIR = (st . irs) <~ (uses parseIRs (foldr makeIRFold []))
 
 makeIRFold                      :: ParseIR -> [IR] -> [IR]
-makeIRFold (PAlways PStar stmt) = (:) $ Always Star (makeStmt stmt)
+makeIRFold (PAlways event stmt) = (:) $ Always (makeEvent event) (makeStmt stmt)
 makeIRFold (PContAsgn l r)      = (:) $ ContAsgn l r
 makeIRFold _                    = id
+
+makeEvent :: ParseEvent -> Event
+makeEvent PStar          = Star
+makeEvent (PPosEdge clk) = PosEdge clk
+makeEvent (PNegEdge clk) = NegEdge clk
 
 makeStmt                       :: ParseStmt -> Stmt
 makeStmt (PBlock ss)            = Block (makeStmt <$> ss)

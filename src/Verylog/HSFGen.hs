@@ -20,5 +20,6 @@ collect step = first step >>> arr (\((st,cs2), cs1) -> (st, cs1 ++ cs2))
 hsfgen :: FilePath -> IO [HSFClause]
 hsfgen f = do
   s <- readFile f
+  -- putStrLn $ pprint $ parse f s
   return $ pipeline f s
 
