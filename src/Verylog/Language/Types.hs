@@ -83,7 +83,9 @@ class PPrint a where
   toDoc :: a -> Doc
 
   pprint :: a -> String
-  pprint = (renderStyle style{lineLength = 150}) . toDoc
+  pprint = (renderStyle style{ lineLength     = 150
+                             , ribbonsPerLine = 1.2
+                             }) . toDoc
 
 instance PPrint IR where
   toDoc (Register{..})    = text "register(" <> text varName <> text ")."

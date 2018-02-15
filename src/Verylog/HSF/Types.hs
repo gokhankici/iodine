@@ -18,9 +18,12 @@ data HSFClause = QueryNaming { hsfArgs :: [Id] }
 
 type HSFVar = String
 
-data HSFExpr = BinOp     { hsfOp   :: BinOp
-                         , hsfExpL :: HSFExpr
-                         , hsfExpR :: HSFExpr
+data HSFExpr = BinOp     { hsfBOp   :: BinOp
+                         , hsfExpL  :: HSFExpr
+                         , hsfExpR  :: HSFExpr
+                         }
+             | UnOp      { hsfUOp  :: UnOp
+                         , hsfExp  :: HSFExpr
                          }
              | Ands      [HSFExpr]
              | Ors       [HSFExpr]
@@ -33,17 +36,21 @@ data HSFExpr = BinOp     { hsfOp   :: BinOp
              | Boolean   Bool
              | Number    Int
 
-data BinOp = EQU | LE | GE | OR | AND | PLUS
+data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
+data UnOp  = NOT
 
 printArgs as = hcat $ punctuate (comma <> space) (text <$> as)
 
+nextPred = "next"
+invPred  = "inv"
+
 instance PPrint HSFClause where
-  toDoc (QueryNaming{..}) = text "query_naming(inv(" <> printArgs hsfArgs <> text "))."
-  toDoc (Next{..})        = text "next(" <> printArgs hsfArgs <> text ") :=" 
+  toDoc (QueryNaming{..}) = text "query_naming(" <> text invPred <> lparen <> printArgs hsfArgs <> text "))."
+  toDoc (Next{..})        = text nextPred <> lparen <> printArgs hsfArgs <> text ") :=" 
                             $+$ text "("
                             $+$ nest 3 (toDoc hsfBody)
                             $+$ text ")."
-  toDoc (Inv{..})         = text "inv(" <> printArgs hsfArgs <> text ") :-" 
+  toDoc (Inv{..})         = text invPred <> lparen <> printArgs hsfArgs <> text ") :-" 
                             $+$ text "("
                             $+$ nest 3 (toDoc hsfBody)
                             $+$ text ")."
@@ -59,22 +66,31 @@ instance PPrint HSFExpr where
   toDoc (Ands [])        = text "true"
   toDoc (Ors [])         = text "true"
   toDoc (Ands es)        = cat $ punctuate (comma <> space) (toDoc <$> es)
-  toDoc (Ors es)         = cat $ punctuate (semi <> space)  (parens . toDoc <$> es)
-  toDoc (Structure f as) = text f <> lparen <> (hcat $ punctuate (comma <> space) (text <$> as)) <> rparen
+  toDoc (Ors es)         = lparen <+> (cat $ punctuate (semi <> space) (f <$> es)) <+> rparen
+                           where
+                             f e = lparen <+> toDoc e <+> rparen
+  toDoc (Structure f as) = text f <> lparen <> printArgs as <> rparen
   toDoc (Ite{..})        = text "ite("
                            <> toDoc hsfCond <> comma
                            <+> toDoc hsfExpThen <> comma
                            <+> toDoc hsfExpElse
                            <> rparen
-  toDoc (BinOp{..})      = case hsfOp of
-                             EQU  -> toDoc hsfExpL <+> equals <+> toDoc hsfExpR
-                             LE   -> toDoc hsfExpL <+> text "=<" <+> toDoc hsfExpR
-                             GE   -> toDoc hsfExpL <+> text ">=" <+> toDoc hsfExpR
-                             PLUS -> toDoc hsfExpL <+> text "+"  <+> toDoc hsfExpR
-                             AND  -> cat [ toDoc hsfExpL <> comma
-                                         , toDoc hsfExpR
-                                         ]
-                             OR   -> cat [ lparen <> text "   " <> toDoc hsfExpL
-                                         , semi   <> text "   " <> toDoc hsfExpR
-                                         , rparen
-                                         ]
+  toDoc (UnOp{..})       = case hsfUOp of
+                             NOT -> text "!" <> ptoDoc hsfExp
+    where ptoDoc = parens . toDoc
+  toDoc (BinOp{..})      = case hsfBOp of
+                             IMPLIES -> lparen
+                                        <+> ptoDoc hsfExpL <+> text "->" <+> ptoDoc hsfExpR
+                                        <+> rparen
+                             EQU     -> toDoc hsfExpL <+> equals <+> toDoc hsfExpR
+                             LE      -> toDoc hsfExpL <+> text "=<" <+> toDoc hsfExpR
+                             GE      -> toDoc hsfExpL <+> text ">=" <+> toDoc hsfExpR
+                             PLUS    -> toDoc hsfExpL <+> text "+"  <+> toDoc hsfExpR
+                             AND     -> cat [ toDoc hsfExpL <> comma
+                                            , toDoc hsfExpR
+                                            ]
+                             OR      -> cat [ lparen <> text "   " <> toDoc hsfExpL
+                                            , semi   <> text "   " <> toDoc hsfExpR
+                                            , rparen
+                                            ]
+    where ptoDoc = parens . toDoc
