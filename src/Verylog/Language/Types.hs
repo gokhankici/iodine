@@ -11,22 +11,16 @@ import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
 import           Data.Typeable
 import           Text.PrettyPrint hiding (sep)
+import           Data.List
 
 type Id = String
 
-data IR = Register { varName :: Id }
-        | Wire     { varName :: Id }
-        | UF       { varName :: Id
-                   , ufArgs  :: [Id]
-                   }
-        | Always   { event      :: Event
+data IR = Always   { event      :: Event
                    , alwaysStmt :: Stmt
                    }
         | ContAsgn { caLhs      :: Id
                    , caRhs      :: Id
                    }
-        | Source   { sourceName :: Id }
-        | Sink     { sinkName   :: Id }
 
 data Event = Star
            | PosEdge Id
@@ -88,17 +82,8 @@ class PPrint a where
                              }) . toDoc
 
 instance PPrint IR where
-  toDoc (Register{..})    = text "register(" <> text varName <> text ")."
-  toDoc (Wire{..})        = text "wire(" <> text varName <> text ")."
-  toDoc (UF{..})          = text "link("
-                            <> text varName
-                            <> comma
-                            <+> brackets (hcat $ punctuate (comma <> space) (text <$> ufArgs))
-                            <> text ")."
   toDoc (Always{..})      = text "always(" <> vcat [toDoc event <> comma, toDoc alwaysStmt] <> text ")."
   toDoc (ContAsgn{..})    = text "asn(" <> text caLhs <> comma <+> text caRhs <> text ")."
-  toDoc (Source{..}) = text "taint_source(" <> text sourceName <> text ")."
-  toDoc (Sink{..})   = text "taint_sink(" <> text sinkName <> text ")."
   
 instance PPrint Stmt where
   toDoc (Block [])     = brackets empty
@@ -121,3 +106,24 @@ instance PPrint Event where
 
 instance PPrint a => PPrint [a] where
   toDoc = vcat . (map toDoc)
+
+instance PPrint St where
+  toDoc st = vcat $ stDoc : space : st^.irs.to (map toDoc)
+    where
+      stDoc = text "St" <+>
+              vcat [ lbrace <+> text "regs " <+> equals <+> st^.registers.to printSet
+                   , comma  <+> text "wires" <+> equals <+> st^.wires.to     printSet
+                   , comma  <+> text "ufs  " <+> equals <+> st^.ufs.to       printMap
+                   , comma  <+> text "srcs " <+> equals <+> st^.sources.to   printSet
+                   , comma  <+> text "sinks" <+> equals <+> st^.sinks.to     printSet
+                   , rbrace
+                   ]
+      printList   = brackets . text . (intercalate ", ")
+      printSet    = printList . S.toList
+      mapKV (k,l) = "(" ++ k ++ ", [" ++ (intercalate ", " l) ++ "])"
+      printMap    = brackets
+                    . text
+                    . (intercalate ", ")
+                    . (map mapKV)
+                    . (filter (\(_,l) -> length l > 0))
+                    . M.toList

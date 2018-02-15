@@ -36,7 +36,7 @@ data HSFExpr = BinOp     { hsfBOp   :: BinOp
              | Boolean   Bool
              | Number    Int
 
-data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
+data BinOp = EQU | LE | GE | OR | AND | PLUS
 data UnOp  = NOT
 
 printArgs as = hcat $ punctuate (comma <> space) (text <$> as)
@@ -79,9 +79,6 @@ instance PPrint HSFExpr where
                              NOT -> text "!" <> ptoDoc hsfExp
     where ptoDoc = parens . toDoc
   toDoc (BinOp{..})      = case hsfBOp of
-                             IMPLIES -> lparen
-                                        <+> ptoDoc hsfExpL <+> text "->" <+> ptoDoc hsfExpR
-                                        <+> rparen
                              EQU     -> toDoc hsfExpL <+> equals <+> toDoc hsfExpR
                              LE      -> toDoc hsfExpL <+> text "=<" <+> toDoc hsfExpR
                              GE      -> toDoc hsfExpL <+> text ">=" <+> toDoc hsfExpR
@@ -93,4 +90,3 @@ instance PPrint HSFExpr where
                                             , semi   <> text "   " <> toDoc hsfExpR
                                             , rparen
                                             ]
-    where ptoDoc = parens . toDoc

@@ -30,7 +30,6 @@ nextClause st es = Next { hsfArgs = nextArgs fmt st
 nextIR :: IR -> R [HSFExpr]
 nextIR (Always _ s)   = nextStmt s
 nextIR (ContAsgn l r) = nextAsgn CA l r
-nextIR e              = throw (PassError $ "nextIR for " ++ pprint e ++ " is missing") 
 
 nextStmt :: Stmt -> R [HSFExpr]
 nextStmt (Block{..})           = concat <$> mapM nextStmt blockStmts

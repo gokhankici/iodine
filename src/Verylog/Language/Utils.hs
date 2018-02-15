@@ -4,21 +4,11 @@ module Verylog.Language.Utils where
 
 import           Control.Monad
 
-import           Verylog.Language.Types
-
 (.||.) :: (a -> Bool) -> (a -> Bool) -> (a -> Bool)
 (.||.) = liftM2 (||)
 
 (.&&.) :: (a -> Bool) -> (a -> Bool) -> (a -> Bool)
 (.&&.) = liftM2 (&&)
-
-isGate                :: IR -> Bool
-isGate (ContAsgn{..}) = True
-isGate _              = False
-
-isProcess              :: IR -> Bool
-isProcess (Always{..}) = True
-isProcess _            = False
 
 safeHead :: a -> [a] -> a
 safeHead def []    = def

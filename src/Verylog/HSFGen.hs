@@ -5,12 +5,11 @@ import Control.Arrow
 import Verylog.Language.Parser
 import Verylog.Language.Types
 import Verylog.HSF.Types
-import Verylog.Transform.InitialPass
 import Verylog.Transform.TransitionRelation
 import Verylog.Transform.VCGen
 
 pipeline f = parse f
-             >>> initialPass >>> arr (\st -> (st, []))
+             >>> arr (\st -> (st, []))
              >>> collect next
              >>> collect invs
              >>> arr (\(_st, cs) -> cs)

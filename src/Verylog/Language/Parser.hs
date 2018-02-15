@@ -1,5 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Verylog.Language.Parser ( parse
                                , renderError
@@ -7,12 +9,16 @@ module Verylog.Language.Parser ( parse
                                ) where
 
 import           Control.Exception
+import           Control.Lens
 import           Control.Monad (void)
+import           Control.Monad.State.Lazy
 import           Data.Char (isLetter, isDigit)
+import qualified Data.HashMap.Strict        as M
+import qualified Data.HashSet               as S
 import qualified Data.List                  as Li
-import           Data.List.NonEmpty         as NE
+import qualified Data.List.NonEmpty         as NE
 import           Data.Typeable
-import           Text.Megaparsec            as M hiding (parse)
+import           Text.Megaparsec            as MP hiding (parse, State(..))
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import           Text.Printf
@@ -20,12 +26,49 @@ import           Text.Printf
 import           Verylog.Language.Types
 import           Verylog.Language.Utils
 
+-----------------------------------------------------------------------------------
+-- | Verylog IR
+-----------------------------------------------------------------------------------
+data ParseIR = PRegister String
+             | PWire     String
+             | PUF       String
+                         [String]
+                         
+             | PAlways   ParseEvent
+                         ParseStmt
+                         
+             | PContAsgn String
+                         String
+                         
+             | PSource   String
+             | PSink     String
+             
+data ParseEvent = PStar
+                | PPosEdge String
+                | PNegEdge String
+
+data ParseStmt = PBlock           [ParseStmt]
+               | PBlockingAsgn    String
+                                  String
+               | PNonBlockingAsgn String
+                                  String
+               | PIfStmt          String
+                                  ParseStmt
+                                  ParseStmt
+               | PSkip
+
+data ParseSt = ParseSt { _parseIRs :: [ParseIR]
+                       , _st       :: St
+                       }
+
+makeLenses ''ParseSt
+
 type Parser = Parsec SourcePos String
 
 -- --------------------------------------------------------------------------------
-parse :: FilePath -> String -> [IR]
+parse :: FilePath -> String -> St
 -- --------------------------------------------------------------------------------
-parse = parseWith $ many parseIR
+parse f s = makeState $ parseWith (many parseIR) f s
 
 parseWith  :: Parser a -> FilePath -> String -> a
 parseWith p f s = case runParser (whole p) f s of
@@ -36,29 +79,29 @@ parseWith p f s = case runParser (whole p) f s of
 -- | Top-Level Expression Parser
 --------------------------------------------------------------------------------
 
-parseIR :: Parser IR
+parseIR :: Parser ParseIR
 parseIR = spaceConsumer *> _parseIR <* char '.' <* spaceConsumer
 
-_parseIR :: Parser IR  
-_parseIR = rWord "register"         *> parens (Register    <$> identifier)
-           <|> rWord "wire"         *> parens (Wire        <$> identifier)
-           <|> rWord "link"         *> parens (UF          <$> identifier <*> (comma *> list identifier))
-           <|> rWord "always"       *> parens (Always      <$> parseEvent <*> (comma *> parseStmt))
-           <|> rWord "asn"          *> parens (ContAsgn    <$> identifier <*> (comma *> identifier))
-           <|> rWord "taint_source" *> parens (Source      <$> identifier)
-           <|> rWord "taint_sink"   *> parens (Sink        <$> identifier)
+_parseIR :: Parser ParseIR  
+_parseIR = rWord "register"         *> parens (PRegister    <$> identifier)
+           <|> rWord "wire"         *> parens (PWire        <$> identifier)
+           <|> rWord "link"         *> parens (PUF          <$> identifier <*> (comma *> list identifier))
+           <|> rWord "always"       *> parens (PAlways      <$> parseEvent <*> (comma *> parseStmt))
+           <|> rWord "asn"          *> parens (PContAsgn    <$> identifier <*> (comma *> identifier))
+           <|> rWord "taint_source" *> parens (PSource      <$> identifier)
+           <|> rWord "taint_sink"   *> parens (PSink        <$> identifier)
 
-parseStmt :: Parser Stmt  
-parseStmt = rWord "block"      *> parens (Block        <$> list parseStmt)
-            <|> rWord "b_asn"  *> parens (BlockingAsgn <$> identifier <*> (comma *> identifier))
-            <|> rWord "nb_asn" *> parens (BlockingAsgn <$> identifier <*> (comma *> identifier))
-            <|> rWord "ite"    *> parens (IfStmt       <$> identifier <*> (comma *> parseStmt) <*> (comma *> parseStmt))
-            <|> rWord "skip"   *> return Skip
+parseStmt :: Parser ParseStmt  
+parseStmt = rWord "block"      *> parens (PBlock           <$> list parseStmt)
+            <|> rWord "b_asn"  *> parens (PBlockingAsgn    <$> identifier <*> (comma *> identifier))
+            <|> rWord "nb_asn" *> parens (PNonBlockingAsgn <$> identifier <*> (comma *> identifier))
+            <|> rWord "ite"    *> parens (PIfStmt          <$> identifier <*> (comma *> parseStmt) <*> (comma *> parseStmt))
+            <|> rWord "skip"   *> return PSkip
 
-parseEvent :: Parser Event
-parseEvent = rWord "event1(star)" *> return Star
-             <|> rWord "event2(posedge" *> comma *> (PosEdge <$> identifier) <* rWord ")"
-             <|> rWord "event2(negedge" *> comma *> (NegEdge <$> identifier) <* rWord ")"
+parseEvent :: Parser ParseEvent
+parseEvent = rWord "event1(star)" *> return PStar
+             <|> rWord "event2(posedge" *> comma *> (PPosEdge <$> identifier) <* rWord ")"
+             <|> rWord "event2(negedge" *> comma *> (PNegEdge <$> identifier) <* rWord ")"
 
 --------------------------------------------------------------------------------
 -- | Tokenisers and Whitespace
@@ -119,12 +162,12 @@ identifier = lexeme (p >>= check)
                    then fail $ "keyword " ++ show x ++ " cannot be an identifier"
                    else return x
 
--- -----------------------------------------------------------------------------
--- PRINTING ERROR MESSAGES -----------------------------------------------------
--- -----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- | Printing Error Messages
+--------------------------------------------------------------------------------
 
 readFilePos    :: SourcePos -> IO String
-readFilePos pos = getPos pos <$> readFile (M.sourceName pos)
+readFilePos pos = getPos pos <$> readFile (MP.sourceName pos)
 
 getPos :: SourcePos -> String -> String
 getPos pos = getSpanSingle (unPos $ sourceLine pos) (unPos $ sourceColumn pos)
@@ -159,12 +202,62 @@ renderError e = do
   return $ printf "%s%s" snippet msg
 
 instance ShowErrorComponent SourcePos where
-  showErrorComponent pos = "parse error in file " ++ (M.sourceName pos)
+  showErrorComponent pos = "parse error in file " ++ (MP.sourceName pos)
 
 data IRParseError = IRParseError
   { eMsg :: !String
-  , ePos :: !M.SourcePos
+  , ePos :: !MP.SourcePos
   }
   deriving (Show, Typeable)
 
 instance Exception IRParseError
+
+-----------------------------------------------------------------------------------
+-- | ParseIR -> St
+-----------------------------------------------------------------------------------
+
+makeState :: [ParseIR] -> St
+makeState input = evalState pipeline initialParseSt
+  where
+    initialParseSt = ParseSt input initialSt
+    initialSt      = St { _registers = S.empty
+                        , _wires     = S.empty
+                        , _ufs       = M.empty
+                        , _sources   = S.empty
+                        , _sinks     = S.empty
+                        , _irs       = []
+                        }
+    pipeline       = collectVars >> makeIR >> use st
+
+-- -----------------------------------------------------------------------------
+-- 1. Collect vars
+-- -----------------------------------------------------------------------------
+
+collectVars :: State ParseSt ()
+collectVars = use parseIRs >>= sequence_ . (map collectVar)
+
+collectVar :: ParseIR -> State ParseSt ()
+collectVar (PRegister id) = st . registers %= S.insert id
+collectVar (PWire id)     = st . wires     %= S.insert id
+collectVar (PUF id vars)  = st . ufs       %= M.insert id vars
+collectVar (PSource s)    = st . sources   %= S.insert s
+collectVar (PSink s)      = st . sinks     %= S.insert s
+collectVar _              = return ()
+
+-- -----------------------------------------------------------------------------
+-- 3. Make IR elements
+-- -----------------------------------------------------------------------------
+makeIR :: State ParseSt ()
+makeIR = (st . irs) <~ (uses parseIRs (foldr makeIRFold []))
+
+makeIRFold                      :: ParseIR -> [IR] -> [IR]
+makeIRFold (PAlways PStar stmt) = (:) $ Always Star (makeStmt stmt)
+makeIRFold (PContAsgn l r)      = (:) $ ContAsgn l r
+makeIRFold _                    = id
+
+makeStmt                       :: ParseStmt -> Stmt
+makeStmt (PBlock ss)            = Block (makeStmt <$> ss)
+makeStmt (PBlockingAsgn l r)    = BlockingAsgn l r
+makeStmt (PNonBlockingAsgn l r) = NonBlockingAsgn l r
+makeStmt (PIfStmt cond th el)   = IfStmt cond (makeStmt th) (makeStmt el)
+makeStmt  PSkip                 = Skip
