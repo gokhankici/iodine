@@ -19,8 +19,8 @@ verylog options:
       Just generate the IR file and print it
   --just-vcgen
       Just generate the file that will be fed to qarmc and print it
-  --no-interpreter
-      Build the sicstus program rather than interpreting it
+  --emacs
+      Opens the output (IR or VC) in emacs
   -h, --help
       Prints this help
 

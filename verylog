@@ -24,10 +24,6 @@ verylog options:
       Just generate the IR file and print it
   --just-vcgen
       Just generate the file that will be fed to qarmc and print it
-  --plot
-      Plots the assignment graph (doesn't make sense atm)
-  --race
-      Checks race conditions
   --emacs
       Opens the output (IR or VC) in emacs
   -h, --help
