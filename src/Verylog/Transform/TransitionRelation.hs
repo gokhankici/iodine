@@ -20,25 +20,12 @@ next :: St -> (St, [HSFClause])
 next st = (st, (: []) $ nextClause st $ concat $ readIRs st nextIR)
 
 nextClause       :: St -> [HSFExpr] -> HSFClause
-nextClause st es = Next { hsfArgs = nextArgs st
+nextClause st es = Next { hsfArgs = nextArgs fmt st
                         , hsfBody = Ands (es ++ rest)
                         }
   where
     rest = ( nextSink <$> st^.sinks.to S.toList )
            ++ [ BinOp EQU (Var $ makeVarName fmt done_atom) (Number 0) ]
-
-nextArgs    :: St -> [Id]
-nextArgs st = let rs = st^.registers.to S.toList 
-                  ws = st^.wires.to     S.toList
-                  us = st^.ufs.to       M.keys
-                  vs = rs ++ ws
-                  os = us ++ [done_atom]
-              in    (makeVarName fmt                                <$> vs)
-                 ++ (makeVarName fmt{taggedVar=True}                <$> vs)
-                 ++ (makeVarName fmt                                <$> os)
-                 ++ (makeVarName fmt{primedVar=True}                <$> vs)
-                 ++ (makeVarName fmt{taggedVar=True,primedVar=True} <$> vs)
-                 ++ (makeVarName fmt{primedVar=True}                <$> os)
 
 nextIR :: IR -> R [HSFExpr]
 nextIR (Always _ s)   = nextStmt s

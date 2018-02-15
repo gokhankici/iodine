@@ -37,7 +37,7 @@ library:
   exposed-modules:
   - Verylog.Language.Parser
   - Verylog.Language.Types
-  - Verylog.VCGen
+  - Verylog.HSFGen
 
 executables:
   vcgen:

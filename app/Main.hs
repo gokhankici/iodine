@@ -6,7 +6,7 @@ import System.Environment (getArgs)
 import System.Exit
 import System.IO (stderr, hPutStrLn)
 
-import Verylog.VCGen
+import Verylog.HSFGen
 import Verylog.Language.Parser
 import Verylog.Language.Types
 
@@ -17,8 +17,8 @@ main =  do
   where
     printResults f = do putStrLn "/* -*- mode: prolog -*- */"
                         putStrLn "/* vim: set ft=prolog: */\n" 
-                        cs <- vcgen f
-                        forM_ cs (putStrLn . pprint)
+                        cs <- hsfgen f
+                        forM_ cs (\c -> putStrLn (pprint c) >> putStrLn "")
 
 peHandle :: IRParseError -> IO ()
 peHandle e = renderError e >>= hPutStrLn stderr >> exitFailure

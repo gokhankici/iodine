@@ -1,4 +1,4 @@
-module Verylog.VCGen (vcgen) where
+module Verylog.HSFGen (hsfgen) where
 
 import Control.Arrow
 
@@ -7,17 +7,19 @@ import Verylog.Language.Types
 import Verylog.HSF.Types
 import Verylog.Transform.InitialPass
 import Verylog.Transform.TransitionRelation
+import Verylog.Transform.VCGen
 
 pipeline f = parse f
              >>> initialPass >>> arr (\st -> (st, []))
              >>> collect next
+             >>> collect invs
              >>> arr (\(_st, cs) -> cs)
 
 collect :: (St -> (St, [HSFClause])) -> ((St, [HSFClause]) -> (St, [HSFClause]))
 collect step = first step >>> arr (\((st,cs2), cs1) -> (st, cs1 ++ cs2))
 
-vcgen :: FilePath -> IO [HSFClause]
-vcgen f = do
+hsfgen :: FilePath -> IO [HSFClause]
+hsfgen f = do
   s <- readFile f
   return $ pipeline f s
 
