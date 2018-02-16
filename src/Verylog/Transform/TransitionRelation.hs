@@ -19,12 +19,13 @@ next :: St -> (St, [HSFClause])
 next st = (st, (: []) $ nextClause st $ concat $ readIRs st nextIR)
 
 nextClause       :: St -> [HSFExpr] -> HSFClause
-nextClause st es = Next { hsfArgs = nextArgs fmt st
-                        , hsfBody = Ands (es ++ rest)
-                        }
-  where
-    rest = ( nextSink <$> st^.sinks )
-           ++ [ BinOp EQU (Var $ makeVarName fmt done_atom) (Number 0) ]
+nextClause st es =
+  let doneIfSinkTainted = Ands $ nextSink <$> st^.sinks 
+      notDone           = BinOp EQU (Var $ makeVarName fmt done_atom) (Number 0) 
+      transitions       = doneIfSinkTainted : notDone : es
+  in Next { hsfArgs = nextArgs fmt st
+          , hsfBody = Ands transitions
+          }
 
 nextIR :: IR -> R [HSFExpr]
 nextIR (Always _ s)   = nextStmt s
@@ -51,15 +52,8 @@ nextAsgn a l r = do cond <- isUF r
                     if cond then asgnUF else return [asgn]
 
   where
-    vl     = Var $ makeVarName fmt l
-    vl1    = Var $ makeVarName fmt{primedVar=True} l
-    vlt    = Var $ makeVarName fmt{taggedVar=True} l
-    vlt1   = Var $ makeVarName fmt{primedVar=True,taggedVar=True} l
-    vr     = Var $ makeVarName fmt r
-    vr1    = Var $ makeVarName fmt{primedVar=True} r
-    vrt    = Var $ makeVarName fmt{taggedVar=True} r
-    vrt1   = Var $ makeVarName fmt{primedVar=True,taggedVar=True} r   
-
+    vl = v l; vl1 = v1 l; vlt = vt l; vlt1 = vt1 l;
+    vr = v r; vr1 = v1 r; vrt = vt r; vrt1 = vt1 r;
     asgnUF = do atoms <- views ufs (M.lookupDefault err r)
                 case (Var . makeVarName fmt{taggedVar=True}) <$> atoms of
                   []   -> return [Boolean True]
@@ -83,3 +77,9 @@ nextSink s =
       vd  = Var $ makeVarName fmt done_atom
       vd1 = Var $ makeVarName fmt{primedVar=True} done_atom
   in  Ite (BinOp GE st1 (Number 1)) (BinOp EQU vd1 (Number 1)) (BinOp EQU vd1 vd)
+
+
+v   = Var . makeVarName fmt
+v1  = Var . makeVarName fmt{primedVar=True}
+vt  = Var . makeVarName fmt{taggedVar=True}
+vt1 = Var . makeVarName fmt{primedVar=True,taggedVar=True}

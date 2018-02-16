@@ -6,6 +6,7 @@ import           Control.Monad.Reader
 import qualified Data.HashMap.Strict      as M
 import           Control.Exception
 import           Text.Printf
+import           Debug.Trace
 
 import           Verylog.Language.Types
 import           Verylog.HSF.Types
@@ -63,3 +64,5 @@ nextArgs fmt st = allArgs fmt st ++ allArgs fmt{primedVar=True} st
 invArgs        :: VarFormat -> St -> [Id]
 invArgs fmt st = allArgs fmt{leftVar=True} st ++ allArgs fmt{rightVar=True} st
 
+trc         :: Show b => String -> b -> a -> a
+trc msg b a = trace (printf "%s: %s" msg (show b)) a

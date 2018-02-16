@@ -38,6 +38,9 @@ library:
   - Verylog.Language.Parser
   - Verylog.Language.Types
   - Verylog.HSFGen
+  - Verylog.Transform.Utils
+  - Verylog.Transform.TransitionRelation
+  - Verylog.Transform.VCGen
 
 executables:
   vcgen:

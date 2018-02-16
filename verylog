@@ -134,8 +134,9 @@ if [[ -n "$JUST_IR" ]]; then
 fi
 
 pushd $THIS_DIR
-stack exec -- $APP $IR_FILE > $HSF_FILE
+stack exec -- $APP $IR_FILE $HSF_FILE
 last_err=$?
+echo "\n"
 popd
 
 if [[ $last_err -ne 0 ]]; then

@@ -243,6 +243,11 @@ makeState input = evalState pipeline initialParseSt
                         st . wires     <~ uses parseWires     S.toList
                         st . sources   <~ uses parseSources   S.toList
                         st . sinks     <~ uses parseSinks     S.toList
+    
+                        let f = (== 0) . length
+                        noTaint <- liftM2 (||) (uses (st.sinks) f) (uses (st.sources) f)
+                        when noTaint $ throw (PassError "Source or sink taint information is missing")
+
                         use st
 
 -- -----------------------------------------------------------------------------

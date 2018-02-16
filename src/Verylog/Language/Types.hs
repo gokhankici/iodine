@@ -125,3 +125,6 @@ instance PPrint St where
                     . (map mapKV)
                     . (filter (\(_,l) -> length l > 0))
                     . M.toList
+
+instance Show St where
+  show = pprint
