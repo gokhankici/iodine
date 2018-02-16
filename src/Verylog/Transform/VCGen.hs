@@ -5,7 +5,6 @@ module Verylog.Transform.VCGen ( invs
 import           Control.Lens
 import           Control.Monad.Reader
 import           Data.List
-import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
 -- import           Control.Exception
 
@@ -25,7 +24,7 @@ invs st = let inv1    = runReader invInitClause st
 invInitClause :: R HSFClause
 invInitClause = do args <- asks (invArgs fmt)
                    -- set the taint bits of sources to 1
-                   ss <- views sources S.toList
+                   ss <- view sources
                    let r1 = [ Ands [ BinOp EQU (lt s) (Number 1)
                                    , BinOp EQU (rt s) (Number 1)
                                    ]
@@ -33,8 +32,8 @@ invInitClause = do args <- asks (invArgs fmt)
                             ]
 
                    -- set the taint bits of rest to 0
-                   rs <- views registers S.toList
-                   ws <- views wires     S.toList
+                   rs <- view registers
+                   ws <- view wires
                    let vs = (rs ++ ws) \\ ss
                    let r2 = [ Ands [ BinOp EQU (lt v) (Number 0)
                                    , BinOp EQU (rt v) (Number 0)
@@ -79,16 +78,16 @@ invMainIssueNewBit = do
   -- done l&r old&new set to 0
   let l1 = [ BinOp EQU v (Number 0) | v <- [l,lp,r,rp] <*> [done_atom]]
   -- issue a new taint bit
-  ss <- views sources S.toList
+  ss <- view sources
   let l2 = [ Ands [ BinOp EQU (ltp s) (Number 1)
                   , BinOp EQU (rtp s) (Number 1)
                   ]
            | s <- ss
            ]
   -- reset other taint bits
-  rs <- views registers S.toList
-  ws <- views wires     S.toList
-  us <- views ufs       M.keys
+  rs <- view registers
+  ws <- view wires
+  us <- views ufs M.keys
   let l3 = [ Ands [ BinOp EQU (ltp v) (Number 0)
                   , BinOp EQU (rtp v) (Number 0)
                   ]
@@ -116,7 +115,7 @@ invMainNextStep = do
            ]
 
   -- both read the same instructions
-  ss <- views sources S.toList
+  ss <- view sources
   let l2 = [ Ands [ BinOp EQU (lp s) (rp s)
                   , BinOp EQU (ltp s) (Number 0)
                   , BinOp EQU (rtp s) (Number 0)

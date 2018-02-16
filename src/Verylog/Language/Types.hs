@@ -7,7 +7,6 @@ import           Control.Exception
 import           Control.Lens
 import           Control.Monad.Reader
 import           Control.Monad.State.Lazy
-import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
 import           Data.Typeable
 import           Text.PrettyPrint hiding (sep)
@@ -39,11 +38,11 @@ data Stmt = Block           { blockStmts :: [Stmt] }
                             }
           | Skip
 
-data St = St { _registers :: S.HashSet Id
-             , _wires     :: S.HashSet Id
+data St = St { _registers :: [Id]
+             , _wires     :: [Id]
              , _ufs       :: M.HashMap Id [Id]
-             , _sources   :: S.HashSet Id
-             , _sinks     :: S.HashSet Id
+             , _sources   :: [Id]
+             , _sinks     :: [Id]
              , _irs       :: [IR]
              }
 
@@ -111,15 +110,14 @@ instance PPrint St where
   toDoc st = vcat $ stDoc : space : st^.irs.to (map toDoc)
     where
       stDoc = text "St" <+>
-              vcat [ lbrace <+> text "regs " <+> equals <+> st^.registers.to printSet
-                   , comma  <+> text "wires" <+> equals <+> st^.wires.to     printSet
+              vcat [ lbrace <+> text "regs " <+> equals <+> st^.registers.to printList
+                   , comma  <+> text "wires" <+> equals <+> st^.wires.to     printList
                    , comma  <+> text "ufs  " <+> equals <+> st^.ufs.to       printMap
-                   , comma  <+> text "srcs " <+> equals <+> st^.sources.to   printSet
-                   , comma  <+> text "sinks" <+> equals <+> st^.sinks.to     printSet
+                   , comma  <+> text "srcs " <+> equals <+> st^.sources.to   printList
+                   , comma  <+> text "sinks" <+> equals <+> st^.sinks.to     printList
                    , rbrace
                    ]
       printList   = brackets . text . (intercalate ", ")
-      printSet    = printList . S.toList
       mapKV (k,l) = "(" ++ k ++ ", [" ++ (intercalate ", " l) ++ "])"
       printMap    = brackets
                     . text

@@ -5,7 +5,6 @@ module Verylog.Transform.TransitionRelation ( next
 import           Control.Exception
 import           Control.Monad.Reader
 import           Control.Lens
-import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
 
 import           Verylog.Transform.Utils
@@ -24,7 +23,7 @@ nextClause st es = Next { hsfArgs = nextArgs fmt st
                         , hsfBody = Ands (es ++ rest)
                         }
   where
-    rest = ( nextSink <$> st^.sinks.to S.toList )
+    rest = ( nextSink <$> st^.sinks )
            ++ [ BinOp EQU (Var $ makeVarName fmt done_atom) (Number 0) ]
 
 nextIR :: IR -> R [HSFExpr]

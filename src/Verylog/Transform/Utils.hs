@@ -3,7 +3,6 @@ module Verylog.Transform.Utils where
 
 import           Control.Lens
 import           Control.Monad.Reader
-import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
 import           Control.Exception
 import           Text.Printf
@@ -47,8 +46,8 @@ makeVarName fmt@(VarFormat{..}) v = printf "%sV%s%s%s_%s" atom pos tag prime v
           | otherwise             = ""
 
 allArgs        :: VarFormat -> St -> [Id]
-allArgs fmt st = let rs = st^.registers.to S.toList 
-                     ws = st^.wires.to     S.toList
+allArgs fmt st = let rs = st^.registers
+                     ws = st^.wires
                      us = st^.ufs.to       M.keys
                      vs = rs ++ ws
                      os = us ++ [done_atom]
