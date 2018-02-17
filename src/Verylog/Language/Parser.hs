@@ -57,8 +57,13 @@ data ParseStmt = PBlock           [ParseStmt]
                                   ParseStmt
                | PSkip
 
-data ParseSt = ParseSt { _parseIRs :: [ParseIR]
-                       , _st       :: St
+data ParseSt = ParseSt { _parseIRs       :: [ParseIR]
+                       , _parseRegisters :: S.HashSet Id
+                       , _parseWires     :: S.HashSet Id
+                       , _parseSources   :: S.HashSet Id
+                       , _parseSinks     :: S.HashSet Id
+
+                       , _st             :: St
                        }
 
 makeLenses ''ParseSt
@@ -219,15 +224,31 @@ instance Exception IRParseError
 makeState :: [ParseIR] -> St
 makeState input = evalState pipeline initialParseSt
   where
-    initialParseSt = ParseSt input initialSt
-    initialSt      = St { _registers = S.empty
-                        , _wires     = S.empty
+    initialParseSt = ParseSt { _parseIRs       = input
+                             , _parseRegisters = S.empty
+                             , _parseWires     = S.empty
+                             , _parseSources   = S.empty
+                             , _parseSinks     = S.empty
+                             , _st             = initialSt
+                             }
+    initialSt      = St { _registers = []
+                        , _wires     = []
                         , _ufs       = M.empty
-                        , _sources   = S.empty
-                        , _sinks     = S.empty
+                        , _sources   = []
+                        , _sinks     = []
                         , _irs       = []
                         }
-    pipeline       = collectVars >> makeIR >> use st
+    pipeline       = collectVars >> makeIR >> lastpass
+    lastpass       = do st . registers <~ uses parseRegisters S.toList
+                        st . wires     <~ uses parseWires     S.toList
+                        st . sources   <~ uses parseSources   S.toList
+                        st . sinks     <~ uses parseSinks     S.toList
+    
+                        let f = (== 0) . length
+                        noTaint <- liftM2 (||) (uses (st.sinks) f) (uses (st.sources) f)
+                        when noTaint $ throw (PassError "Source or sink taint information is missing")
+
+                        use st
 
 -- -----------------------------------------------------------------------------
 -- 1. Collect vars
@@ -237,11 +258,11 @@ collectVars :: State ParseSt ()
 collectVars = use parseIRs >>= sequence_ . (map collectVar)
 
 collectVar :: ParseIR -> State ParseSt ()
-collectVar (PRegister id) = st . registers %= S.insert id
-collectVar (PWire id)     = st . wires     %= S.insert id
+collectVar (PRegister id) = parseRegisters %= S.insert id
+collectVar (PWire id)     = parseWires     %= S.insert id
 collectVar (PUF id vars)  = st . ufs       %= M.insert id vars
-collectVar (PSource s)    = st . sources   %= S.insert s
-collectVar (PSink s)      = st . sinks     %= S.insert s
+collectVar (PSource s)    = parseSources   %= S.insert s
+collectVar (PSink s)      = parseSinks     %= S.insert s
 collectVar _              = return ()
 
 -- -----------------------------------------------------------------------------

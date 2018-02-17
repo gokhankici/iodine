@@ -5,9 +5,7 @@ module Verylog.Transform.VCGen ( invs
 import           Control.Lens
 import           Control.Monad.Reader
 import           Data.List
-import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
--- import           Control.Exception
 
 import           Verylog.Transform.Utils
 import           Verylog.Language.Types
@@ -25,7 +23,7 @@ invs st = let inv1    = runReader invInitClause st
 invInitClause :: R HSFClause
 invInitClause = do args <- asks (invArgs fmt)
                    -- set the taint bits of sources to 1
-                   ss <- views sources S.toList
+                   ss <- view sources
                    let r1 = [ Ands [ BinOp EQU (lt s) (Number 1)
                                    , BinOp EQU (rt s) (Number 1)
                                    ]
@@ -33,8 +31,8 @@ invInitClause = do args <- asks (invArgs fmt)
                             ]
 
                    -- set the taint bits of rest to 0
-                   rs <- views registers S.toList
-                   ws <- views wires     S.toList
+                   rs <- view registers
+                   ws <- view wires
                    let vs = (rs ++ ws) \\ ss
                    let r2 = [ Ands [ BinOp EQU (lt v) (Number 0)
                                    , BinOp EQU (rt v) (Number 0)
@@ -70,7 +68,9 @@ invMainClause = do args       <- asks (invArgs fmt)
                    or2 <- invMainNextStep
 
                    let or3 = Structure invPred args 
-                   return $ Inv argsPrimed (Ands [Ors [or1, or2], or3])
+
+                   or4 <- asks ufEqs
+                   return $ Inv argsPrimed (Ands $ or3 : or4 : Ors [or1, or2] : [] )
                                                 
 
 invMainIssueNewBit :: R HSFExpr
@@ -79,16 +79,25 @@ invMainIssueNewBit = do
   -- done l&r old&new set to 0
   let l1 = [ BinOp EQU v (Number 0) | v <- [l,lp,r,rp] <*> [done_atom]]
   -- issue a new taint bit
-  ss <- views sources S.toList
+  ss <- view sources
   let l2 = [ Ands [ BinOp EQU (ltp s) (Number 1)
                   , BinOp EQU (rtp s) (Number 1)
                   ]
            | s <- ss
            ]
   -- reset other taint bits
-  rs <- views registers S.toList
-  ws <- views wires     S.toList
-  us <- views ufs       M.keys
+  _rs <- view registers
+  _ws <- view wires
+  _us <- view ufs
+
+  let rs = trc "|registers|" (length _rs) _rs
+  let ws = trc "|wires|"     (length _ws) _ws
+
+  let us = let cnt      = (M.size _us)
+               constCnt = foldr (\l sum -> if length l == 0 then sum + 1 else sum) 0 _us
+               ufArgCnt = foldr (\l sum -> if any (isPrefixOf "uf_") l then sum + 1 else sum) 0 _us
+           in trc "|ufs|, |constUF|, |hasUfArg|" (cnt,constCnt,ufArgCnt) (M.keys _us)
+
   let l3 = [ Ands [ BinOp EQU (ltp v) (Number 0)
                   , BinOp EQU (rtp v) (Number 0)
                   ]
@@ -116,7 +125,7 @@ invMainNextStep = do
            ]
 
   -- both read the same instructions
-  ss <- views sources S.toList
+  ss <- view sources
   let l2 = [ Ands [ BinOp EQU (lp s) (rp s)
                   , BinOp EQU (ltp s) (Number 0)
                   , BinOp EQU (rtp s) (Number 0)
@@ -140,15 +149,31 @@ getCondAtoms = views irs (concat . map irHelper)
   
 
 invPropClause :: R HSFClause
-invPropClause = do args <- asks (invArgs fmt)
-                   let vld = Var $ makeVarName fmt{leftVar=True} done_atom
-                       vrd = Var $ makeVarName fmt{rightVar=True} done_atom
-                       r   = Prop
-                             (BinOp EQU vrd (Number 1))
-                             (Ands [ Structure "inv" args
-                                   , BinOp EQU vld (Number 1)
-                                   ])
-                   return r
+invPropClause = do
+  _args <- asks (invArgs fmt)
+  let args = trc "|invArgs|" (length _args) _args
+
+  let vld = Var $ makeVarName fmt{leftVar=True} done_atom
+      vrd = Var $ makeVarName fmt{rightVar=True} done_atom
+      r   = Prop
+            (BinOp EQU vrd (Number 1))
+            (Ands [ Structure "inv" args
+                  , BinOp EQU vld (Number 1)
+                  ])
+  return r
                      
 queryNaming :: R HSFClause
 queryNaming = asks (invArgs fmt{atomVar=True}) >>= (return . QueryNaming)
+
+
+ufEqs :: St -> HSFExpr
+ufEqs st = Ands [ BinOp AND
+                  (line fmt                 uf args)
+                  (line fmt{primedVar=True} uf args)
+                | (uf,args) <- st^.ufs.to M.toList
+                ]
+  where
+    mkv f            = Var . makeVarName f
+    line fmt uf args = BinOp IMPLIES (argsEq fmt args) (ufEq fmt uf)
+    argsEq fmt args  = Ands (ufEq fmt <$> args)
+    ufEq fmt v       = BinOp EQU (mkv fmt{leftVar=True} v) (mkv fmt{rightVar=True} v)
