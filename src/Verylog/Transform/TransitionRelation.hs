@@ -28,8 +28,10 @@ nextClause st es =
           }
 
 nextIR :: IR -> R [HSFExpr]
-nextIR (Always _ s)   = nextStmt s
-nextIR (ContAsgn l r) = nextAsgn CA l r
+nextIR (Always _ s)     = nextStmt s
+nextIR (ContAsgn l r)   = nextAsgn CA l r
+-- TODO
+nextIR (ModuleInst{..}) = return [Structure (makeNextPred modInstName) []]
 
 nextStmt :: Stmt -> R [HSFExpr]
 nextStmt (Block{..})           = concat <$> mapM nextStmt blockStmts

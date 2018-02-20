@@ -14,12 +14,16 @@ import           Data.List
 
 type Id = String
 
-data IR = Always   { event      :: Event
-                   , alwaysStmt :: Stmt
-                   }
-        | ContAsgn { caLhs      :: Id
-                   , caRhs      :: Id
-                   }
+data IR = Always     { event      :: Event
+                     , alwaysStmt :: Stmt
+                     }
+        | ContAsgn   { caLhs :: Id
+                     , caRhs :: Id
+                     }
+        | ModuleInst { modInstName :: String
+                     , modInstArgs :: [(String,String)] -- formal & actual parameters
+                     , modInstSt   :: St
+                     }
 
 data Event = Star
            | PosEdge Id
@@ -38,12 +42,18 @@ data Stmt = Block           { blockStmts :: [Stmt] }
                             }
           | Skip
 
-data St = St { _registers :: [Id]
-             , _wires     :: [Id]
+data St = St { _ports     :: [Id]
              , _ufs       :: M.HashMap Id [Id]
              , _sources   :: [Id]
              , _sinks     :: [Id]
              , _irs       :: [IR]
+             }
+
+emptySt = St { _ports     = []
+             , _ufs       = M.empty
+             , _sources   = []
+             , _sinks     = []
+             , _irs       = []
              }
 
 makeLenses ''St
@@ -83,6 +93,15 @@ class PPrint a where
 instance PPrint IR where
   toDoc (Always{..})      = text "always(" <> vcat [toDoc event <> comma, toDoc alwaysStmt] <> text ")."
   toDoc (ContAsgn{..})    = text "asn(" <> text caLhs <> comma <+> text caRhs <> text ")."
+  toDoc (ModuleInst{..})  = text "module" <> vcat [ lparen <+> text modInstName
+                                                  , comma  <+> pl (pe <$> modInstArgs)
+                                                  , comma  <+> toDoc modInstSt
+                                                  , rparen
+                                                  ] <> text "."
+    where
+      pe (x,y) = parens (text x <> comma <+> text y)
+      pl = brackets . hsep . (punctuate (text ", "))
+                            
   
 instance PPrint Stmt where
   toDoc (Block [])     = brackets empty
@@ -110,8 +129,7 @@ instance PPrint St where
   toDoc st = vcat $ stDoc : space : st^.irs.to (map toDoc)
     where
       stDoc = text "St" <+>
-              vcat [ lbrace <+> text "regs " <+> equals <+> st^.registers.to printList
-                   , comma  <+> text "wires" <+> equals <+> st^.wires.to     printList
+              vcat [ lbrace <+> text "ports" <+> equals <+> st^.ports.to     printList
                    , comma  <+> text "ufs  " <+> equals <+> st^.ufs.to       printMap
                    , comma  <+> text "srcs " <+> equals <+> st^.sources.to   printList
                    , comma  <+> text "sinks" <+> equals <+> st^.sinks.to     printList

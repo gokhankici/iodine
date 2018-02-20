@@ -4,6 +4,7 @@ module Verylog.HSF.Types where
 
 import Verylog.Language.Types
 import Text.PrettyPrint
+import Text.Printf
 
 data HSFClause = QueryNaming { hsfArgs :: [Id] }
                | Next        { hsfArgs :: [HSFVar]
@@ -43,6 +44,9 @@ printArgs as = hcat $ punctuate (comma <> space) (text <$> as)
 
 nextPred = "next"
 invPred  = "inv"
+
+makeNextPred     :: String -> String
+makeNextPred sfx = printf "next_%s" sfx
 
 instance PPrint HSFClause where
   toDoc (QueryNaming{..}) = text "query_naming(" <> text invPred <> lparen <> printArgs hsfArgs <> text "))."

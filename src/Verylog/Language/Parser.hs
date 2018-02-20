@@ -29,24 +29,37 @@ import           Verylog.Language.Utils
 -----------------------------------------------------------------------------------
 -- | Verylog IR
 -----------------------------------------------------------------------------------
-data ParseIR = PRegister String
-             | PWire     String
-             | PUF       String
-                         [String]
-                         
-             | PAlways   ParseEvent
-                         ParseStmt
-                         
-             | PContAsgn String
-                         String
-                         
-             | PSource   String
-             | PSink     String
-             
+
+data ParsePort = PRegister { parsePortName :: String }
+               | PWire     { parsePortName :: String }
+
+data ParseBehavior = PAlways ParseEvent ParseStmt
+
 data ParseEvent = PStar
                 | PPosEdge String
                 | PNegEdge String
 
+data ParseUF = PUF String [String]
+
+data ParseGate = PContAsgn String String
+               | PModuleInst { pmInstName      :: String            -- name of the module
+                             , pmInstPortNames :: [String]          -- port list (i.e. formal parameters)
+                             , pmInstArgs      :: [String]          -- instantiations (i.e. actual parameters)
+                             , pmInstPorts     :: [ParsePort]       -- wires or registers used
+                             , pmInstGates     :: [ParseGate]       -- assign or module instantiations
+                             , pmInstBehaviors :: [ParseBehavior]   -- always blocks
+                             , pmInstUFs       :: [ParseUF]         -- uninterpreted functions
+                             }
+                         
+data ParseIR = TopModule { mPortNames :: [String]          -- port list (i.e. formal parameters)
+                         , mPorts     :: [ParsePort]       -- wires os registers used
+                         , mGates     :: [ParseGate]       -- assign or module instantiations
+                         , mBehaviors :: [ParseBehavior]   -- always blocks
+                         , mUFs       :: [ParseUF]         -- uninterpreted functions
+                         }
+             | PSource   String
+             | PSink     String
+             
 data ParseStmt = PBlock           [ParseStmt]
                | PBlockingAsgn    String
                                   String
@@ -57,13 +70,10 @@ data ParseStmt = PBlock           [ParseStmt]
                                   ParseStmt
                | PSkip
 
-data ParseSt = ParseSt { _parseIRs       :: [ParseIR]
-                       , _parseRegisters :: S.HashSet Id
-                       , _parseWires     :: S.HashSet Id
-                       , _parseSources   :: S.HashSet Id
-                       , _parseSinks     :: S.HashSet Id
-
-                       , _st             :: St
+data ParseSt = ParseSt { _parseSources :: S.HashSet Id
+                       , _parseSinks   :: S.HashSet Id
+                       , _parsePorts   :: S.HashSet Id
+                       , _st           :: St
                        }
 
 makeLenses ''ParseSt
@@ -73,7 +83,7 @@ type Parser = Parsec SourcePos String
 -- --------------------------------------------------------------------------------
 parse :: FilePath -> String -> St
 -- --------------------------------------------------------------------------------
-parse f s = makeState $ parseWith (many parseIR) f s
+parse f s = makeState $ parseWith parseIR f s
 
 parseWith  :: Parser a -> FilePath -> String -> a
 parseWith p f s = case runParser (whole p) f s of
@@ -84,17 +94,53 @@ parseWith p f s = case runParser (whole p) f s of
 -- | Top-Level Expression Parser
 --------------------------------------------------------------------------------
 
-parseIR :: Parser ParseIR
-parseIR = spaceConsumer *> _parseIR <* char '.' <* spaceConsumer
+parsePort :: Parser ParsePort
+parsePort = rWord "register" *> parens (PRegister <$> identifier)
+            <|> rWord "wire" *> parens (PWire     <$> identifier)
 
-_parseIR :: Parser ParseIR  
-_parseIR = rWord "register"         *> parens (PRegister    <$> identifier)
-           <|> rWord "wire"         *> parens (PWire        <$> identifier)
-           <|> rWord "link"         *> parens (PUF          <$> identifier <*> (comma *> list identifier))
-           <|> rWord "always"       *> parens (PAlways      <$> parseEvent <*> (comma *> parseStmt))
-           <|> rWord "asn"          *> parens (PContAsgn    <$> identifier <*> (comma *> identifier))
-           <|> rWord "taint_source" *> parens (PSource      <$> identifier)
-           <|> rWord "taint_sink"   *> parens (PSink        <$> identifier)
+parseBehavior :: Parser ParseBehavior
+parseBehavior = rWord "always" *> parens (PAlways <$> parseEvent <*> (comma *> parseStmt))
+
+parseEvent :: Parser ParseEvent
+parseEvent = rWord "event1(star)" *> return PStar
+             <|> rWord "event2(posedge" *> comma *> (PPosEdge <$> identifier) <* rWord ")"
+             <|> rWord "event2(negedge" *> comma *> (PNegEdge <$> identifier) <* rWord ")"
+
+parseUF :: Parser ParseUF
+parseUF = rWord "link" *> parens (PUF <$> identifier <*> (comma *> list identifier))
+
+parseGate :: Parser ParseGate
+parseGate = rWord "asn" *> parens (PContAsgn <$> identifier <*> (comma *> identifier))
+            <|> parseModuleInst
+
+parseModuleInst :: Parser ParseGate
+parseModuleInst = rWord "module"
+                  *> parens (PModuleInst
+                              <$> identifier
+                              <*> (comma *> list identifier)
+                              <*> (comma *> list identifier)
+                              <*> (comma *> list parsePort)
+                              <*> (comma *> list parseGate)
+                              <*> (comma *> list parseBehavior)
+                              <*> (comma *> list parseUF))
+
+parseTopModule :: Parser ParseIR
+parseTopModule = spaceConsumer
+                 *> rWord "topmodule"
+                 *> parens (TopModule
+                             <$> list identifier
+                             <*> (comma *> list parsePort)
+                             <*> (comma *> list parseGate)
+                             <*> (comma *> list parseBehavior)
+                             <*> (comma *> list parseUF))
+                 <* char '.' <* spaceConsumer
+
+parseTaint :: Parser ParseIR  
+parseTaint = spaceConsumer
+             *> ( rWord "taint_source" *> parens (PSource <$> identifier)
+                  <|> rWord "taint_sink" *> parens (PSink <$> identifier)
+                )
+             <* char '.' <* spaceConsumer
 
 parseStmt :: Parser ParseStmt  
 parseStmt = rWord "block"      *> parens (PBlock           <$> list parseStmt)
@@ -103,10 +149,8 @@ parseStmt = rWord "block"      *> parens (PBlock           <$> list parseStmt)
             <|> rWord "ite"    *> parens (PIfStmt          <$> identifier <*> (comma *> parseStmt) <*> (comma *> parseStmt))
             <|> rWord "skip"   *> return PSkip
 
-parseEvent :: Parser ParseEvent
-parseEvent = rWord "event1(star)" *> return PStar
-             <|> rWord "event2(posedge" *> comma *> (PPosEdge <$> identifier) <* rWord ")"
-             <|> rWord "event2(negedge" *> comma *> (PNegEdge <$> identifier) <* rWord ")"
+parseIR :: Parser [ParseIR]
+parseIR = (:) <$> parseTopModule <*> many parseTaint
 
 --------------------------------------------------------------------------------
 -- | Tokenisers and Whitespace
@@ -154,7 +198,7 @@ rWord w = string w <* notFollowedBy alphaNumChar <* spaceConsumer
 keywords :: [String]
 keywords =
   [ "register", "wire", "always", "link", "asn", "taint_source", "taint_sink"
-  , "block", "b_asn", "nb_asn", "ite", "skip"
+  , "block", "b_asn", "nb_asn", "ite", "skip", "module", "topmodule"
   ]
 
 -- | `identifier` parses identifiers: lower-case alphabets followed by alphas or digits
@@ -221,69 +265,65 @@ instance Exception IRParseError
 -- | ParseIR -> St
 -----------------------------------------------------------------------------------
 
+emptyParseSt = ParseSt { _parseSources = S.empty
+                       , _parseSinks   = S.empty
+                       , _parsePorts   = S.empty
+                       , _st           = emptySt
+                       }
+
 makeState :: [ParseIR] -> St
-makeState input = evalState pipeline initialParseSt
+makeState (TopModule{..}:taints) = evalState comp emptyParseSt
   where
-    initialParseSt = ParseSt { _parseIRs       = input
-                             , _parseRegisters = S.empty
-                             , _parseWires     = S.empty
-                             , _parseSources   = S.empty
-                             , _parseSinks     = S.empty
-                             , _st             = initialSt
-                             }
-    initialSt      = St { _registers = []
-                        , _wires     = []
-                        , _ufs       = M.empty
-                        , _sources   = []
-                        , _sinks     = []
-                        , _irs       = []
-                        }
-    pipeline       = collectVars >> makeIR >> lastpass
-    lastpass       = do st . registers <~ uses parseRegisters S.toList
-                        st . wires     <~ uses parseWires     S.toList
-                        st . sources   <~ uses parseSources   S.toList
-                        st . sinks     <~ uses parseSinks     S.toList
+    comp = do sequence_ $ collectVar <$> taints
+              st           .= collectModule mPorts mGates mBehaviors mUFs
+              st . sources <~ uses parseSources   S.toList
+              st . sinks   <~ uses parseSinks     S.toList
+
+              let f = (== 0) . length
+              noTaint <- liftM2 (||) (uses (st.sinks) f) (uses (st.sources) f)
+              when noTaint $ throw (PassError "Source or sink taint information is missing")
+
+              use st
+makeState _ = throw (PassError "First ir is not a toplevel module !")
+
+collectVar                :: ParseIR -> State ParseSt ()
+collectVar (PSource s)     = parseSources %= S.insert s
+collectVar (PSink s)       = parseSinks   %= S.insert s
+collectVar (TopModule{..}) = return ()
     
-                        let f = (== 0) . length
-                        noTaint <- liftM2 (||) (uses (st.sinks) f) (uses (st.sources) f)
-                        when noTaint $ throw (PassError "Source or sink taint information is missing")
+collectModule :: [ParsePort] -> [ParseGate] -> [ParseBehavior] -> [ParseUF] -> St
+collectModule prts gates bhvs ufs = evalState comp emptyParseSt
+  where
+    comp = do sequence_ $ (\p -> parsePorts %= S.insert (parsePortName p)) <$> prts
+              sequence_ (collectGate <$> reverse gates)
+              sequence_ (collectBhv  <$> reverse bhvs)
+              sequence_ (collectUF   <$> reverse ufs)
+              st . ports <~ uses parsePorts S.toList
+              use st
 
-                        use st
+collectGate :: ParseGate -> State ParseSt ()
+collectGate (PContAsgn l r)   = st . irs %= (:) (ContAsgn l r)
+collectGate (PModuleInst{..}) = st . irs %= (:) ModuleInst{ modInstName = pmInstName
+                                                          , modInstArgs = zip pmInstPortNames pmInstArgs
+                                                          , modInstSt   = st'
+                                                          }
+  where st' = collectModule pmInstPorts pmInstGates pmInstBehaviors pmInstUFs
 
--- -----------------------------------------------------------------------------
--- 1. Collect vars
--- -----------------------------------------------------------------------------
+collectBhv :: ParseBehavior -> State ParseSt ()
+collectBhv (PAlways ev stmt) = st . irs %= (:) (Always (makeEvent ev) (makeStmt stmt))
 
-collectVars :: State ParseSt ()
-collectVars = use parseIRs >>= sequence_ . (map collectVar)
-
-collectVar :: ParseIR -> State ParseSt ()
-collectVar (PRegister id) = parseRegisters %= S.insert id
-collectVar (PWire id)     = parseWires     %= S.insert id
-collectVar (PUF id vars)  = st . ufs       %= M.insert id vars
-collectVar (PSource s)    = parseSources   %= S.insert s
-collectVar (PSink s)      = parseSinks     %= S.insert s
-collectVar _              = return ()
-
--- -----------------------------------------------------------------------------
--- 3. Make IR elements
--- -----------------------------------------------------------------------------
-makeIR :: State ParseSt ()
-makeIR = (st . irs) <~ (uses parseIRs (foldr makeIRFold []))
-
-makeIRFold                      :: ParseIR -> [IR] -> [IR]
-makeIRFold (PAlways event stmt) = (:) $ Always (makeEvent event) (makeStmt stmt)
-makeIRFold (PContAsgn l r)      = (:) $ ContAsgn l r
-makeIRFold _                    = id
-
-makeEvent :: ParseEvent -> Event
+makeEvent                :: ParseEvent -> Event
 makeEvent PStar          = Star
 makeEvent (PPosEdge clk) = PosEdge clk
 makeEvent (PNegEdge clk) = NegEdge clk
 
-makeStmt                       :: ParseStmt -> Stmt
+makeStmt                        :: ParseStmt -> Stmt
 makeStmt (PBlock ss)            = Block (makeStmt <$> ss)
 makeStmt (PBlockingAsgn l r)    = BlockingAsgn l r
 makeStmt (PNonBlockingAsgn l r) = NonBlockingAsgn l r
 makeStmt (PIfStmt cond th el)   = IfStmt cond (makeStmt th) (makeStmt el)
 makeStmt  PSkip                 = Skip
+
+collectUF              :: ParseUF -> State ParseSt ()
+collectUF (PUF v args) = st . ufs %= M.insert v args
+      

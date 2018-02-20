@@ -12,6 +12,7 @@ MAIN_PL="src/${MAIN_MODULE}.pl"
 
 zparseopts -D -E -- \
            -just-ir=JUST_IR -just-vcgen=JUST_VCGEN \
+           -vc-debug=VC_DEBUG \
            M:=TOPLEVEL_MODULE \
            -emacs=EMACS \
            h=HELP -help=HELP
@@ -26,6 +27,8 @@ verylog options:
       Just generate the file that will be fed to qarmc and print it
   --emacs
       Opens the output (IR or VC) in emacs
+  --vc-debug
+      Run vcgen but do not print the resulting Horn Clauses
   -h, --help
       Prints this help
 
@@ -85,14 +88,9 @@ fi
 
 # output of this function is redirected to the IR_FILE
 print_IR() {
-    predicates='register/1, wire/1, module_inst/3, always/2, link/2, asn/2, taint_source/1, taint_sink/1'
     cat <<EOF
 % -*- mode: prolog -*-
 % vim: set ft=prolog:
-:- multifile     $predicates.
-:- dynamic       $predicates.
-:- discontiguous $predicates.
-
 EOF
     
     pushd ${FILENAME:A:h}
@@ -142,6 +140,10 @@ popd
 if [[ $last_err -ne 0 ]]; then
     echo "[VCGEN ERROR]" 1>&2
     exit 1 
+fi
+
+if [[ -n "$VC_DEBUG" ]]; then
+    exit 0
 fi
 
 if [[ -n "$JUST_VCGEN" ]]; then

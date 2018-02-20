@@ -13,12 +13,25 @@ import           Verylog.HSF.Types
 
 type R = Reader St
 
+-- TODO
 invs :: St -> (St, [HSFClause])
-invs st = let inv1    = runReader invInitClause st 
-              invMain = runReader invMainClause st
-              invProp = runReader invPropClause st
-              qn      = runReader queryNaming st
-          in (st, [qn, inv1, invMain, invProp])
+invs st = (st, loop st)
+  where
+    loop :: St -> [HSFClause]
+    loop st = (single_inv st) ++ (foldr h [] (st^.irs))
+
+    h :: IR -> [HSFClause] -> [HSFClause]
+    h (ModuleInst {..}) cs  = (loop modInstSt) ++ cs
+    h (ContAsgn{..}) cs     = cs
+    h (Always{..}) cs       = cs
+
+single_inv :: St -> [HSFClause]
+single_inv st =
+  let inv1    = runReader invInitClause st 
+      invMain = runReader invMainClause st
+      invProp = runReader invPropClause st
+      qn      = runReader queryNaming st
+  in [qn, inv1, invMain, invProp]
 
 invInitClause :: R HSFClause
 invInitClause = do args <- asks (invArgs fmt)
@@ -31,9 +44,8 @@ invInitClause = do args <- asks (invArgs fmt)
                             ]
 
                    -- set the taint bits of rest to 0
-                   rs <- view registers
-                   ws <- view wires
-                   let vs = (rs ++ ws) \\ ss
+                   ps <- view ports
+                   let vs = ps \\ ss
                    let r2 = [ Ands [ BinOp EQU (lt v) (Number 0)
                                    , BinOp EQU (rt v) (Number 0)
                                    ]
@@ -86,12 +98,10 @@ invMainIssueNewBit = do
            | s <- ss
            ]
   -- reset other taint bits
-  _rs <- view registers
-  _ws <- view wires
+  _ps <- view ports
   _us <- view ufs
 
-  let rs = trc "|registers|" (length _rs) _rs
-  let ws = trc "|wires|"     (length _ws) _ws
+  let ps = trc "|ports|" (length _ps) _ps
 
   let us = let cnt      = (M.size _us)
                constCnt = foldr (\l sum -> if length l == 0 then sum + 1 else sum) 0 _us
@@ -101,13 +111,13 @@ invMainIssueNewBit = do
   let l3 = [ Ands [ BinOp EQU (ltp v) (Number 0)
                   , BinOp EQU (rtp v) (Number 0)
                   ]
-           | v <- (rs ++ ws) \\ ss
+           | v <- ps \\ ss
            ]
   -- all variable valuations stay the same
   let l4 = [ Ands [ BinOp EQU (lp v) (l v)
                   , BinOp EQU (rp v) (r v)
                   ]
-           | v <- rs ++ ws ++ us
+           | v <- ps ++ us
            ]
   
   return $ Ands (l1 ++ l2 ++ l3 ++ l4)
