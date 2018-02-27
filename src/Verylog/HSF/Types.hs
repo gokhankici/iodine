@@ -8,10 +8,8 @@ import Text.Printf
 import Control.Lens
 
 data HSFClause = QueryNaming { hsfArgs :: [Id] }
-               | Next        { hsfArgs :: [HSFVar]
-                             , hsfBody :: HSFExpr
-                             }
-               | Inv         { hsfArgs :: [HSFVar]
+               | Inv         { hsfId   :: Int
+                             , hsfArgs :: [HSFVar]
                              , hsfBody :: HSFExpr
                              }
                | Prop        { hsfHead :: HSFExpr
@@ -51,11 +49,7 @@ makeInvPred a = printf "inv%d" (a^.aId)
 
 instance PPrint HSFClause where
   toDoc (QueryNaming{..}) = text "query_naming(" <> text invPred <> lparen <> printArgs hsfArgs <> text "))."
-  toDoc (Next{..})        = text nextPred <> lparen <> printArgs hsfArgs <> text ") :=" 
-                            $+$ text "("
-                            $+$ nest 3 (toDoc hsfBody)
-                            $+$ text ")."
-  toDoc (Inv{..})         = text invPred <> lparen <> printArgs hsfArgs <> text ") :-" 
+  toDoc (Inv{..})         = text invPred <> int hsfId <> lparen <> printArgs hsfArgs <> text ") :-" 
                             $+$ text "("
                             $+$ nest 3 (toDoc hsfBody)
                             $+$ text ")."

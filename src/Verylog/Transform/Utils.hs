@@ -29,6 +29,9 @@ fmt = VarFormat { taggedVar = False
                 , atomVar   = False
                 } 
 
+makeVar :: VarFormat -> Id -> HSFExpr
+makeVar fmt v = Var (makeVarName fmt v)
+
 makeVarName :: VarFormat -> Id -> HSFVar
 makeVarName fmt@(VarFormat{..}) v = printf "%sV%s%s%s_%s" atom pos tag prime v
   where
@@ -59,8 +62,10 @@ allArgs fmt st = let ps = st^.ports
 nextArgs        :: VarFormat -> St -> [Id]
 nextArgs fmt st = allArgs fmt st ++ allArgs fmt{primedVar=True} st
 
-invArgs        :: VarFormat -> St -> [Id]
-invArgs fmt st = allArgs fmt{leftVar=True} st ++ allArgs fmt{rightVar=True} st
+invArgs        :: VarFormat -> AlwaysBlock -> [Id]
+invArgs fmt a = allArgs fmt{leftVar=True} st ++ allArgs fmt{rightVar=True} st
+  where
+    st = a^.aSt
 
 trc         :: Show b => String -> b -> a -> a
 trc msg b a = trace (printf "%s: %s" msg (show b)) a
