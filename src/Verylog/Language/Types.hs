@@ -12,6 +12,11 @@ import           Data.Typeable
 import           Text.PrettyPrint hiding (sep)
 import           Data.List
 
+data AlwaysBlock = AB { _aEvent   :: Event
+                      , _aStmt    :: Stmt
+                      , _aSt      :: St
+                      }
+
 type Id = String
 
 data IR = Always     { event      :: Event
@@ -21,11 +26,6 @@ data IR = Always     { event      :: Event
                      , modInstArgs :: [(String,String)] -- formal & actual parameters
                      , modInstSt   :: St
                      }
-
-data AlwaysBlock = AB { _aEvent   :: Event
-                      , _aStmt    :: Stmt
-                      , _aSt      :: St
-                      }
 
 data Event = Star
            | PosEdge Id
