@@ -2,17 +2,12 @@
 module Verylog.Transform.Utils where
 
 import           Control.Lens
-import           Control.Monad.Reader
-import qualified Data.HashMap.Strict      as M
 import           Control.Exception
 import           Text.Printf
 import           Debug.Trace
 
 import           Verylog.Language.Types
 import           Verylog.HSF.Types
-
-isUF   :: Id -> Reader St Bool
-isUF v = views ufs (M.member v)
 
 data VarFormat = VarFormat { taggedVar :: Bool
                            , primedVar :: Bool

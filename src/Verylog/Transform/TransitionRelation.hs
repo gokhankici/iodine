@@ -1,4 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 module Verylog.Transform.TransitionRelation ( next
                                             ) where
 
@@ -11,72 +13,65 @@ import           Verylog.Transform.Utils
 import           Verylog.Language.Types
 import           Verylog.HSF.Types
 
-type R = Reader St
+data TRSt = TRSt { _trSt  :: St
+                 , _trFmt :: VarFormat
+                 }
+
+makeLenses ''TRSt
+
+type R = Reader TRSt
 
 data Asgn = BA | NBA  
 
 next :: VarFormat -> AlwaysBlock -> HSFExpr
-next fmt a = Boolean True
+next fmt a = Ands es
+  where
+    es = runReader (nextStmt (a^.aStmt)) (TRSt (a^.aSt) fmt)
 
--- next :: St -> (St, [HSFClause])
--- next st = (st, (: []) $ nextClause st $ concat $ readIRs st nextIR)
+nextStmt :: Stmt -> R [HSFExpr]
+nextStmt (Block{..})           = concat <$> mapM nextStmt blockStmts
+nextStmt (BlockingAsgn{..})    = nextAsgn BA  lhs rhs
+nextStmt (NonBlockingAsgn{..}) = nextAsgn NBA lhs rhs
+nextStmt (IfStmt{..})          = do fmt <- view trFmt
+                                    let condTrue  = BinOp GE n (Number 1)
+                                        condFalse = BinOp LE n (Number 0)
+                                        n = Var $ makeVarName fmt ifCond
+                                    thenClauses <- nextStmt thenStmt
+                                    elseClauses <- nextStmt elseStmt
+                                    let th = Ands (condTrue  : thenClauses)
+                                        el = Ands (condFalse : elseClauses)
+                                    return $ [BinOp OR th el]
+nextStmt Skip                  = return []
 
--- nextClause       :: St -> [HSFExpr] -> HSFClause
--- nextClause st es =
---   let doneIfSinkTainted = Ands $ nextSink <$> st^.sinks 
---       notDone           = BinOp EQU (Var $ makeVarName fmt done_atom) (Number 0) 
---       transitions       = doneIfSinkTainted : notDone : es
---   in Next { hsfArgs = nextArgs fmt st
---           , hsfBody = Ands transitions
---           }
+nextAsgn :: Asgn -> Id -> Id -> R [HSFExpr]
+nextAsgn _ l r = do cond <- isUF r
+                    if cond then asgnUF else asgn
 
--- nextIR :: IR -> R [HSFExpr]
--- nextIR (Always _ s)     = nextStmt s
--- nextIR (ModuleInst{..}) = return . concat $ readIRs modInstSt nextIR
+  where
+    asgnUF = do atoms <- views trSt (M.lookupDefault err r . view ufs)
+                fmt <- view trFmt
+                let vlt1 = vt1 fmt l
+                case (Var . makeVarName fmt{taggedVar=True}) <$> atoms of
+                  []   -> return [Boolean True]
+                  v:vs -> let rhs = foldr (BinOp PLUS) v vs
+                          in return [BinOp EQU vlt1 rhs]
+    err    = throw (PassError $ "could not find " ++ r ++ " in ufs")
 
--- nextStmt :: Stmt -> R [HSFExpr]
--- nextStmt (Block{..})           = concat <$> mapM nextStmt blockStmts
--- nextStmt (BlockingAsgn{..})    = nextAsgn BA  lhs rhs
--- nextStmt (NonBlockingAsgn{..}) = nextAsgn NBA lhs rhs
--- nextStmt (IfStmt{..})          = do let condTrue  = BinOp GE n (Number 1)
---                                         condFalse = BinOp LE n (Number 0)
---                                     thenClauses <- nextStmt thenStmt
---                                     elseClauses <- nextStmt elseStmt
---                                     let th = Ands (condTrue  : thenClauses)
---                                         el = Ands (condFalse : elseClauses)
---                                     return $ [BinOp OR th el]
---   where
---     n = Var $ makeVarName fmt ifCond
-
--- nextStmt Skip                  = return []
-
--- nextAsgn :: Asgn -> Id -> Id -> R [HSFExpr]
--- nextAsgn _ l r = do cond <- isUF r
---                     if cond then asgnUF else return [asgn]
-
---   where
---     vl1 = v1 l; vlt1 = vt1 l;
---     vr = v r; vrt = vt r;
---     asgnUF = do atoms <- views ufs (M.lookupDefault err r)
---                 case (Var . makeVarName fmt{taggedVar=True}) <$> atoms of
---                   []   -> return [Boolean True]
---                   v:vs -> let rhs = foldr (BinOp PLUS) v vs
---                           in return [BinOp EQU vlt1 rhs]
---     err    = throw (PassError $ "could not find " ++ r ++ " in ufs")
-
---     asgn   = Ands [ BinOp EQU vlt1 vrt
---                   , BinOp EQU vl1 vr
---                   ]
+    asgn   = do fmt <- view trFmt
+                let vl1  = v1 fmt l
+                    vlt1 = vt1 fmt l
+                    vr   = v fmt r
+                    vrt  = vt fmt r
+                return [ Ands [ BinOp EQU vlt1 vrt
+                              , BinOp EQU vl1  vr
+                              ]
+                       ]
                     
--- nextSink :: Id -> HSFExpr
--- nextSink s =
---   let st1 = Var $ makeVarName fmt{taggedVar=True,primedVar=True} s
---       vd  = Var $ makeVarName fmt done_atom
---       vd1 = Var $ makeVarName fmt{primedVar=True} done_atom
---   in  Ite (BinOp GE st1 (Number 1)) (BinOp EQU vd1 (Number 1)) (BinOp EQU vd1 vd)
+v   fmt = makeVar fmt
+v1  fmt = makeVar fmt{primedVar=True}
+vt  fmt = makeVar fmt{taggedVar=True}
+vt1 fmt = makeVar fmt{primedVar=True,taggedVar=True}
 
 
--- v   = Var . makeVarName fmt
--- v1  = Var . makeVarName fmt{primedVar=True}
--- vt  = Var . makeVarName fmt{taggedVar=True}
--- vt1 = Var . makeVarName fmt{primedVar=True,taggedVar=True}
+isUF   :: Id -> R Bool
+isUF v = views trSt (M.member v . view ufs)
