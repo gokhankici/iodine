@@ -48,11 +48,11 @@ makeVarName fmt@(VarFormat{..}) v = printf "%sV%s%s%s_%s" atom pos tag prime v
 
 allArgs        :: VarFormat -> St -> [Id]
 allArgs fmt st = let ps = st^.ports
-                     us = st^.ufs.to M.keys
-                     os = us ++ [done_atom]
+                     -- us = st^.ufs.to M.keys
+                     -- os = us ++ [done_atom]
                  in (makeVarName fmt                    <$> ps)
                     ++ (makeVarName fmt{taggedVar=True} <$> ps)
-                    ++ (makeVarName fmt                 <$> os)
+                    -- ++ (makeVarName fmt                 <$> os)
 
 
           

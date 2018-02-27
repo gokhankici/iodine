@@ -18,7 +18,7 @@ zparseopts -D -E -- \
            h=HELP -help=HELP
 
 if [[ $# -eq 0 || -n "$HELP" ]]; then
-    echo "usage: $0 [options] <verilog file>"
+    echo "usage: ${0:t} [options] <verilog file>"
     echo "
 verylog options:
   --just-ir
@@ -143,6 +143,10 @@ if [[ $last_err -ne 0 ]]; then
 fi
 
 if [[ -n "$VC_DEBUG" ]]; then
+    echo '################################################################################'
+    echo '################################################################################'
+    echo '################################################################################'
+    cat $HSF_FILE
     exit 0
 fi
 

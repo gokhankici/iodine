@@ -87,14 +87,13 @@ m_flattenToAlways st = sequence ((f st) <$> st^.irs) >>= return . concat
     filterMap toKeep = M.filterWithKey (\k _v -> Li.elem k toKeep)
 
     filterSt :: Stmt -> St -> St
-    filterSt s =
-       over ports   (filterList vars) .
-       over ufs     (filterMap vars)  .
-       over sources (filterList vars) .
-       over sinks   (filterList vars) .
-       set irs      []
-      where
-        vars = foldVariables id s
+    filterSt s st = let vars = foldVariables id s
+                        st'  = over ufs     (filterMap vars)  .
+                               over sources (filterList vars) .
+                               over sinks   (filterList vars) .
+                               set irs      [] $
+                               st
+                    in st' & ports %~ filterList (vars ++ (concat $ M.elems (st'^.ufs)))
 
 class FoldVariables a where
   foldVariables :: (Id -> b) -> a -> [b]

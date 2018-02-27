@@ -19,7 +19,24 @@ invs :: [AlwaysBlock] -> [HSFClause]
 invs = concatMap modular_inv
 
 modular_inv :: AlwaysBlock -> [HSFClause]  
-modular_inv ab = trace (show ab) []
+modular_inv a = trace (show a) $ [initial_inv] <*> [a]
+
+initial_inv   :: AlwaysBlock -> HSFClause
+initial_inv a =
+  Prop
+  (Structure (makeInvPred a) args)
+  (Boolean True)
+  where
+    args = invArgs fmt (a^.aSt)
+
+tag_reset_inv   :: AlwaysBlock -> HSFClause
+tag_reset_inv a = undefined
+
+next_step_inv   :: AlwaysBlock -> HSFClause 
+next_step_inv a = undefined
+
+non_interference_inv   :: AlwaysBlock -> HSFClause 
+non_interference_inv a = undefined
 
 -- TODO
 old_invs :: St -> (St, [HSFClause])
