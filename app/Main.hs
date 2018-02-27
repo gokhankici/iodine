@@ -16,7 +16,7 @@ main =  do
 
 printResults          :: FilePath -> FilePath -> IO ()
 printResults fin fout = do
-  (_, cs) <- hsfgen fin
+  cs <- hsfgen fin
   withFile fout WriteMode $ \h -> do
     let pr = hPutStrLn h
     pr "/* -*- mode: prolog -*- */"

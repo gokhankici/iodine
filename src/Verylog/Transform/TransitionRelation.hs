@@ -13,7 +13,7 @@ import           Verylog.HSF.Types
 
 type R = Reader St
 
-data Asgn = CA | BA | NBA  
+data Asgn = BA | NBA  
 
 next :: St -> (St, [HSFClause])
 next st = (st, (: []) $ nextClause st $ concat $ readIRs st nextIR)
@@ -29,9 +29,7 @@ nextClause st es =
 
 nextIR :: IR -> R [HSFExpr]
 nextIR (Always _ s)     = nextStmt s
-nextIR (ContAsgn l r)   = nextAsgn CA l r
--- TODO
-nextIR (ModuleInst{..}) = return [Structure (makeNextPred modInstName) []]
+nextIR (ModuleInst{..}) = return . concat $ readIRs modInstSt nextIR
 
 nextStmt :: Stmt -> R [HSFExpr]
 nextStmt (Block{..})           = concat <$> mapM nextStmt blockStmts
@@ -50,12 +48,12 @@ nextStmt (IfStmt{..})          = do let condTrue  = BinOp GE n (Number 1)
 nextStmt Skip                  = return []
 
 nextAsgn :: Asgn -> Id -> Id -> R [HSFExpr]
-nextAsgn a l r = do cond <- isUF r
+nextAsgn _ l r = do cond <- isUF r
                     if cond then asgnUF else return [asgn]
 
   where
-    vl = v l; vl1 = v1 l; vlt = vt l; vlt1 = vt1 l;
-    vr = v r; vr1 = v1 r; vrt = vt r; vrt1 = vt1 r;
+    vl1 = v1 l; vlt1 = vt1 l;
+    vr = v r; vrt = vt r;
     asgnUF = do atoms <- views ufs (M.lookupDefault err r)
                 case (Var . makeVarName fmt{taggedVar=True}) <$> atoms of
                   []   -> return [Boolean True]
@@ -63,15 +61,9 @@ nextAsgn a l r = do cond <- isUF r
                           in return [BinOp EQU vlt1 rhs]
     err    = throw (PassError $ "could not find " ++ r ++ " in ufs")
 
-    asgn   = case a of
-               CA -> Ands [ BinOp EQU vl vr
-                          , BinOp EQU vl1 vr1
-                          , BinOp EQU vlt vrt
-                          , BinOp EQU vlt1 vrt1
-                          ]
-               _  -> Ands [ BinOp EQU vlt1 vrt
-                          , BinOp EQU vl1 vr
-                          ]
+    asgn   = Ands [ BinOp EQU vlt1 vrt
+                  , BinOp EQU vl1 vr
+                  ]
                     
 nextSink :: Id -> HSFExpr
 nextSink s =

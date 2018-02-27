@@ -17,13 +17,15 @@ type Id = String
 data IR = Always     { event      :: Event
                      , alwaysStmt :: Stmt
                      }
-        | ContAsgn   { caLhs :: Id
-                     , caRhs :: Id
-                     }
         | ModuleInst { modInstName :: String
                      , modInstArgs :: [(String,String)] -- formal & actual parameters
                      , modInstSt   :: St
                      }
+
+data AlwaysBlock = AB { _aEvent   :: Event
+                      , _aStmt    :: Stmt
+                      , _aSt      :: St
+                      }
 
 data Event = Star
            | PosEdge Id
@@ -56,7 +58,8 @@ emptySt = St { _ports     = []
              , _irs       = []
              }
 
-makeLenses ''St
+makeLenses ''St 
+makeLenses ''AlwaysBlock
 
 done_atom :: Id
 done_atom = "done"
@@ -72,11 +75,11 @@ readIRs st f = st^.irs.to (map (r . f))
   where
     r m = runReader m st
 
-
 data PassError = PassError !String
                deriving (Show, Typeable)
 
 instance Exception PassError
+  
 
 -- -----------------------------------------------------------------------------  
 -- Pretty printing
@@ -92,7 +95,6 @@ class PPrint a where
 
 instance PPrint IR where
   toDoc (Always{..})      = text "always(" <> vcat [toDoc event <> comma, toDoc alwaysStmt] <> text ")."
-  toDoc (ContAsgn{..})    = text "asn(" <> text caLhs <> comma <+> text caRhs <> text ")."
   toDoc (ModuleInst{..})  = text "module" <> vcat [ lparen <+> text modInstName
                                                   , comma  <+> pl (pe <$> modInstArgs)
                                                   , comma  <+> toDoc modInstSt
@@ -123,7 +125,7 @@ instance PPrint Event where
   toDoc (NegEdge clk) = text "event2(negedge," <> text clk <> rparen
 
 instance PPrint a => PPrint [a] where
-  toDoc = vcat . (map toDoc)
+  toDoc = cat . (map toDoc)
 
 instance PPrint St where
   toDoc st = vcat $ stDoc : space : st^.irs.to (map toDoc)
@@ -135,14 +137,29 @@ instance PPrint St where
                    , comma  <+> text "sinks" <+> equals <+> st^.sinks.to     printList
                    , rbrace
                    ]
-      printList   = brackets . text . (intercalate ", ")
-      mapKV (k,l) = "(" ++ k ++ ", [" ++ (intercalate ", " l) ++ "])"
-      printMap    = brackets
-                    . text
-                    . (intercalate ", ")
-                    . (map mapKV)
-                    . (filter (\(_,l) -> length l > 0))
-                    . M.toList
 
 instance Show St where
   show = pprint
+
+instance PPrint AlwaysBlock where
+  toDoc a = text "always(" <> vcat [ comment "ports  " <+> printList (a^.aSt^.ports) <> comma
+                                   , comment "ufs    " <+> printMap  (a^.aSt^.ufs) <> comma
+                                   , comment "sources" <+> printList (a^.aSt^.sources) <> comma
+                                   , comment "sinks  " <+> printList (a^.aSt^.sinks) <> comma
+                                   , toDoc (a^.aEvent) <> comma
+                                   , toDoc (a^.aStmt)
+                                   ] <> text ")."
+    where
+      comment t = text "/*" <+> text t <+> text "*/"
+
+instance Show AlwaysBlock where
+  show = pprint
+
+printList   = brackets . text . (intercalate ", ")
+mapKV (k,l) = "(" ++ k ++ ", [" ++ (intercalate ", " l) ++ "])"
+printMap    = brackets
+              . text
+              . (intercalate ", ")
+              . (map mapKV)
+              . (filter (\(_,l) -> length l > 0))
+              . M.toList

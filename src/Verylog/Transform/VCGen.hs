@@ -11,18 +11,25 @@ import           Verylog.Transform.Utils
 import           Verylog.Language.Types
 import           Verylog.HSF.Types
 
+import Debug.Trace  
+
 type R = Reader St
 
+invs :: [AlwaysBlock] -> [HSFClause]
+invs = concatMap modular_inv
+
+modular_inv :: AlwaysBlock -> [HSFClause]  
+modular_inv ab = trace (show ab) []
+
 -- TODO
-invs :: St -> (St, [HSFClause])
-invs st = (st, loop st)
+old_invs :: St -> (St, [HSFClause])
+old_invs st = (st, loop st)
   where
     loop :: St -> [HSFClause]
     loop st = (single_inv st) ++ (foldr h [] (st^.irs))
 
     h :: IR -> [HSFClause] -> [HSFClause]
     h (ModuleInst {..}) cs  = (loop modInstSt) ++ cs
-    h (ContAsgn{..}) cs     = cs
     h (Always{..}) cs       = cs
 
 single_inv :: St -> [HSFClause]
@@ -98,15 +105,15 @@ invMainIssueNewBit = do
            | s <- ss
            ]
   -- reset other taint bits
-  _ps <- view ports
-  _us <- view ufs
+  ps <- view ports
+  us <- views ufs M.keys
 
-  let ps = trc "|ports|" (length _ps) _ps
+  -- let ps = trc "|ports|" (length _ps) _ps
 
-  let us = let cnt      = (M.size _us)
-               constCnt = foldr (\l sum -> if length l == 0 then sum + 1 else sum) 0 _us
-               ufArgCnt = foldr (\l sum -> if any (isPrefixOf "uf_") l then sum + 1 else sum) 0 _us
-           in trc "|ufs|, |constUF|, |hasUfArg|" (cnt,constCnt,ufArgCnt) (M.keys _us)
+  -- let us = let cnt      = (M.size _us)
+  --              constCnt = foldr (\l sum -> if length l == 0 then sum + 1 else sum) 0 _us
+  --              ufArgCnt = foldr (\l sum -> if any (isPrefixOf "uf_") l then sum + 1 else sum) 0 _us
+  --          in trc "|ufs|, |constUF|, |hasUfArg|" (cnt,constCnt,ufArgCnt) (M.keys _us)
 
   let l3 = [ Ands [ BinOp EQU (ltp v) (Number 0)
                   , BinOp EQU (rtp v) (Number 0)
@@ -160,8 +167,8 @@ getCondAtoms = views irs (concat . map irHelper)
 
 invPropClause :: R HSFClause
 invPropClause = do
-  _args <- asks (invArgs fmt)
-  let args = trc "|invArgs|" (length _args) _args
+  args <- asks (invArgs fmt)
+  -- let args = trc "|invArgs|" (length _args) _args
 
   let vld = Var $ makeVarName fmt{leftVar=True} done_atom
       vrd = Var $ makeVarName fmt{rightVar=True} done_atom
