@@ -66,12 +66,19 @@ inlineVariables st = st & irs .~ map (mapIR M.empty) (st ^. irs)
 -- | St -> [AlwaysBlock] :::: Flatten the module hierarchy after inlining
 -----------------------------------------------------------------------------------
 
+type S = State Int
+
 flattenToAlways :: St -> [AlwaysBlock]
-flattenToAlways st = concatMap (f st) (st^.irs)
+flattenToAlways st = evalState (m_flattenToAlways st) 0
+
+m_flattenToAlways :: St -> S [AlwaysBlock]
+m_flattenToAlways st = sequence ((f st) <$> st^.irs) >>= return . concat
   where
-    f                     :: St -> IR -> [AlwaysBlock]
-    f st (Always{..})     =  [AB event alwaysStmt (filterSt alwaysStmt st)]
-    f _  (ModuleInst{..}) =  flattenToAlways modInstSt
+    f                     :: St -> IR -> S [AlwaysBlock]
+    f st (Always{..})     =  do id <- get
+                                put (id+1)
+                                return [AB event alwaysStmt id (filterSt alwaysStmt st)]
+    f _  (ModuleInst{..}) =  m_flattenToAlways modInstSt
 
     filterList :: [Id] -> [Id] -> [Id]
     filterList toKeep = filter (\x -> Li.elem x toKeep)

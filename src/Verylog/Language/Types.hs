@@ -14,6 +14,7 @@ import           Data.List
 
 data AlwaysBlock = AB { _aEvent   :: Event
                       , _aStmt    :: Stmt
+                      , _aId      :: Int
                       , _aSt      :: St
                       }
 
@@ -146,6 +147,7 @@ instance PPrint AlwaysBlock where
                                    , comment "ufs    " <+> printMap  (a^.aSt^.ufs) <> comma
                                    , comment "sources" <+> printList (a^.aSt^.sources) <> comma
                                    , comment "sinks  " <+> printList (a^.aSt^.sinks) <> comma
+                                   , comment "id     " <+> int (a^.aId) <> comma
                                    , toDoc (a^.aEvent) <> comma
                                    , toDoc (a^.aStmt)
                                    ] <> text ")."
