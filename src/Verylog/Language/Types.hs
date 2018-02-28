@@ -12,11 +12,19 @@ import           Data.Typeable
 import           Text.PrettyPrint hiding (sep)
 import           Data.List
 
+--------------------------------------------------------------------------------
+-- IR for the formalism
+--------------------------------------------------------------------------------
+
 data AlwaysBlock = AB { _aEvent   :: Event
                       , _aStmt    :: Stmt
                       , _aId      :: Int
                       , _aSt      :: St
                       }
+
+--------------------------------------------------------------------------------
+-- Intermediary IR after parsing
+--------------------------------------------------------------------------------
 
 type Id = String
 

@@ -7,7 +7,9 @@ import Text.PrettyPrint
 import Text.Printf
 import Control.Lens
 
-data HSFClause = QueryNaming { hsfArgs :: [Id] }
+data HSFClause = QueryNaming { hsfId   :: Int
+                             , hsfArgs :: [Id]
+                             }
                | Inv         { hsfId   :: Int
                              , hsfArgs :: [HSFVar]
                              , hsfBody :: HSFExpr
@@ -48,7 +50,9 @@ makeInvPred   :: AlwaysBlock -> String
 makeInvPred a = printf "inv%d" (a^.aId)
 
 instance PPrint HSFClause where
-  toDoc (QueryNaming{..}) = text "query_naming(" <> text invPred <> lparen <> printArgs hsfArgs <> text "))."
+  toDoc (QueryNaming{..}) = text "query_naming("
+                            <> text invPred <> int hsfId
+                            <> lparen <> printArgs hsfArgs <> text "))."
   toDoc (Inv{..})         = text invPred <> int hsfId <> lparen <> printArgs hsfArgs <> text ") :-" 
                             $+$ text "("
                             $+$ nest 3 (toDoc hsfBody)
@@ -89,10 +93,10 @@ instance PPrint HSFExpr where
                              AND     -> cat [ toDoc hsfExpL <> comma
                                             , toDoc hsfExpR
                                             ]
-                             OR      -> cat [ lparen <> text "   " <> toDoc hsfExpL
-                                            , semi   <> text "   " <> toDoc hsfExpR
-                                            , rparen
-                                            ]
+                             OR      -> vcat [ lparen <> text "   " <> toDoc hsfExpL
+                                             , semi   <> text "   " <> toDoc hsfExpR
+                                             , rparen
+                                             ]
 
 ptoDoc :: PPrint a => a -> Doc
 ptoDoc = parens . toDoc
