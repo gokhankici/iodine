@@ -1,9 +1,12 @@
 {-# LANGUAGE RecordWildCards #-}
+
 module Verylog.Transform.VCGen ( invs
                                ) where
 
 import           Control.Lens
+import           Control.Monad.State.Lazy
 import           Data.List
+import qualified Data.HashSet               as S
 -- import qualified Data.HashMap.Strict      as M
 -- import           Text.Printf
 
@@ -14,11 +17,77 @@ import           Verylog.HSF.Types
 
 import Debug.Trace
 
+--------------------------------------------------------------------------------
 invs :: [AlwaysBlock] -> [HSFClause]
+--------------------------------------------------------------------------------
 invs as = concatMap modular_inv as ++ non_interference_checks as
-  where
-    non_interference_checks as = non_int_chk as [] []
 
+--------------------------------------------------------------------------------
+modular_inv :: AlwaysBlock -> [HSFClause]  
+--------------------------------------------------------------------------------
+modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
+  where
+    a' = trace (show a) a
+
+--------------------------------------------------------------------------------
+initial_inv :: AlwaysBlock -> HSFClause
+--------------------------------------------------------------------------------
+initial_inv a = Inv (a^.aId) args body
+  where
+    st    = a^.aSt
+    args  = invArgs fmt a
+    body1 = Ands [ BinOp EQU (lvar sntz) (rvar sntz)
+                 | sntz <- st^.sanitize
+                 ]
+    body2 = Ands [ BinOp EQU tv (Number 0)
+                 | s <- st^.ports, tv <- [ltvar, rtvar] <*> [s]
+                 ]
+    body  = Ands [ body1, body2 ]
+    
+
+--------------------------------------------------------------------------------
+tag_reset_inv :: AlwaysBlock -> HSFClause
+--------------------------------------------------------------------------------
+tag_reset_inv a = Inv (a^.aId) args' body
+  where
+    st    = a^.aSt
+    args  = invArgs fmt a
+    args' = invArgs fmt{primedVar=True} a
+
+    body = let b1 = Ands [ BinOp EQU tv (Number 1)
+                         | s <- st^.sources
+                         , tv <- [ltvar', rtvar'] <*> [s]
+                         ]
+               b2 = Ands [ BinOp EQU tv (Number 0)
+                         | v <- (st^.ports) \\ (st^.sources)
+                         , tv <- [ltvar', rtvar'] <*> [v]
+                         ]
+               b3 = Ands [ Ands [ BinOp EQU (lvar' p) (lvar p)
+                                , BinOp EQU (rvar' p) (rvar p)
+                                ]
+                         | p <- st^.ports
+                         ]
+           in Ands [ b1, b2, b3
+                   , Structure (makeInvPred a) args
+                   ]
+
+--------------------------------------------------------------------------------
+next_step_inv :: AlwaysBlock -> HSFClause 
+--------------------------------------------------------------------------------
+next_step_inv a = Inv (a^.aId) args' body
+  where
+    args  = invArgs fmt                 a
+    args' = invArgs fmt{primedVar=True} a
+    body  = Ands [ next fmt{leftVar=True} a
+                 , next fmt{rightVar=True} a
+                 , Structure (makeInvPred a) args
+                 ]
+
+--------------------------------------------------------------------------------
+non_interference_checks :: [AlwaysBlock] -> [HSFClause]
+--------------------------------------------------------------------------------
+non_interference_checks as = non_int_chk as [] []
+  where
     pred a1 a2 = not . null $ (a1^.aSt^.ports) `intersect` (a2^.aSt^.ports)
 
     non_int_chk []     _checked cs = cs
@@ -29,50 +98,17 @@ invs as = concatMap modular_inv as ++ non_interference_checks as
           cs'          = foldr f cs checked
       in non_int_chk as (a1:checked) cs'
 
-modular_inv :: AlwaysBlock -> [HSFClause]  
-modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
+type RWSet = (S.HashSet Id, S.HashSet Id)
+
+readWriteSet :: AlwaysBlock -> RWSet
+readWriteSet a = evalState (comp (a^.aStmt)) (S.empty, S.empty)
   where
-    a' = trace (show a) a
+    comp :: Stmt -> State RWSet RWSet
+    comp = undefined
 
-ltvar = makeVar fmt{taggedVar=True, leftVar=True}
-rtvar = makeVar fmt{taggedVar=True, rightVar=True}
-
-initial_inv   :: AlwaysBlock -> HSFClause
-initial_inv a = Inv (a^.aId) args body
-  where
-    st   = a^.aSt
-    args = invArgs fmt a
-    body = Ands [ BinOp EQU tv (Number 0)
-                | s <- st^.ports, tv <- [ltvar, rtvar] <*> [s]
-                ]
-    
-
-tag_reset_inv   :: AlwaysBlock -> HSFClause
-tag_reset_inv a = Inv (a^.aId) args body
-  where
-    st   = a^.aSt
-    args = invArgs fmt a
-    body = let b1 = Ands [ BinOp EQU tv (Number 1)
-                         | s <- st^.sources
-                         , tv <- [ltvar, rtvar] <*> [s]
-                         ]
-               b2 = Ands [ BinOp EQU tv (Number 0)
-                         | v <- (st^.ports) \\ (st^.sources)
-                         , tv <- [ltvar, rtvar] <*> [v]
-                         ]
-           in Ands [b1, b2]
-
-next_step_inv   :: AlwaysBlock -> HSFClause 
-next_step_inv a = Inv (a^.aId) args' body
-  where
-    args  = invArgs fmt                 a
-    args' = invArgs fmt{primedVar=True} a
-    body  = Ands [ next fmt{leftVar=True} a
-                 , next fmt{rightVar=True} a
-                 , Structure (makeInvPred a) args
-                 ]
-
-non_interference_inv       :: AlwaysBlock -> AlwaysBlock -> HSFClause 
+--------------------------------------------------------------------------------
+non_interference_inv :: AlwaysBlock -> AlwaysBlock -> HSFClause 
+--------------------------------------------------------------------------------
 non_interference_inv a1 a2 = Inv (a2^.aId) args2' body
   where
     args1  = invArgs fmt a1
@@ -257,3 +293,17 @@ non_interference_inv a1 a2 = Inv (a2^.aId) args2' body
 --     line fmt uf args = BinOp IMPLIES (argsEq fmt args) (ufEq fmt uf)
 --     argsEq fmt args  = Ands (ufEq fmt <$> args)
 --     ufEq fmt v       = BinOp EQU (mkv fmt{leftVar=True} v) (mkv fmt{rightVar=True} v)
+
+
+-------------------------------------------------------------------------------- 
+-- Helper functions
+-------------------------------------------------------------------------------- 
+lvar  = makeVar fmt{leftVar=True}
+rvar  = makeVar fmt{rightVar=True}
+ltvar = makeVar fmt{taggedVar=True, leftVar=True}
+rtvar = makeVar fmt{taggedVar=True, rightVar=True}
+
+lvar'  = makeVar fmt{primedVar=True, leftVar=True}
+rvar'  = makeVar fmt{primedVar=True, rightVar=True}
+ltvar' = makeVar fmt{primedVar=True, taggedVar=True, leftVar=True}
+rtvar' = makeVar fmt{primedVar=True, taggedVar=True, rightVar=True}

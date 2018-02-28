@@ -174,10 +174,10 @@ whole :: Parser a -> Parser a
 whole p = spaceConsumer *> p <* eof
 
 spaceConsumer :: Parser ()
-spaceConsumer = (L.space (void spaceChar) lineCmnt blockCmnt) *> (L.space (void spaceChar) prologDecl blockCmnt)
+spaceConsumer = (L.space (void spaceChar) lineCmnt blockCmnt) -- *> (L.space (void spaceChar) prologDecl blockCmnt)
   where blockCmnt    = L.skipBlockComment "/*" "*/"
-        prologDecl   = L.skipLineComment ":-"
         lineCmnt     = L.skipLineComment "%"
+        -- prologDecl   = L.skipLineComment ":-"
 
 -- | `symbol s` parses just the string s (and trailing whitespace)
 symbol :: String -> Parser String
