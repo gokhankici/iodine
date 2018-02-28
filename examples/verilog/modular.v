@@ -1,9 +1,9 @@
-module modular(clk, slow);
+module modular(clk);
    input clk, slow;
-   reg   slow;
-   reg   x; // @annot{taint_source(v_x)}
+   reg   slow;                  // @annot{sanitize(v_slow)}
+   reg   x;                     // @annot{taint_source(v_x)}
    reg   y;
-   reg   z; // @annot{taint_sink(v_y)}
+   reg   z;                     // @annot{taint_sink(v_y)}
    reg   a;
    reg   b;
 

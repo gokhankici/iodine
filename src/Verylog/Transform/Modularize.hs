@@ -37,9 +37,10 @@ inlineVariables st = st & irs .~ map (mapIR M.empty) (st ^. irs)
             st'   = evalState (comp args') modInstSt
 
     comp :: Args -> State St St
-    comp args = do irs   %= map (mapIR args)
-                   ports %= replaceVars args
-                   ufs   %= replaceUFArgs args
+    comp args = do irs      %= map (mapIR args)
+                   ports    %= replaceVars args
+                   ufs      %= replaceUFArgs args
+                   sanitize %= replaceVars args
                    get
 
     inline :: Args -> Stmt -> Stmt
@@ -87,13 +88,17 @@ m_flattenToAlways st = sequence ((f st) <$> st^.irs) >>= return . concat
     filterMap toKeep = M.filterWithKey (\k _v -> Li.elem k toKeep)
 
     filterSt :: Stmt -> St -> St
-    filterSt s st = let vars = foldVariables id s
-                        st'  = over ufs     (filterMap vars)  .
-                               over sources (filterList vars) .
-                               over sinks   (filterList vars) .
-                               set irs      [] $
-                               st
-                    in st' & ports %~ filterList (vars ++ (concat $ M.elems (st'^.ufs)))
+    filterSt s st = let vars  = foldVariables id s
+                        st'   = over ufs      (filterMap vars)  .
+                                set irs      [] $
+                                st
+                        vars' = vars ++ (concat $ M.elems (st'^.ufs))
+                        st''  = over ports    (filterList vars') .
+                                over sources  (filterList vars') .
+                                over sinks    (filterList vars') .
+                                over sanitize (filterList vars') $
+                                st'
+                    in st''
 
 class FoldVariables a where
   foldVariables :: (Id -> b) -> a -> [b]

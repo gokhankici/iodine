@@ -27,6 +27,8 @@ import           Text.Printf
 import           Verylog.Language.Types
 import           Verylog.Language.Utils
 
+import Debug.Trace
+
 -----------------------------------------------------------------------------------
 -- | Verylog IR
 -----------------------------------------------------------------------------------
@@ -60,6 +62,7 @@ data ParseIR = TopModule { mPortNames :: [String]          -- port list (i.e. fo
                          }
              | PSource   String
              | PSink     String
+             | PSanitize String
              
 data ParseStmt = PBlock           [ParseStmt]
                | PBlockingAsgn    String
@@ -74,7 +77,15 @@ data ParseStmt = PBlock           [ParseStmt]
 data ParseSt = ParseSt { _parseSources :: S.HashSet Id
                        , _parseSinks   :: S.HashSet Id
                        , _parsePorts   :: S.HashSet Id
+                       , _parseSanitize :: S.HashSet Id
                        , _st           :: St
+                       }
+
+emptyParseSt = ParseSt { _parseSources = S.empty
+                       , _parseSinks   = S.empty
+                       , _parsePorts   = S.empty
+                       , _parseSanitize = S.empty
+                       , _st           = emptySt
                        }
 
 makeLenses ''ParseSt
@@ -140,6 +151,7 @@ parseTaint :: Parser ParseIR
 parseTaint = spaceConsumer
              *> ( rWord "taint_source" *> parens (PSource <$> identifier)
                   <|> rWord "taint_sink" *> parens (PSink <$> identifier)
+                  <|> rWord "sanitize" *> parens (PSanitize <$> identifier)
                 )
              <* char '.' <* spaceConsumer
 
@@ -266,67 +278,112 @@ instance Exception IRParseError
 -- | ParseIR -> St
 -----------------------------------------------------------------------------------
 
-emptyParseSt = ParseSt { _parseSources = S.empty
-                       , _parseSinks   = S.empty
-                       , _parsePorts   = S.empty
-                       , _st           = emptySt
-                       }
-
+-----------------------------------------------------------------------------------
 makeState :: [ParseIR] -> St
+-----------------------------------------------------------------------------------
 makeState (TopModule{..}:taints) = evalState comp emptyParseSt
   where
-    comp = do sequence_ $ collectVar <$> taints
-              st           .= collectModule mPorts mGates mBehaviors mUFs
-              st . sources <~ uses parseSources   S.toList
-              st . sinks   <~ uses parseSinks     S.toList
+    comp = do sequence_ $ collectTaint <$> taints -- collect taint information
+              st .= makeIntermediaryIR mPorts mGates mBehaviors mUFs -- create intermediary IR from parse IR
+  
+              -- update IR state's taint info from parse IR 
+              st . sources  <~ uses parseSources  S.toList
+              st . sinks    <~ uses parseSinks    S.toList
+              st . sanitize <~ uses parseSanitize S.toList
 
+              -- and copy it to the instantiated modules
+              st %= updateTaintInfo 
+
+              -- make sure we have at least one source and a sink
               let f = (== 0) . length
               noTaint <- liftM2 (||) (uses (st.sinks) f) (uses (st.sources) f)
               when noTaint $ throw (PassError "Source or sink taint information is missing")
 
-              use st
+              res <- use st
+              return $ trace (show res) res
+
 makeState _ = throw (PassError "First ir is not a toplevel module !")
 
-collectVar                :: ParseIR -> State ParseSt ()
-collectVar (PSource s)     = parseSources %= S.insert s
-collectVar (PSink s)       = parseSinks   %= S.insert s
-collectVar (TopModule{..}) = return ()
+-----------------------------------------------------------------------------------
+collectTaint :: ParseIR -> State ParseSt ()
+-----------------------------------------------------------------------------------
+collectTaint (PSource s)     = parseSources  %= S.insert s
+collectTaint (PSink s)       = parseSinks    %= S.insert s
+collectTaint (PSanitize s)   = parseSanitize %= S.insert s
+collectTaint (TopModule{..}) = return ()
     
-collectModule :: [ParsePort] -> [ParseGate] -> [ParseBehavior] -> [ParseUF] -> St
-collectModule prts gates bhvs ufs = evalState comp emptyParseSt
+-----------------------------------------------------------------------------------
+makeIntermediaryIR :: [ParsePort] -> [ParseGate] -> [ParseBehavior] -> [ParseUF] -> St
+-----------------------------------------------------------------------------------
+makeIntermediaryIR prts gates bhvs ufs = evalState comp emptyParseSt
   where
-    comp = do sequence_ $ (\p -> parsePorts %= S.insert (parsePortName p)) <$> prts
+    comp = do sequence_ (collectPort <$> prts)
               sequence_ (collectGate <$> reverse gates)
               sequence_ (collectBhv  <$> reverse bhvs)
               sequence_ (collectUF   <$> reverse ufs)
-              st . ports   <~ uses parsePorts   S.toList
-              st . sinks   <~ uses parseSinks   S.toList
-              st . sources <~ uses parseSources S.toList
+              st . ports <~ uses parsePorts S.toList
               use st
 
-collectGate :: ParseGate -> State ParseSt ()
-collectGate (PContAsgn l r)   = st . irs %= (:) (Always Star (BlockingAsgn l r))
-collectGate (PModuleInst{..}) = st . irs %= (:) ModuleInst{ modInstName = pmInstName
-                                                          , modInstArgs = zip pmInstPortNames pmInstArgs
-                                                          , modInstSt   = st'
-                                                          }
-  where st' = collectModule pmInstPorts pmInstGates pmInstBehaviors pmInstUFs
+-----------------------------------------------------------------------------------
+collectPort :: ParsePort -> State ParseSt ()
+-----------------------------------------------------------------------------------
+collectPort p = parsePorts %= S.insert (parsePortName p)
 
+-----------------------------------------------------------------------------------
+collectGate :: ParseGate -> State ParseSt ()
+-----------------------------------------------------------------------------------
+collectGate (PContAsgn l r)   = st . irs %= (:) (Always Star (BlockingAsgn l r))
+collectGate (PModuleInst{..}) =
+  st . irs %= (:) ModuleInst{ modInstName = pmInstName
+                            , modInstArgs = zip pmInstPortNames pmInstArgs
+                            , modInstSt   = st'
+                            }
+  where
+    st' = makeIntermediaryIR pmInstPorts pmInstGates pmInstBehaviors pmInstUFs
+
+-----------------------------------------------------------------------------------
 collectBhv :: ParseBehavior -> State ParseSt ()
+-----------------------------------------------------------------------------------
 collectBhv (PAlways ev stmt) = st . irs %= (:) (Always (makeEvent ev) (makeStmt stmt))
 
-makeEvent                :: ParseEvent -> Event
+-----------------------------------------------------------------------------------
+makeEvent :: ParseEvent -> Event
+-----------------------------------------------------------------------------------
 makeEvent PStar          = Star
 makeEvent (PPosEdge clk) = PosEdge clk
 makeEvent (PNegEdge clk) = NegEdge clk
 
-makeStmt                        :: ParseStmt -> Stmt
+-----------------------------------------------------------------------------------
+makeStmt :: ParseStmt -> Stmt
+-----------------------------------------------------------------------------------
 makeStmt (PBlock ss)            = Block (makeStmt <$> ss)
 makeStmt (PBlockingAsgn l r)    = BlockingAsgn l r
 makeStmt (PNonBlockingAsgn l r) = NonBlockingAsgn l r
 makeStmt (PIfStmt cond th el)   = IfStmt cond (makeStmt th) (makeStmt el)
 makeStmt  PSkip                 = Skip
 
-collectUF              :: ParseUF -> State ParseSt ()
+-----------------------------------------------------------------------------------
+collectUF :: ParseUF -> State ParseSt ()
+-----------------------------------------------------------------------------------
 collectUF (PUF v args) = st . ufs %= M.insert v args
+
+-----------------------------------------------------------------------------------
+updateTaintInfo :: St -> St
+-----------------------------------------------------------------------------------
+updateTaintInfo st = over irs mapIRs st
+  where
+    mapIRs :: [IR] -> [IR]
+    mapIRs = map mapIR
+
+    mapIR :: IR -> IR
+    mapIR ir@(Always{..})     = ir
+    mapIR ir@(ModuleInst{..}) = ir { modInstSt = fixSt modInstSt }
+
+    fixSt :: St -> St 
+    fixSt = set sources  (st^.sources) .
+            set sinks    (st^.sinks) .
+            set sanitize (st^.sanitize) .
+            over irs mapIRs
+        
+  
 

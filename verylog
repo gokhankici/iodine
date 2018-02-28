@@ -99,7 +99,7 @@ EOF
 
     $IVLPP $this_filename 1>$PREPROCESSED_FILE && \
         $IVL $@ -O >(cat) $PREPROCESSED_FILE &>$LOGFILE && \
-        sed -n 's|.*//[ \t]*@annot{\(.*\)}[^}]*|\1.|p' $this_filename
+        sed -n 's|[^@]*@annot{\([^}]*\)}[^@]*|\1.\n|pg' $this_filename
     
     last_err=$?
 

@@ -12,6 +12,8 @@ import           Verylog.Transform.Utils
 import           Verylog.Language.Types
 import           Verylog.HSF.Types
 
+import Debug.Trace
+
 invs :: [AlwaysBlock] -> [HSFClause]
 invs as = concatMap modular_inv as ++ non_interference_checks as
   where
@@ -28,7 +30,9 @@ invs as = concatMap modular_inv as ++ non_interference_checks as
       in non_int_chk as (a1:checked) cs'
 
 modular_inv :: AlwaysBlock -> [HSFClause]  
-modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a]
+modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
+  where
+    a' = trace (show a) a
 
 ltvar = makeVar fmt{taggedVar=True, leftVar=True}
 rtvar = makeVar fmt{taggedVar=True, rightVar=True}

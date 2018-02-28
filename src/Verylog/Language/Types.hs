@@ -49,14 +49,16 @@ data St = St { _ports     :: [Id]
              , _ufs       :: M.HashMap Id [Id]
              , _sources   :: [Id]
              , _sinks     :: [Id]
+             , _sanitize  :: [Id]
              , _irs       :: [IR]
              }
 
-emptySt = St { _ports     = []
-             , _ufs       = M.empty
-             , _sources   = []
-             , _sinks     = []
-             , _irs       = []
+emptySt = St { _ports      = []
+             , _ufs        = M.empty
+             , _sources    = []
+             , _sinks      = []
+             , _sanitize   = []
+             , _irs        = []
              }
 
 makeLenses ''St 
@@ -136,6 +138,7 @@ instance PPrint St where
                    , comma  <+> text "ufs  " <+> equals <+> st^.ufs.to       printMap
                    , comma  <+> text "srcs " <+> equals <+> st^.sources.to   printList
                    , comma  <+> text "sinks" <+> equals <+> st^.sinks.to     printList
+                   , comma  <+> text "sntz " <+> equals <+> st^.sanitize.to  printList
                    , rbrace
                    ]
 
@@ -143,11 +146,12 @@ instance Show St where
   show = pprint
 
 instance PPrint AlwaysBlock where
-  toDoc a = text "always(" <> vcat [ comment "ports  " <+> printList (a^.aSt^.ports) <> comma
-                                   , comment "ufs    " <+> printMap  (a^.aSt^.ufs) <> comma
-                                   , comment "sources" <+> printList (a^.aSt^.sources) <> comma
-                                   , comment "sinks  " <+> printList (a^.aSt^.sinks) <> comma
-                                   , comment "id     " <+> int (a^.aId) <> comma
+  toDoc a = text "always(" <> vcat [ comment "ports   " <+> printList (a^.aSt^.ports) <> comma
+                                   , comment "ufs     " <+> printMap  (a^.aSt^.ufs) <> comma
+                                   , comment "sources " <+> printList (a^.aSt^.sources) <> comma
+                                   , comment "sinks   " <+> printList (a^.aSt^.sinks) <> comma
+                                   , comment "sanitize" <+> printList (a^.aSt^.sanitize) <> comma
+                                   , comment "id      " <+> int (a^.aId) <> comma
                                    , toDoc (a^.aEvent) <> comma
                                    , toDoc (a^.aStmt)
                                    ] <> text ")."
