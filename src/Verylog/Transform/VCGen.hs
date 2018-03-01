@@ -96,7 +96,9 @@ non_interference_checks as = non_int_chk as [] []
     non_int_chk []     _checked cs = cs
     non_int_chk (a1:as) checked cs =
       let f (rw2, a2) cs_prev = if   interfere rw1 rw2
-                                then (non_interference_inv a1 a2):cs_prev
+                                then (non_interference_inv a1 a2)
+                                     : (non_interference_inv a2 a1)
+                                     : cs_prev
                                 else cs_prev
           cs'                 = foldr f cs checked
           rw1                 = readWriteSet a1

@@ -83,7 +83,7 @@ instance PPrint HSFExpr where
                            <+> toDoc hsfExpElse
                            <> rparen
   toDoc (UnOp{..})       = case hsfUOp of
-                             NOT -> text "!" <> ptoDoc hsfExp
+                             NOT -> text "\\+" <> ptoDoc hsfExp
   toDoc (BinOp{..})      = case hsfBOp of
                              IMPLIES -> lparen
                                         <> ptoDoc hsfExpL

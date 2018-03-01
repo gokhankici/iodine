@@ -74,21 +74,70 @@ nextStmt (Block{..})           = sequence (nextStmt <$> blockStmts) >>= return .
 nextStmt (BlockingAsgn{..})    = nextAsgn BA  lhs rhs
 nextStmt (NonBlockingAsgn{..}) = nextAsgn NBA lhs rhs
 nextStmt (IfStmt{..})          = do fmt <- use trFmt
-                                    --TODO phi node hack
                                     let condTrue  = BinOp GE n (Number 1)
                                         condFalse = BinOp LE n (Number 0)
                                         n = Var $ makeVarName fmt ifCond
-                                    thenClauses <- nextStmt thenStmt
+
+                                    -- if condition is the value of an uninterpreted function,
+                                    -- add a check that equates left & right runs for the value
+                                    condUFCheck <- uf_eq ifCond
+
+                                    -- store the current state before running either branch
+                                    oldSt@(oldQ, _oldNBAs) <- getSt
+                                    let qDif q = M.differenceWith
+                                                 (\n' n -> if   n' == n
+                                                           then Nothing
+                                                           else Just n')
+                                                 q oldQ
+
+                                    -- run the then branch,
+                                    thenClauses   <- nextStmt thenStmt
+                                    (thQ, thNBAs) <- getSt
+                                    -- and calculate what is changed
+                                    let thQChanged = qDif thQ
+                                    -- set back the old state
+                                    setSt oldSt
+                                    
+                                    -- run the then branch,
                                     elseClauses <- nextStmt elseStmt
-                                    let th = Ands (condTrue  : thenClauses)
-                                        el = Ands (condFalse : elseClauses)
-                                    return $ [BinOp OR th el]
+                                    (elQ, elNBAs) <- getSt
+                                    -- and calculate what is changed
+                                    let elQChanged = qDif elQ
+
+                                    -- union the changes in both branches wrt the old state
+                                    let qChanged  = M.unionWith (\n1 n2 -> (max n1 n2) + 1) thQChanged elQChanged
+
+                                    -- calculate new state
+                                    let newQ    = M.unionWith max oldQ qChanged
+                                        newNBAs = S.union thNBAs elNBAs
+
+                                    setSt (newQ, newNBAs)
+
+                                    let th  = Ands $ (condTrue  : thenClauses) ++ phiNodes fmt thQ qChanged
+                                        el  = Ands $ (condFalse : elseClauses) ++ phiNodes fmt elQ qChanged
+                                        ite = BinOp OR th el
+                                    return $ ite : condUFCheck
+  where
+    getSt = do q    <- use trQ
+               nbas <- use trNBAs
+               return (q,nbas)
+
+    setSt :: (AsgnQueue, S.HashSet Id) -> S ()
+    setSt (q,nbas) = trQ .= q >> trNBAs .= nbas
+
+    phiNodes :: VarFormat -> AsgnQueue -> AsgnQueue -> [HSFExpr]
+    phiNodes fmt q qDiff = [ BinOp EQU
+                             (makeVar fmt{varId=Just n} v)
+                             (makeVar fmt{varId=M.lookup v q} v)
+                           | (v,n) <- M.toList qDiff
+                           ]
+
 nextStmt Skip                  = return []
 
 --------------------------------------------------------------------------------
 nextAsgn :: Asgn -> Id -> Id -> S [HSFExpr]
 --------------------------------------------------------------------------------
-nextAsgn a l r = do es1 <- uf_eq
+nextAsgn a l r = do es1 <- uf_eq r
                     es2 <- case a of
                              BA  -> ba
                              NBA -> nba
@@ -145,40 +194,42 @@ nextAsgn a l r = do es1 <- uf_eq
                   else uses trFmt mkTagged >>= flip getLastVar r 
 
     ----------------------------------------
-    ufAtoms :: VarFormat -> S [HSFExpr]
-    ----------------------------------------
-    -- arguments of the uf formatted with fmt
-    ufAtoms fmt = do atoms <- uses (trSt.ufs) (M.lookupDefault err r)
-                     sequence $ getLastVar fmt <$> atoms
-    err = throw (PassError $ "could not find " ++ r ++ " in ufs")
-             
-    ----------------------------------------
     ufTagRhs :: S HSFExpr
     ----------------------------------------
     ufTagRhs = do fmt <- uses trFmt mkTagged
-                  vars <- ufAtoms fmt
+                  vars <- ufAtoms fmt r
                   case vars of
-                    []   -> getLastVar fmt r
+                    []   -> return $ makeVar fmt l -- rhs is constant, no tag propagation needed
                     v:vs -> return $ foldr (BinOp PLUS) v vs
 
     mkTagged fmt = fmt{taggedVar=True}
 
-    ----------------------------------------
-    uf_eq :: S [HSFExpr]
-    ----------------------------------------
-    uf_eq = do c <- isUF r
-               if c
-                 then do fmt <- use trFmt
-                         let fmtL = fmt{leftVar=True,  rightVar=False}
-                             fmtR = fmt{leftVar=False, rightVar=True}
+----------------------------------------
+ufAtoms :: VarFormat -> Id -> S [HSFExpr]
+----------------------------------------
+-- arguments of the uf formatted with fmt
+ufAtoms fmt u = do atoms <- uses (trSt.ufs) (M.lookupDefault err u)
+                   sequence $ getLastVar fmt <$> atoms
+  where
+    err = throw (PassError $ "could not find " ++ u ++ " in ufs")
+             
 
-                         varsL <- ufAtoms fmtL
-                         varsR <- ufAtoms fmtR
+----------------------------------------
+uf_eq :: Id -> S [HSFExpr]
+----------------------------------------
+uf_eq u = do c <- isUF u
+             if c
+               then do fmt <- use trFmt
+                       let fmtL = fmt{leftVar=True,  rightVar=False}
+                           fmtR = fmt{leftVar=False, rightVar=True}
 
-                         let lhs = Ands $ uncurry (BinOp EQU) <$> zip varsL varsR
-                             rhs = BinOp EQU (makeVar fmtL r) (makeVar fmtR r)
-                         return [makeImpl lhs rhs]
-                 else return []
+                       varsL <- ufAtoms fmtL u
+                       varsR <- ufAtoms fmtR u
+
+                       let lhs = Ands $ uncurry (BinOp EQU) <$> zip varsL varsR
+                           rhs = BinOp EQU (makeVar fmtL u) (makeVar fmtR u)
+                       return [makeImpl lhs rhs]
+               else return []
                     
 --------------------------------------------------------------------------------
 -- helper functions
