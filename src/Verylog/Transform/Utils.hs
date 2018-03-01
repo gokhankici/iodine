@@ -1,52 +1,66 @@
 {-# LANGUAGE RecordWildCards #-}
+
 module Verylog.Transform.Utils where
 
 import           Control.Lens
 import           Control.Exception
 import           Text.Printf
 import           Debug.Trace
+import           Data.Char
 
 import           Verylog.Language.Types
 import           Verylog.HSF.Types
 
-data VarFormat = VarFormat { taggedVar :: Bool
-                           , primedVar :: Bool
-                           , leftVar   :: Bool
-                           , rightVar  :: Bool
-                           , atomVar   :: Bool
-                           , varId     :: Maybe Int
+data VarFormat = VarFormat { taggedVar   :: Bool
+                           , primedVar   :: Bool
+                           , leftVar     :: Bool
+                           , rightVar    :: Bool
+                           , atomVar     :: Bool
+                           , varId       :: Maybe Int
                            }
                  deriving (Show)
 
-fmt = VarFormat { taggedVar = False
-                , primedVar = False
-                , leftVar   = False
-                , rightVar  = False
-                , atomVar   = False
-                , varId     = Nothing
+fmt = VarFormat { taggedVar   = False
+                , primedVar   = False
+                , leftVar     = False
+                , rightVar    = False
+                , atomVar     = False
+                , varId       = Nothing
                 } 
+
+-- set this variable to True if you want to "simplify" the variables
+-- inside the HSF file
+debugSimple = True -- False
 
 makeVar :: VarFormat -> Id -> HSFExpr
 makeVar fmt v = Var (makeVarName fmt v)
 
 makeVarName :: VarFormat -> Id -> HSFVar
-makeVarName fmt@(VarFormat{..}) v = printf "%sV%s%s%s%s_%s" atom pos tag prime vid v
+makeVarName fmt@(VarFormat{..}) v = if   debugSimple
+                                    then let (h:t) = drop 2 v
+                                             v'    = (toUpper h):t
+                                         in printf "%s%s%s%s%s%s" atom v' pos vid prime tag 
+                                    else printf "%sV%s%s%s%s_%s" atom pos tag prime vid v
   where
     atom | atomVar   = "v"
          | otherwise = ""
 
-    tag  | taggedVar = "T"
+    tag  | debugSimple && taggedVar = "_t"
+         | taggedVar = "T"
          | otherwise = ""
 
-    prime | primedVar = "P"
+    prime | debugSimple && primedVar = "p"
+          | primedVar = "P"
           | otherwise = ""
 
     vid   = maybe "" show varId
 
     pos   | (leftVar && rightVar) = throw (PassError $ "Both left & right requested from makeVarName for " ++ v ++ " " ++ show fmt)
-          | leftVar               = "L"
-          | rightVar              = "R"
-          | otherwise             = ""
+          | debugSimple && leftVar   = "l"
+          | debugSimple && rightVar  = "r"
+          | leftVar   = "L"
+          | rightVar  = "R"
+          | otherwise = ""
 
 allArgs        :: VarFormat -> St -> [Id]
 allArgs fmt st = let ps = st^.ports

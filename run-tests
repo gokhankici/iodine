@@ -12,7 +12,8 @@ function green() { print -P "%F{green}%B$1%b%f" }
 function red()   { print -P "%F{red}%B$1%b%f" }
 
 typeset -A TESTS
-TESTS=( "01. stall hand"    "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
+TESTS=( "00 - 00 - tr-test-1"    "-M test $THIS_DIR/test/verilog/tr-test-1.v" \
+        # "01. stall hand"    "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
         # "02. mips fragment" "-M mips_pipeline $IVL_DIR/benchmarks/472-mips-pipelined/472-mips-fragment.v" \
       )
 
@@ -22,7 +23,7 @@ blue "==========================================================================
 blue "   RUNNING UNIT TESTS"
 blue "================================================================================"
 
-stack test $@
+stack test --fast $@ 
 
 last_err=$?
 

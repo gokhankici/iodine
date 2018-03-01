@@ -135,6 +135,15 @@ non_interference_inv a1 a2 = Inv (a2^.aId) args2' body
     args2' = invArgs fmt{primedVar=True} a2 -- TODO: this is not quite right, fix later
     body   = Ands [ next fmt{leftVar=True}  a1
                   , next fmt{rightVar=True} a1
+                  , Ands [ Ands [ BinOp EQU
+                                  (makeVar fmt{leftVar=True, primedVar=True} v)
+                                  (makeVar fmt{leftVar=True} v)
+                                , BinOp EQU
+                                  (makeVar fmt{rightVar=True, primedVar=True} v)
+                                  (makeVar fmt{rightVar=True} v)
+                                ]
+                         | v <- (a2^.aSt^.ports) \\ (a1^.aSt^.ports)
+                         ]
                   , Structure (makeInvPred a1) args1
                   , Structure (makeInvPred a2) args2
                   ]
