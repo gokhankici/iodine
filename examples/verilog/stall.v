@@ -7,19 +7,19 @@ module stalling_cpu(clk);
    // Definitions
    //=============
 
+   // @annot{sanitize(IF_instr)}
+   // @annot{sanitize(Stall)}
+
    reg [1:0]  Stall;
-   reg [31:0] IF_instr;
+   reg [31:0] IF_instr;         // @annot{taint_source(IF_instr)}
    reg [31:0] ID_instr;
    reg [1:0]  EX_ALUOp;
    reg [31:0] MEM_ALUOut;
-   reg [31:0] WB_ALUOut;
+   reg [31:0] WB_ALUOut;        // @annot{taint_sink(WB_ALUOut)}.
 
    //=============  
    // IF stage
    //=============
-
-   // -- Annotation: taint source
-   // @annot{taint_source(v_IF_instr)}
    
    always @(posedge clk) 
      if (Stall)
@@ -54,9 +54,6 @@ module stalling_cpu(clk);
    //=============
    // WB stage
    //=============
-
-   // -- Annotation: taint sink.   
-   // @annot{taint_sink(v_WB_ALUOut)}.
 
 endmodule
 

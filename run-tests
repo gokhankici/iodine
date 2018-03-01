@@ -17,7 +17,8 @@ TESTS=( "01 - 01 - tr-test-1"    "-M test $THIS_DIR/test/verilog/tr-test-1.v" \
         "01 - 03 - tr-test-3"    "-M test $THIS_DIR/test/verilog/tr-test-3.v" \
         "01 - 04 - tr-test-4"    "-M test $THIS_DIR/test/verilog/tr-test-4.v" \
         "01 - 05 - tr-test-5"    "-M test $THIS_DIR/test/verilog/tr-test-5.v" \
-        # "02 - 00 - stall hand"   "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
+
+        "02 - 01 - stall hand"   "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
         # "02. mips fragment" "-M mips_pipeline $IVL_DIR/benchmarks/472-mips-pipelined/472-mips-fragment.v" \
       )
 

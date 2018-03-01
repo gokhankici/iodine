@@ -8,13 +8,12 @@ import           Control.Monad.State.Lazy
 import           Data.List
 import qualified Data.HashSet               as S
 import qualified Data.HashMap.Strict      as M
+import           Text.Printf
 
 import           Verylog.Transform.TransitionRelation
 import           Verylog.Transform.Utils
 import           Verylog.Language.Types
 import           Verylog.HSF.Types
-
-import Debug.Trace
 
 --------------------------------------------------------------------------------
 invs :: [AlwaysBlock] -> [HSFClause]
@@ -29,7 +28,7 @@ modular_inv :: AlwaysBlock -> [HSFClause]
 --------------------------------------------------------------------------------
 modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
   where
-    a' = a -- trace (show a) a
+    a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
 
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> HSFClause

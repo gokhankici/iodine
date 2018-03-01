@@ -27,8 +27,6 @@ import           Text.Printf
 import           Verylog.Language.Types
 import           Verylog.Language.Utils
 
--- import Debug.Trace
-
 -----------------------------------------------------------------------------------
 -- | Verylog IR
 -----------------------------------------------------------------------------------
@@ -149,11 +147,13 @@ parseTopModule = spaceConsumer
 
 parseTaint :: Parser ParseIR  
 parseTaint = spaceConsumer
-             *> ( rWord "taint_source" *> parens (PSource <$> identifier)
-                  <|> rWord "taint_sink" *> parens (PSink <$> identifier)
-                  <|> rWord "sanitize" *> parens (PSanitize <$> identifier)
+             *> ( rWord "taint_source" *> parens (PSource <$> taintId)
+                  <|> rWord "taint_sink" *> parens (PSink <$> taintId)
+                  <|> rWord "sanitize" *> parens (PSanitize <$> taintId)
                 )
              <* char '.' <* spaceConsumer
+  where
+    taintId = ("v_" ++) <$> identifier
 
 parseStmt :: Parser ParseStmt  
 parseStmt = rWord "block"      *> parens (PBlock           <$> list parseStmt)

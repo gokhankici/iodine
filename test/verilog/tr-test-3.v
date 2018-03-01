@@ -1,9 +1,9 @@
 module test(clk);
    input clk, slow;
-   reg   slow;                  // @annot{sanitize(v_slow)}
-   reg   x;                     // @annot{taint_source(v_x)}
+   reg   slow;                  // @annot{sanitize(slow)}
+   reg   x;                     // @annot{taint_source(x)}
    reg   y;
-   reg   z;                     // @annot{taint_sink(v_z)}
+   reg   z;                     // @annot{taint_sink(z)}
 
    always @(posedge clk)
      if (slow == 1)

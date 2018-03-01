@@ -83,7 +83,9 @@ nextStmt (IfStmt{..})          = do
 
   -- if condition is the value of an uninterpreted function,
   -- add a check that equates left & right runs for the value
-  condUFCheck <- uf_eq ifCond
+  condUFCheck <- if rightVar fmt
+                 then uf_eq ifCond
+                 else return []
 
   -- store the current state before running either branch
   oldSt <- getSt

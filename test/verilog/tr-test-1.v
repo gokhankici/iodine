@@ -1,8 +1,8 @@
 module test(clk);
    input clk;
-   reg   x;                     // @annot{taint_source(v_x)}
+   reg   x;                     // @annot{taint_source(x)}
    reg   y;
-   reg   z;                     // @annot{taint_sink(v_z)}
+   reg   z;                     // @annot{taint_sink(z)}
 
    always @(posedge clk) begin
       y <= x;

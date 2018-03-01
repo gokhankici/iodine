@@ -86,4 +86,4 @@ invArgs fmt a = allArgs fmt{leftVar=True} st ++ allArgs fmt{rightVar=True} st
     st = a^.aSt
 
 trc         :: Show b => String -> b -> a -> a
-trc msg b a = trace (printf "%s: %s" msg (show b)) a
+trc msg b a = trace (printf "%s%s" msg (show b)) a
