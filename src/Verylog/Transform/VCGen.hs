@@ -141,6 +141,12 @@ non_interference_inv a1 a2 = Inv (a2^.aId) args2' body
                                 , BinOp EQU
                                   (makeVar fmt{rightVar=True, primedVar=True} v)
                                   (makeVar fmt{rightVar=True} v)
+                                , BinOp EQU
+                                  (makeVar fmt{taggedVar=True, leftVar=True, primedVar=True} v)
+                                  (makeVar fmt{taggedVar=True, leftVar=True} v)
+                                , BinOp EQU
+                                  (makeVar fmt{taggedVar=True, rightVar=True, primedVar=True} v)
+                                  (makeVar fmt{taggedVar=True, rightVar=True} v)
                                 ]
                          | v <- (a2^.aSt^.ports) \\ (a1^.aSt^.ports)
                          ]
