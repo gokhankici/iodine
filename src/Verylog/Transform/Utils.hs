@@ -14,6 +14,7 @@ data VarFormat = VarFormat { taggedVar :: Bool
                            , leftVar   :: Bool
                            , rightVar  :: Bool
                            , atomVar   :: Bool
+                           , varId     :: Maybe Int
                            }
                  deriving (Show)
 
@@ -22,13 +23,14 @@ fmt = VarFormat { taggedVar = False
                 , leftVar   = False
                 , rightVar  = False
                 , atomVar   = False
+                , varId     = Nothing
                 } 
 
 makeVar :: VarFormat -> Id -> HSFExpr
 makeVar fmt v = Var (makeVarName fmt v)
 
 makeVarName :: VarFormat -> Id -> HSFVar
-makeVarName fmt@(VarFormat{..}) v = printf "%sV%s%s%s_%s" atom pos tag prime v
+makeVarName fmt@(VarFormat{..}) v = printf "%sV%s%s%s%s_%s" atom pos tag prime vid v
   where
     atom | atomVar   = "v"
          | otherwise = ""
@@ -36,8 +38,10 @@ makeVarName fmt@(VarFormat{..}) v = printf "%sV%s%s%s_%s" atom pos tag prime v
     tag  | taggedVar = "T"
          | otherwise = ""
 
-    prime | primedVar = "1"
+    prime | primedVar = "P"
           | otherwise = ""
+
+    vid   = maybe "" show varId
 
     pos   | (leftVar && rightVar) = throw (PassError $ "Both left & right requested from makeVarName for " ++ v ++ " " ++ show fmt)
           | leftVar               = "L"
@@ -46,11 +50,8 @@ makeVarName fmt@(VarFormat{..}) v = printf "%sV%s%s%s_%s" atom pos tag prime v
 
 allArgs        :: VarFormat -> St -> [Id]
 allArgs fmt st = let ps = st^.ports
-                     -- us = st^.ufs.to M.keys
-                     -- os = us ++ [done_atom]
                  in (makeVarName fmt                    <$> ps)
                     ++ (makeVarName fmt{taggedVar=True} <$> ps)
-                    -- ++ (makeVarName fmt                 <$> os)
 
 
           

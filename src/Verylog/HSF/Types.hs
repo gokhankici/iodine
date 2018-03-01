@@ -41,6 +41,10 @@ data HSFExpr = BinOp     { hsfBOp   :: BinOp
 data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
 data UnOp  = NOT
 
+-- a -> b == !a || b
+makeImpl :: HSFExpr -> HSFExpr -> HSFExpr
+makeImpl a b =  BinOp OR (UnOp NOT a) b
+
 printArgs as = hcat $ punctuate (comma <> space) (text <$> as)
 
 nextPred = "next"

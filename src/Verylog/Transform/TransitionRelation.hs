@@ -5,34 +5,76 @@ module Verylog.Transform.TransitionRelation ( next
                                             ) where
 
 import           Control.Exception
-import           Control.Monad.Reader
+import           Control.Monad.State.Lazy
 import           Control.Lens
+import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
+import           Data.List
+import           Text.Printf
 
-import           Verylog.Transform.Utils
+import           Verylog.Transform.Utils hiding (fmt)
 import           Verylog.Language.Types
 import           Verylog.HSF.Types
 
-data TRSt = TRSt { _trSt  :: St
-                 , _trFmt :: VarFormat
+type AsgnQueue = M.HashMap Id Int
+
+data TRSt = TRSt { _trSt   :: St           -- state of the always block given to the function `next`
+                 , _trFmt  :: VarFormat    -- store the format variable given to the function `next`
+                 , _trQ    :: AsgnQueue    -- for blocking assignments only
+                 , _trNBAs :: S.HashSet Id -- for sanity checking non-blocking assignments
                  }
 
 makeLenses ''TRSt
 
-type R = Reader TRSt
+type S = State TRSt
 
 data Asgn = BA | NBA  
 
+--------------------------------------------------------------------------------
 next :: VarFormat -> AlwaysBlock -> HSFExpr
+--------------------------------------------------------------------------------
 next fmt a = Ands es
   where
-    es = runReader (nextStmt (a^.aStmt)) (TRSt (a^.aSt) fmt)
+    es = evalState comp (TRSt (a^.aSt) fmt M.empty S.empty)
 
-nextStmt :: Stmt -> R [HSFExpr]
-nextStmt (Block{..})           = concat <$> mapM nextStmt blockStmts
+    comp = do es1 <- nextStmt (a^.aStmt)
+
+              ps   <- use (trSt . ports)
+              q    <- use trQ
+              nbas <- use trNBAs
+
+              -- set the primed vars for the lhs of the blocking assignments
+              let es2 = concat [ [ BinOp EQU
+                                   (makeVar fmt{taggedVar=True, primedVar=True} v)
+                                   (makeVar fmt{taggedVar=True, varId=Just n} v)
+                                 , BinOp EQU
+                                   (makeVar fmt{primedVar=True} v)
+                                   (makeVar fmt{varId=Just n} v)
+                                 ]
+                               | (v,n) <- M.toList q -- blocking assignments
+                               ]
+
+              -- set the primed vars for the untouched variables
+              let es3 = concat [ [ BinOp EQU
+                                   (makeVar fmt{taggedVar=True, primedVar=True} v)
+                                   (makeVar fmt{taggedVar=True} v) -- vt' = vt
+                                 , BinOp EQU
+                                   (makeVar fmt{primedVar=True} v)
+                                   (makeVar fmt v) -- v' = v
+                                 ]
+                               | v <- ps \\ (S.toList nbas ++ M.keys q) -- not updated variables
+                               ]
+
+              return $ es1 ++ es2 ++ es3
+
+--------------------------------------------------------------------------------
+nextStmt :: Stmt -> S [HSFExpr]
+--------------------------------------------------------------------------------
+nextStmt (Block{..})           = sequence (nextStmt <$> blockStmts) >>= return . concat
 nextStmt (BlockingAsgn{..})    = nextAsgn BA  lhs rhs
 nextStmt (NonBlockingAsgn{..}) = nextAsgn NBA lhs rhs
-nextStmt (IfStmt{..})          = do fmt <- view trFmt
+nextStmt (IfStmt{..})          = do fmt <- use trFmt
+                                    --TODO phi node hack
                                     let condTrue  = BinOp GE n (Number 1)
                                         condFalse = BinOp LE n (Number 0)
                                         n = Var $ makeVarName fmt ifCond
@@ -43,35 +85,114 @@ nextStmt (IfStmt{..})          = do fmt <- view trFmt
                                     return $ [BinOp OR th el]
 nextStmt Skip                  = return []
 
-nextAsgn :: Asgn -> Id -> Id -> R [HSFExpr]
-nextAsgn _ l r = do cond <- isUF r
-                    if cond then asgnUF else asgn
-
+--------------------------------------------------------------------------------
+nextAsgn :: Asgn -> Id -> Id -> S [HSFExpr]
+--------------------------------------------------------------------------------
+nextAsgn a l r = do es1 <- uf_eq
+                    es2 <- case a of
+                             BA  -> ba
+                             NBA -> nba
+                    return $ es1 ++ es2
   where
-    asgnUF = do atoms <- views trSt (M.lookupDefault err r . view ufs)
-                fmt <- view trFmt
-                let vlt1 = vt1 fmt l
-                case (Var . makeVarName fmt{taggedVar=True}) <$> atoms of
-                  []   -> return [Boolean True]
-                  v:vs -> let rhs = foldr (BinOp PLUS) v vs
-                          in return [BinOp EQU vlt1 rhs]
-    err    = throw (PassError $ "could not find " ++ r ++ " in ufs")
+    ----------------------------------------
+    ba :: S [HSFExpr]
+    ----------------------------------------
+    -- blocking assignment
+    ba = do fmt <- use trFmt
 
-    asgn   = do fmt <- view trFmt
-                let vl1  = v1 fmt l
-                    vlt1 = vt1 fmt l
-                    vr   = v fmt r
-                    vrt  = vt fmt r
-                return [ Ands [ BinOp EQU vlt1 vrt
-                              , BinOp EQU vl1  vr
-                              ]
-                       ]
+            rhs   <- getLastVar fmt r
+            t_rhs <- tagRhs
+
+            -- use a fresh var for the assignment
+            incrLastVar l
+            lhs   <- getLastVar fmt            l
+            t_lhs <- getLastVar (mkTagged fmt) l
+
+            return [ BinOp EQU t_lhs t_rhs -- update the tag   of lhs
+                   , BinOp EQU lhs rhs     -- update the value of lhs
+                   ]
+
+    ----------------------------------------
+    nba :: S [HSFExpr]
+    ----------------------------------------
+    -- non-blocking assignment
+    nba = do fmt <- use trFmt
+
+             rhs   <- getLastVar fmt r
+             t_rhs <- tagRhs
+
+             -- there can be at most one non-blocking assignment for each variable,
+             -- so directly set the primed variable
+             let lhs   = makeVar fmt{primedVar=True}            l
+                 t_lhs = makeVar (mkTagged fmt){primedVar=True} l
+
+             -- check if there are multiple non-blocking assignments to the same variable
+             uses trNBAs (S.member l)
+               >>= flip when (throw . PassError $ printf "multiple non-blocking assignments to %s !" l)
+
+             trNBAs %= S.insert l
+
+             return [ BinOp EQU t_lhs t_rhs -- set the next tag   of lhs
+                    , BinOp EQU lhs rhs     -- set the next value of lhs
+                    ]
+
+    ----------------------------------------
+    tagRhs :: S HSFExpr
+    ----------------------------------------
+    tagRhs = do c <- isUF r
+                if c
+                  then ufTagRhs
+                  else uses trFmt mkTagged >>= flip getLastVar r 
+
+    ----------------------------------------
+    ufAtoms :: VarFormat -> S [HSFExpr]
+    ----------------------------------------
+    -- arguments of the uf formatted with fmt
+    ufAtoms fmt = do atoms <- uses (trSt.ufs) (M.lookupDefault err r)
+                     sequence $ getLastVar fmt <$> atoms
+    err = throw (PassError $ "could not find " ++ r ++ " in ufs")
+             
+    ----------------------------------------
+    ufTagRhs :: S HSFExpr
+    ----------------------------------------
+    ufTagRhs = do fmt <- uses trFmt mkTagged
+                  vars <- ufAtoms fmt
+                  case vars of
+                    []   -> getLastVar fmt r
+                    v:vs -> return $ foldr (BinOp PLUS) v vs
+
+    mkTagged fmt = fmt{taggedVar=True}
+
+    ----------------------------------------
+    uf_eq :: S [HSFExpr]
+    ----------------------------------------
+    uf_eq = do c <- isUF r
+               if c
+                 then do fmt <- use trFmt
+                         let fmtL = fmt{leftVar=True,  rightVar=False}
+                             fmtR = fmt{leftVar=False, rightVar=True}
+
+                         varsL <- ufAtoms fmtL
+                         varsR <- ufAtoms fmtR
+
+                         let lhs = Ands $ uncurry (BinOp EQU) <$> zip varsL varsR
+                             rhs = BinOp EQU (makeVar fmtL r) (makeVar fmtR r)
+                         return [makeImpl lhs rhs]
+                 else return []
                     
-v   fmt = makeVar fmt
-v1  fmt = makeVar fmt{primedVar=True}
-vt  fmt = makeVar fmt{taggedVar=True}
-vt1 fmt = makeVar fmt{primedVar=True,taggedVar=True}
+--------------------------------------------------------------------------------
+-- helper functions
+--------------------------------------------------------------------------------
 
+isUF :: Id -> S Bool
+isUF v = uses (trSt . ufs) (M.member v)
 
-isUF   :: Id -> R Bool
-isUF v = views trSt (M.member v . view ufs)
+getLastVar       :: VarFormat -> Id -> S HSFExpr
+getLastVar fmt v = do mi  <- uses trQ (M.lookup v)
+                      return $ makeVar fmt{varId=mi} v
+
+incrLastVar   :: Id -> S ()
+incrLastVar v = trQ <~ uses trQ (M.alter updateInd v)
+  where
+    updateInd Nothing = Just 1
+    updateInd _       = throw (PassError $ printf "multiple assignments to %s in an always block !" v)
