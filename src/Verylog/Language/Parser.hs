@@ -27,7 +27,7 @@ import           Text.Printf
 import           Verylog.Language.Types
 import           Verylog.Language.Utils
 
-import Debug.Trace
+-- import Debug.Trace
 
 -----------------------------------------------------------------------------------
 -- | Verylog IR
@@ -299,8 +299,7 @@ makeState (TopModule{..}:taints) = evalState comp emptyParseSt
               noTaint <- liftM2 (||) (uses (st.sinks) f) (uses (st.sources) f)
               when noTaint $ throw (PassError "Source or sink taint information is missing")
 
-              res <- use st
-              return $ trace (show res) res
+              use st
 
 makeState _ = throw (PassError "First ir is not a toplevel module !")
 

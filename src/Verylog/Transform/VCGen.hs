@@ -29,7 +29,7 @@ modular_inv :: AlwaysBlock -> [HSFClause]
 --------------------------------------------------------------------------------
 modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
   where
-    a' = trace (show a) a
+    a' = a -- trace (show a) a
 
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> HSFClause

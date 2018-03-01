@@ -7,10 +7,8 @@ module Verylog.Transform.TransitionRelation ( next
 import           Control.Exception
 import           Control.Monad.State.Lazy
 import           Control.Lens
-import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
 import           Data.List
-import           Text.Printf
 
 import           Verylog.Transform.Utils hiding (fmt)
 import           Verylog.Language.Types
@@ -18,10 +16,10 @@ import           Verylog.HSF.Types
 
 type AsgnQueue = M.HashMap Id Int
 
-data TRSt = TRSt { _trSt   :: St           -- state of the always block given to the function `next`
-                 , _trFmt  :: VarFormat    -- store the format variable given to the function `next`
-                 , _trQ    :: AsgnQueue    -- for blocking assignments only
-                 , _trNBAs :: S.HashSet Id -- for sanity checking non-blocking assignments
+data TRSt = TRSt { _trSt   :: St         -- state of the always block given to the function `next`
+                 , _trFmt  :: VarFormat  -- store the format variable given to the function `next`
+                 , _trAs   :: AsgnQueue  -- assignment counts
+                 , _trBAs  :: AsgnQueue  -- assignment counts (blocking assignments only)
                  }
 
 makeLenses ''TRSt
@@ -35,15 +33,14 @@ next :: VarFormat -> AlwaysBlock -> HSFExpr
 --------------------------------------------------------------------------------
 next fmt a = Ands es
   where
-    es = evalState comp (TRSt (a^.aSt) fmt M.empty S.empty)
+    es = evalState comp (TRSt (a^.aSt) fmt M.empty M.empty)
 
     comp = do es1 <- nextStmt (a^.aStmt)
 
-              ps   <- use (trSt . ports)
-              q    <- use trQ
-              nbas <- use trNBAs
+              ps  <- use (trSt . ports)
+              as  <- use trAs
 
-              -- set the primed vars for the lhs of the blocking assignments
+              -- set the primed vars for the lhs of the assignments
               let es2 = concat [ [ BinOp EQU
                                    (makeVar fmt{taggedVar=True, primedVar=True} v)
                                    (makeVar fmt{taggedVar=True, varId=Just n} v)
@@ -51,7 +48,7 @@ next fmt a = Ands es
                                    (makeVar fmt{primedVar=True} v)
                                    (makeVar fmt{varId=Just n} v)
                                  ]
-                               | (v,n) <- M.toList q -- blocking assignments
+                               | (v,n) <- M.toList as -- blocking assignments
                                ]
 
               -- set the primed vars for the untouched variables
@@ -62,7 +59,7 @@ next fmt a = Ands es
                                    (makeVar fmt{primedVar=True} v)
                                    (makeVar fmt v) -- v' = v
                                  ]
-                               | v <- ps \\ (S.toList nbas ++ M.keys q) -- not updated variables
+                               | v <- ps \\ M.keys as -- not updated variables
                                ]
 
               return $ es1 ++ es2 ++ es3
@@ -73,63 +70,76 @@ nextStmt :: Stmt -> S [HSFExpr]
 nextStmt (Block{..})           = sequence (nextStmt <$> blockStmts) >>= return . concat
 nextStmt (BlockingAsgn{..})    = nextAsgn BA  lhs rhs
 nextStmt (NonBlockingAsgn{..}) = nextAsgn NBA lhs rhs
-nextStmt (IfStmt{..})          = do fmt <- use trFmt
-                                    let condTrue  = BinOp GE n (Number 1)
-                                        condFalse = BinOp LE n (Number 0)
-                                        n = Var $ makeVarName fmt ifCond
+nextStmt (IfStmt{..})          = do
+  -- ---------------------------------------------------------------------------
+  -- ASSUMPTION(S):
+  -- 1. the types of assignments to a variable is the same in both branches
+  -- 2. at most one assignment to a single variable
+  -- ---------------------------------------------------------------------------
+  fmt <- use trFmt
+  let condTrue  = BinOp GE n (Number 1)
+      condFalse = BinOp LE n (Number 0)
+      n = Var $ makeVarName fmt ifCond
 
-                                    -- if condition is the value of an uninterpreted function,
-                                    -- add a check that equates left & right runs for the value
-                                    condUFCheck <- uf_eq ifCond
+  -- if condition is the value of an uninterpreted function,
+  -- add a check that equates left & right runs for the value
+  condUFCheck <- uf_eq ifCond
 
-                                    -- store the current state before running either branch
-                                    oldSt@(oldQ, _oldNBAs) <- getSt
-                                    let qDif q = M.differenceWith
-                                                 (\n' n -> if   n' == n
-                                                           then Nothing
-                                                           else Just n')
-                                                 q oldQ
+  -- store the current state before running either branch
+  oldSt <- getSt
 
-                                    -- run the then branch,
-                                    thenClauses   <- nextStmt thenStmt
-                                    (thQ, thNBAs) <- getSt
-                                    -- and calculate what is changed
-                                    let thQChanged = qDif thQ
-                                    -- set back the old state
-                                    setSt oldSt
-                                    
-                                    -- run the then branch,
-                                    elseClauses <- nextStmt elseStmt
-                                    (elQ, elNBAs) <- getSt
-                                    -- and calculate what is changed
-                                    let elQChanged = qDif elQ
+  -- run the then branch,
+  thenClauses   <- nextStmt thenStmt
+  (thAs,thBAs)  <- getSt
 
-                                    -- union the changes in both branches wrt the old state
-                                    let qChanged  = M.unionWith (\n1 n2 -> (max n1 n2) + 1) thQChanged elQChanged
+  -- set back the old state
+  setSt oldSt
+  
+  -- run the then branch,
+  elseClauses   <- nextStmt elseStmt
+  (elAs, elBAs) <- getSt
 
-                                    -- calculate new state
-                                    let newQ    = M.unionWith max oldQ qChanged
-                                        newNBAs = S.union thNBAs elNBAs
+  -- calculate & set the new state
+  let newAs  = M.unionWith max thAs  elAs
+      newBAs = M.unionWith max thBAs elBAs
+  setSt (newAs, newBAs)
 
-                                    setSt (newQ, newNBAs)
+  let thDiff = branchDif thAs elAs
+      elDiff = branchDif elAs thAs
+      -- thDiff  = trc "thDiff" (thAs,elAs,thDiff') thDiff'
+      -- elDiff  = trc "elDiff" (elAs,thAs,elDiff') elDiff'
 
-                                    let th  = Ands $ (condTrue  : thenClauses) ++ phiNodes fmt thQ qChanged
-                                        el  = Ands $ (condFalse : elseClauses) ++ phiNodes fmt elQ qChanged
-                                        ite = BinOp OR th el
-                                    return $ ite : condUFCheck
+  let th  = Ands [ Ands (condTrue  : thenClauses)
+                 , Boolean True
+                 , Ands $ phiNodes fmt thAs thDiff
+                 ]
+      el  = Ands [ Ands (condFalse : elseClauses)
+                 , Boolean True
+                 , Ands $ phiNodes fmt elAs elDiff
+                 ]
+      ite = BinOp OR th el
+  return $ ite : condUFCheck
+
   where
-    getSt = do q    <- use trQ
-               nbas <- use trNBAs
-               return (q,nbas)
+    -- returns the variables changed in one branch but not in other
+    branchDif myQ otherQ = M.differenceWith
+                           (\otherN myN -> if myN < otherN   -- if I don't have the latest number
+                                           then Just otherN  -- add another equality to match that
+                                           else Nothing      -- otherwise, skip
+                           ) otherQ myQ
 
-    setSt :: (AsgnQueue, S.HashSet Id) -> S ()
-    setSt (q,nbas) = trQ .= q >> trNBAs .= nbas
+    getSt :: S (AsgnQueue, AsgnQueue)
+    getSt = (,) <$> use trAs <*> use trBAs
 
+    setSt          :: (AsgnQueue, AsgnQueue) -> S ()
+    setSt (as,bas) = trAs .= as >> trBAs .= bas
+    
     phiNodes :: VarFormat -> AsgnQueue -> AsgnQueue -> [HSFExpr]
     phiNodes fmt q qDiff = [ BinOp EQU
-                             (makeVar fmt{varId=Just n} v)
-                             (makeVar fmt{varId=M.lookup v q} v)
+                             (makeVar fmt'{varId=Just n} v)
+                             (makeVar fmt'{varId=M.lookup v q} v)
                            | (v,n) <- M.toList qDiff
+                           , fmt' <- [fmt, fmt{taggedVar=True}]
                            ]
 
 nextStmt Skip                  = return []
@@ -138,52 +148,28 @@ nextStmt Skip                  = return []
 nextAsgn :: Asgn -> Id -> Id -> S [HSFExpr]
 --------------------------------------------------------------------------------
 nextAsgn a l r = do es1 <- uf_eq r
-                    es2 <- case a of
-                             BA  -> ba
-                             NBA -> nba
+                    es2 <- asgn
                     return $ es1 ++ es2
   where
     ----------------------------------------
-    ba :: S [HSFExpr]
+    asgn :: S [HSFExpr]
     ----------------------------------------
-    -- blocking assignment
-    ba = do fmt <- use trFmt
+    asgn = do fmt <- use trFmt
 
-            rhs   <- getLastVar fmt r
-            t_rhs <- tagRhs
+              rhs   <- getLastVarRHS fmt r
+              t_rhs <- tagRhs
 
-            -- use a fresh var for the assignment
-            incrLastVar l
-            lhs   <- getLastVar fmt            l
-            t_lhs <- getLastVar (mkTagged fmt) l
+              -- use a fresh var for the assignment
+              case a of
+                BA  -> incrBA  l
+                NBA -> incrNBA l
 
-            return [ BinOp EQU t_lhs t_rhs -- update the tag   of lhs
-                   , BinOp EQU lhs rhs     -- update the value of lhs
-                   ]
-
-    ----------------------------------------
-    nba :: S [HSFExpr]
-    ----------------------------------------
-    -- non-blocking assignment
-    nba = do fmt <- use trFmt
-
-             rhs   <- getLastVar fmt r
-             t_rhs <- tagRhs
-
-             -- there can be at most one non-blocking assignment for each variable,
-             -- so directly set the primed variable
-             let lhs   = makeVar fmt{primedVar=True}            l
-                 t_lhs = makeVar (mkTagged fmt){primedVar=True} l
-
-             -- check if there are multiple non-blocking assignments to the same variable
-             uses trNBAs (S.member l)
-               >>= flip when (throw . PassError $ printf "multiple non-blocking assignments to %s !" l)
-
-             trNBAs %= S.insert l
-
-             return [ BinOp EQU t_lhs t_rhs -- set the next tag   of lhs
-                    , BinOp EQU lhs rhs     -- set the next value of lhs
-                    ]
+              lhs   <- getLastVarLHS fmt            l
+              t_lhs <- getLastVarLHS (mkTagged fmt) l
+  
+              return [ BinOp EQU t_lhs t_rhs -- update the tag   of lhs
+                     , BinOp EQU lhs rhs     -- update the value of lhs
+                     ]
 
     ----------------------------------------
     tagRhs :: S HSFExpr
@@ -191,13 +177,13 @@ nextAsgn a l r = do es1 <- uf_eq r
     tagRhs = do c <- isUF r
                 if c
                   then ufTagRhs
-                  else uses trFmt mkTagged >>= flip getLastVar r 
+                  else uses trFmt mkTagged >>= flip getLastVarRHS r 
 
     ----------------------------------------
     ufTagRhs :: S HSFExpr
     ----------------------------------------
     ufTagRhs = do fmt <- uses trFmt mkTagged
-                  vars <- ufAtoms fmt r
+                  vars <- ufAtomsRHS fmt r
                   case vars of
                     []   -> return $ makeVar fmt l -- rhs is constant, no tag propagation needed
                     v:vs -> return $ foldr (BinOp PLUS) v vs
@@ -205,11 +191,11 @@ nextAsgn a l r = do es1 <- uf_eq r
     mkTagged fmt = fmt{taggedVar=True}
 
 ----------------------------------------
-ufAtoms :: VarFormat -> Id -> S [HSFExpr]
+ufAtomsRHS :: VarFormat -> Id -> S [HSFExpr]
 ----------------------------------------
 -- arguments of the uf formatted with fmt
-ufAtoms fmt u = do atoms <- uses (trSt.ufs) (M.lookupDefault err u)
-                   sequence $ getLastVar fmt <$> atoms
+ufAtomsRHS fmt u = do atoms <- uses (trSt.ufs) (M.lookupDefault err u)
+                      sequence $ getLastVarRHS fmt <$> atoms
   where
     err = throw (PassError $ "could not find " ++ u ++ " in ufs")
              
@@ -223,8 +209,8 @@ uf_eq u = do c <- isUF u
                        let fmtL = fmt{leftVar=True,  rightVar=False}
                            fmtR = fmt{leftVar=False, rightVar=True}
 
-                       varsL <- ufAtoms fmtL u
-                       varsR <- ufAtoms fmtR u
+                       varsL <- ufAtomsRHS fmtL u
+                       varsR <- ufAtomsRHS fmtR u
 
                        let lhs = Ands $ uncurry (BinOp EQU) <$> zip varsL varsR
                            rhs = BinOp EQU (makeVar fmtL u) (makeVar fmtR u)
@@ -238,12 +224,20 @@ uf_eq u = do c <- isUF u
 isUF :: Id -> S Bool
 isUF v = uses (trSt . ufs) (M.member v)
 
-getLastVar       :: VarFormat -> Id -> S HSFExpr
-getLastVar fmt v = do mi  <- uses trQ (M.lookup v)
-                      return $ makeVar fmt{varId=mi} v
+getLastVarRHS       :: VarFormat -> Id -> S HSFExpr
+getLastVarRHS fmt v = do mi <- uses trBAs (M.lookup v)
+                         return $ makeVar fmt{varId=mi} v
 
-incrLastVar   :: Id -> S ()
-incrLastVar v = trQ <~ uses trQ (M.alter updateInd v)
-  where
-    updateInd Nothing = Just 1
-    updateInd _       = throw (PassError $ printf "multiple assignments to %s in an always block !" v)
+getLastVarLHS       :: VarFormat -> Id -> S HSFExpr
+getLastVarLHS fmt v = do mi <- uses trAs (M.lookup v)
+                         return $ makeVar fmt{varId=mi} v
+
+incrBA :: Id -> S ()
+incrBA v = do trAs  <~ uses trAs  (M.alter updateInd v)
+              trBAs <~ uses trBAs (M.alter updateInd v)
+
+incrNBA :: Id -> S ()
+incrNBA v = trAs  <~ uses trAs  (M.alter updateInd v)
+
+updateInd Nothing = Just 1
+updateInd m       = (+ 1) <$> m

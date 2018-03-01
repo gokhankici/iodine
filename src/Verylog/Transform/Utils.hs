@@ -7,6 +7,7 @@ import           Control.Exception
 import           Text.Printf
 import           Debug.Trace
 import           Data.Char
+import           Data.List
 
 import           Verylog.Language.Types
 import           Verylog.HSF.Types
@@ -36,11 +37,18 @@ makeVar :: VarFormat -> Id -> HSFExpr
 makeVar fmt v = Var (makeVarName fmt v)
 
 makeVarName :: VarFormat -> Id -> HSFVar
-makeVarName fmt@(VarFormat{..}) v = if   debugSimple
-                                    then let (h:t) = drop 2 v
-                                             v'    = (toUpper h):t
-                                         in printf "%s%s%s%s%s%s" atom v' pos vid prime tag 
-                                    else printf "%sV%s%s%s%s_%s" atom pos tag prime vid v
+makeVarName fmt@(VarFormat{..}) v =
+  if   debugSimple
+  then let v' = if isPrefixOf "v_" v
+                then case drop 2 v of
+                       []  -> throw (PassError $ printf "weird variable %s" v)
+                       h:t -> (toUpper h):t
+                else case v of
+                       []  -> throw (PassError "empty var")
+                       h:t -> (toUpper h):t
+       in printf "%s%s%s%s%s%s" atom v' pos vid prime tag 
+  else printf "%sV%s%s%s%s_%s" atom pos tag prime vid v
+
   where
     atom | atomVar   = "v"
          | otherwise = ""
