@@ -52,6 +52,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - verylog-hs
+    - ansi-terminal
 
 tests:
   vcgen-test:

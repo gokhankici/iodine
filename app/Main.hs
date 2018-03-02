@@ -10,6 +10,8 @@ import Verylog.HSFGen
 import Verylog.Language.Parser
 import Verylog.Language.Types
 
+import System.Console.ANSI
+
 main :: IO ()
 main =  do
   (getFiles >>= uncurry printResults) `catch` peHandle `catch` passHandle
@@ -28,7 +30,13 @@ peHandle :: IRParseError -> IO ()
 peHandle e = renderError e >>= hPutStrLn stderr >> exitFailure
 
 passHandle :: PassError -> IO ()
-passHandle (PassError msg) = hPutStrLn stderr msg >> exitFailure
+passHandle (PassError msg) = do
+  hSetSGR stderr [ SetColor Foreground Vivid Red
+                 , SetConsoleIntensity BoldIntensity
+                 ]
+  hPutStrLn stderr msg
+  hSetSGR stderr []
+  exitFailure
 
 getFiles :: IO (FilePath, FilePath)
 getFiles = do
