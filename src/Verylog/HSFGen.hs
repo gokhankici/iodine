@@ -9,7 +9,7 @@ import Verylog.Solver.HSF.Types
 
 import Verylog.Transform.Modularize
 import Verylog.Transform.SanityCheck
-import Verylog.Transform.VCGen
+import Verylog.Transform.HSFVCGen
 
 type Out = ([QueryNaming], [Inv])  
 

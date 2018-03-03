@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Verylog.Solver.SMTLib.Types where
+module Verylog.Solver.SMT.Types where
 
 import Verylog.Language.Types
 import Text.PrettyPrint

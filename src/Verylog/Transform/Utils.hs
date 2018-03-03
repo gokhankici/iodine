@@ -11,7 +11,6 @@ import           Data.List
 
 import           Verylog.Language.Types
 import           Verylog.Solver.Common
-import           Verylog.Solver.HSF.Types
 
 data VarFormat = VarFormat { taggedVar   :: Bool
                            , primedVar   :: Bool
@@ -37,7 +36,7 @@ debugSimple = True -- False
 makeVar :: VarFormat -> Id -> Expr
 makeVar fmt v = Var (makeVarName fmt v)
 
-makeVarName :: VarFormat -> Id -> HSFVar
+makeVarName :: VarFormat -> Id -> Id
 makeVarName fmt@(VarFormat{..}) v =
   if   debugSimple
   then let v' = if isPrefixOf "v_" v

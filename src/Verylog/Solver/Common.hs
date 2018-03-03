@@ -1,5 +1,7 @@
 module Verylog.Solver.Common where
 
+import Text.Printf
+import Control.Lens
 import Verylog.Language.Types
 
 data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
@@ -33,3 +35,9 @@ data Expr = BinOp     { bOp   :: BinOp
           | UFCheck   { ufArgs  :: [(Expr,Expr)]
                       , ufNames :: (Expr,Expr)
                       }
+
+nextPred = "next"
+invPred  = "inv"
+
+makeInvPred   :: AlwaysBlock -> String
+makeInvPred a = printf "inv%d" (a^.aId)

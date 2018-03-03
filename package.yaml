@@ -29,30 +29,43 @@ dependencies:
 - process
 - semigroups
 - unordered-containers
+- ansi-terminal
 
 library:
   source-dirs:           src
   ghc-options:
   - -W
   exposed-modules:
+  - Verylog.MainCommon
+  - Verylog.HSFGen
+  - Verylog.SMTGen
   - Verylog.Language.Parser
   - Verylog.Language.Types
-  - Verylog.HSFGen
-  - Verylog.Transform.Utils
   - Verylog.Transform.TransitionRelation
+  - Verylog.Transform.Utils
   - Verylog.Transform.VCGen
+  - Verylog.Solver.HSF.Types
+  - Verylog.Solver.SMT.Types
 
 executables:
-  vcgen:
-    main:                HSFMain.hs
-    source-dirs:         app
+  vcgen-hsf:
+    main:                Main.hs
+    source-dirs:         app-hsf
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
     - verylog-hs
-    - ansi-terminal
+  vcgen-smt:
+    main:                Main.hs
+    source-dirs:         app-smt
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - verylog-hs
 
 tests:
   vcgen-test:

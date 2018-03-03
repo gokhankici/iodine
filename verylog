@@ -6,7 +6,6 @@ if [[ "$(uname)" != "Darwin" &&  "$(expr substr $(uname -s) 1 5)" != "Linux"  ]]
 fi
 
 THIS_DIR=${0:A:h}
-APP=vcgen
 MAIN_MODULE='verylog' 
 MAIN_PL="src/${MAIN_MODULE}.pl" 
 
@@ -14,11 +13,14 @@ zparseopts -D -E -- \
            -ir=JUST_IR -vcgen=JUST_VCGEN \
            -debug=VC_DEBUG \
            -qarmcOpts+:=QARMC_OPTS \
+           -solver:=SOLVER \
            M:=TOPLEVEL_MODULE \
            -emacs=EMACS \
            h=HELP -help=HELP
 
 QARMC_OPTS=${(@)QARMC_OPTS:#--qarmcOpts}
+
+VCGEN_TARGET=${SOLVER[2]:-hsf}
 
 if [[ $# -eq 0 || -n "$HELP" ]]; then
     echo "usage: ${0:t} [options] <verilog file>"
@@ -34,6 +36,8 @@ verylog options:
       Opens the output (IR or VC) in emacs
   --qarmcOpts <option>
       The argument of this option is passed to qarmc
+  --solver ( hsf | smt )
+      Specifies the target of the vcgen (default is hsf)
   -h, --help
       Prints this help
 
@@ -57,9 +61,20 @@ elif [[ $# -ne 0 ]]; then
     exit 1
 fi
 
+if [[ "$VCGEN_TARGET" != "hsf" && "$VCGEN_TARGET" != "smt" ]]; then
+    echo "Invalid vcgen target: '$VCGEN_TARGET'" >&2
+    exit 1
+fi
+
 PREPROCESSED_FILE=${FILENAME:A:h}/.${FILENAME:t:r}.preproc.v
 IR_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.pl
-HSF_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.hsf.pl
+if [[ "$VCGEN_TARGET" == "hsf" ]]; then
+    APP=vcgen-hsf
+    VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.hsf.pl
+else
+    APP=vcgen-smt
+    VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.smt2
+fi
 LOGFILE="$THIS_DIR/.log.$(date +%F-%H-%M-%S)"
 
 CONF_FILE="${THIS_DIR}/configuration.sh"
@@ -137,7 +152,7 @@ if [[ -n "$JUST_IR" ]]; then
 fi
 
 pushd $THIS_DIR
-stack exec -- $APP $IR_FILE $HSF_FILE
+stack exec -- $APP $IR_FILE $VCGEN_FILE
 last_err=$?
 echo "\n"
 popd
@@ -148,23 +163,23 @@ if [[ $last_err -ne 0 ]]; then
 fi
 
 if [[ -n "$VC_DEBUG" ]]; then
-    # echo '################################################################################'
-    # echo '################################################################################'
-    # echo '################################################################################'
-    # cat $HSF_FILE
     exit 0
 fi
 
 if [[ -n "$JUST_VCGEN" ]]; then
-    [[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $HSF_FILE || cat $HSF_FILE
+    [[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $VCGEN_FILE || cat $VCGEN_FILE
     exit 0
 fi
 
-if [[ "$(uname)" == "Darwin" ]]; then
-    $QARMC $QARMC_OPTS $HSF_FILE
+if [[ "$VCGEN_TARGET" == "hsf" ]]; then
+    if [[ "$(uname)" == "Darwin" ]]; then
+        $QARMC $QARMC_OPTS $VCGEN_FILE
+    else
+        $QARMC $QARMC_OPTS $VCGEN_FILE | \
+            awk '{ print $0; } /program is correct/ {correct = 1;} END {if(correct) {exit 0;} else {exit 1;}}'
+    fi
 else
-    $QARMC $QARMC_OPTS $HSF_FILE | \
-        awk '{ print $0; } /program is correct/ {correct = 1;} END {if(correct) {exit 0;} else {exit 1;}}'
+    cat $VCGEN_FILE
 fi
 
 last_err=$?
@@ -173,8 +188,8 @@ echo
 echo '################################################################################'
 echo '# TEMPORARY FILES ##############################################################'
 echo '################################################################################'
-echo "IR  file : ${IR_FILE}"
-echo "HSF file : ${HSF_FILE}"
+echo "IR file : ${IR_FILE}"
+echo "VC file : ${VCGEN_FILE}"
 echo '################################################################################'
 
 exit $last_err

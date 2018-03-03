@@ -2,6 +2,7 @@
 /verylog-hs.cabal
 configuration.sh
 .*.pl
+.*.smt2
 .log*
 
 [._]*.s[a-v][a-z]

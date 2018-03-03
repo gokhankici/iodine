@@ -4,8 +4,6 @@ module Verylog.Solver.HSF.Types where
 
 import Verylog.Language.Types
 import Text.PrettyPrint
-import Text.Printf
-import Control.Lens
 
 import Verylog.Solver.Common
 
@@ -16,12 +14,6 @@ data QueryNaming = QueryNaming { hsfId   :: Int
 type HSFVar = String
 
 printArgs as = hcat $ punctuate (comma <> space) (text <$> as)
-
-nextPred = "next"
-invPred  = "inv"
-
-makeInvPred   :: AlwaysBlock -> String
-makeInvPred a = printf "inv%d" (a^.aId)
 
 instance PPrint QueryNaming where
   toDoc (QueryNaming{..}) = text "query_naming("

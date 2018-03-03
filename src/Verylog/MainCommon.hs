@@ -1,34 +1,13 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-module Main where
+module Verylog.MainCommon where
 
 import Control.Exception  (catch)
-import Control.Monad
+import System.IO
 import System.Environment (getArgs)
 import System.Exit
-import System.IO --(withFile, stderr, hPutStrLn)
-
-import Verylog.HSFGen
-import Verylog.Language.Parser
-import Verylog.Language.Types
-
 import System.Console.ANSI
 
-main :: IO ()
-main =  do
-  (getFiles >>= uncurry printResults) `catch` peHandle `catch` passHandle
-
-printResults          :: FilePath -> FilePath -> IO ()
-printResults fin fout = do
-  (qs, invs) <- hsfgen fin
-
-  withFile fout WriteMode $ \h -> do
-    let pr     = hPutStrLn h
-        prLn c = pr (show c) >> pr ""
-    pr "/* -*- mode: prolog -*- */"
-    pr "/* vim: set ft=prolog: */\n" 
-    forM_ qs   prLn
-    forM_ invs prLn
-  return ()
+import Verylog.Language.Parser
+import Verylog.Language.Types
 
 peHandle :: IRParseError -> IO ()
 peHandle e = renderError e >>= hPutStrLn stderr >> exitFailure
@@ -49,3 +28,8 @@ getFiles = do
     [f1,f2] -> return (f1,f2)
     _       -> error "Please run with two files (input & output)"
 
+
+type PRType = FilePath -> FilePath -> IO ()
+
+runMain              :: PRType -> IO ()
+runMain printResults = (getFiles >>= uncurry printResults) `catch` peHandle `catch` passHandle

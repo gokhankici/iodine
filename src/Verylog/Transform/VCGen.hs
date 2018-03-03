@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Verylog.Transform.VCGen ( hsfInvs
+module Verylog.Transform.VCGen ( invs
                                ) where
 
 import           Control.Lens
@@ -14,7 +14,7 @@ import           Verylog.Transform.TransitionRelation
 import           Verylog.Transform.Utils
 import           Verylog.Language.Types
 
-import           Verylog.Solver.HSF.Types
+-- import           Verylog.Solver.HSF.Types
 import           Verylog.Solver.Common
 
 --------------------------------------------------------------------------------
@@ -23,9 +23,6 @@ invs :: [AlwaysBlock] -> [Inv]
 invs as = concatMap modular_inv as
           ++ non_interference_checks as
           ++ concatMap provedProperty as
-
-hsfInvs    :: [AlwaysBlock] -> ([QueryNaming], [Inv])
-hsfInvs as = (map queryNaming as, invs as)
 
 --------------------------------------------------------------------------------
 modular_inv :: AlwaysBlock -> [Inv]  
@@ -158,9 +155,6 @@ non_interference_inv a1 a2 = Inv (a2^.aId) args2' body
                   ]
 
                      
-queryNaming   :: AlwaysBlock -> QueryNaming
-queryNaming a = QueryNaming (a^.aId) (makeInvArgs fmt{atomVar=True} a)
-
 provedProperty :: AlwaysBlock -> [Inv]
 provedProperty a =
   [ Prop
