@@ -13,11 +13,16 @@ main = runMain printResults
 
 printResults          :: FilePath -> FilePath -> IO ()
 printResults fin fout = do
-  gen <- smtgen fin
+  (gen, fs, ufcs) <- smtgen fin
 
   withFile fout WriteMode $ \h -> do
     let pr     = hPutStrLn h
         prLn c = pr (show c) >> pr ""
-    forM_ gen prLn
+    hPutStrLn h "(set-logic HORN)\n"
+    forM_ fs   prLn
+    forM_ ufcs prLn
+    forM_ gen  prLn
+    hPutStrLn h "(check-sat)"
+    hPutStrLn h "(get-model)"
   return ()
 

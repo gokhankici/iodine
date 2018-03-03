@@ -71,11 +71,7 @@ instance PPrint Expr where
 ptoDoc :: PPrint a => a -> Doc
 ptoDoc = parens . toDoc
 
-instance Show Expr where
-  show = pprint
-
-instance Show Inv where
-  show = pprint
-
 instance Show QueryNaming where
+  show = pprint
+instance Show Inv where
   show = pprint

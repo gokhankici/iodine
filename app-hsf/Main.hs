@@ -4,7 +4,7 @@ module Main where
 import Control.Monad
 import System.IO
 
-import Verylog.MainCommon  
+import Verylog.MainCommon
 import Verylog.HSFGen
 
 main :: IO ()

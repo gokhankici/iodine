@@ -150,9 +150,6 @@ instance PPrint St where
                    , rbrace
                    ]
 
-instance Show St where
-  show = pprint
-
 instance PPrint AlwaysBlock where
   toDoc a = text "always(" <> vcat [ comment "ports   " <+> printList (a^.aSt^.ports) <> comma
                                    , comment "ufs     " <+> printMap  (a^.aSt^.ufs) <> comma
@@ -166,9 +163,6 @@ instance PPrint AlwaysBlock where
     where
       comment t = text "/*" <+> text t <+> text "*/"
 
-instance Show AlwaysBlock where
-  show = pprint
-
 printList   = brackets . text . (intercalate ", ")
 mapKV (k,l) = "(" ++ k ++ ", [" ++ (intercalate ", " l) ++ "])"
 printMap    = brackets
@@ -176,3 +170,14 @@ printMap    = brackets
               . (intercalate ", ")
               . (map mapKV)
               . M.toList
+
+instance Show IR where
+  show = pprint
+instance Show Stmt where
+  show = pprint
+instance Show Event where
+  show = pprint
+instance Show St where
+  show = pprint
+instance Show AlwaysBlock where
+  show = pprint

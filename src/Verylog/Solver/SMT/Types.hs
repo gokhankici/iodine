@@ -2,31 +2,39 @@
 
 module Verylog.Solver.SMT.Types where
 
-import Text.PrettyPrint
-import Text.Printf
-import Verylog.Language.Types
+import           Control.Monad.State.Lazy
+import           Text.PrettyPrint
+import           Text.Printf
+import qualified Data.HashSet               as S
 
-import Verylog.Solver.Common
+import           Verylog.Language.Types
+import           Verylog.Solver.Common
 
 type SMTVar = String
 
-printArgs as = hcat $ punctuate (comma <> space) (text <$> as)
+data InvFun = InvFun { invFunName  :: Id
+                     , invFunArity :: Int
+                     }
 
-forallArgs      :: [Id] -> Expr -> Doc
-forallArgs as e = psep [text "forall" , args, toDoc e]
+data UFConst = UFConst { ufConstName  :: Id
+                       , ufConstArity :: Int
+                       }
+
+forallArgs   :: Expr -> Doc
+forallArgs e = psep [text "forall" , args, toDoc e]
   where
     args = let f a = parens $ text a <+> text "Int"
-           in psep (f <$> as)
+           in psep (f <$> allVars e)
 
 instance PPrint Inv where
   toDoc (Inv{..})  = parens $ text "assert" <+> chk
     where
-      chk     = forallArgs invArgs (BinOp IMPLIES invBody (Structure invName invArgs))
+      chk     = forallArgs (BinOp IMPLIES invBody (Structure invName invArgs))
       invName = printf "%s%d" invPred invId
 
   toDoc (Prop{..}) = parens $ text "assert" <+> chk
     where
-      chk = forallArgs propArgs (BinOp IMPLIES propL propR)
+      chk = forallArgs (BinOp IMPLIES propL propR)
 
 instance PPrint Expr where
   toDoc (Boolean True)   = text "true"
@@ -64,7 +72,20 @@ instance PPrint Expr where
                         , toDoc f
                         , psep (text "select" : text ufFunc : (toDoc <$> args))
                         ]
-        
+
+instance PPrint InvFun where
+  toDoc (InvFun{..}) = parens $ hsep [ text "declare-fun"
+                                     , text invFunName
+                                     , parens $ hsep (replicate invFunArity (text "Int"))
+                                     , text "Bool"
+                                     ]
+
+instance PPrint UFConst where
+  toDoc (UFConst{..}) = parens $ hsep [ text "declare-const"
+                                      , text ufConstName
+                                      , parens $ hsep $
+                                        text "Array" : (replicate (ufConstArity+1) (text "Int"))
+                                      ]
 
 ptoDoc :: PPrint a => a -> Doc
 ptoDoc = parens . toDoc
@@ -72,9 +93,33 @@ ptoDoc = parens . toDoc
 psep :: [Doc] -> Doc
 psep = parens . sep
 
-instance Show Expr where
-  show = pprint
+type S = State (S.HashSet Id)
+
+-- TODO : this is probably not quite right
+--------------------------------------------------------------------------------
+allVars :: Expr -> [Id]
+--------------------------------------------------------------------------------
+allVars s = evalState comp S.empty
+  where
+    comp = f s >> get >>= return . S.toList
+
+    f                  :: Expr -> S ()
+    f (BinOp{..})      = sequence_ (f <$> [expL, expR])
+    f (UnOp{..})       = f exp
+    f (Ands es)        = sequence_ (f <$> es)
+    f (Ite{..})        = sequence_ (f <$> [cnd, expThen, expElse])
+    f (Structure _ vs) = modify (S.union (S.fromList vs))
+    f (Var v)          = modify (S.insert v)
+    f (Boolean _)      = return ()
+    f (Number _)       = return ()
+    f (UFCheck{..})    = sequence_ (f <$> as ++ t2l ufNames)
+      where
+        as        = concatMap t2l ufArgs
+        t2l (x,y) = [x,y]
 
 instance Show Inv where
   show = pprint
-
+instance Show InvFun where
+  show = pprint
+instance Show UFConst where
+  show = pprint

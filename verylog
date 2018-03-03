@@ -179,7 +179,7 @@ if [[ "$VCGEN_TARGET" == "hsf" ]]; then
             awk '{ print $0; } /program is correct/ {correct = 1;} END {if(correct) {exit 0;} else {exit 1;}}'
     fi
 else
-    cat $VCGEN_FILE
+    z3 $VCGEN_FILE
 fi
 
 last_err=$?

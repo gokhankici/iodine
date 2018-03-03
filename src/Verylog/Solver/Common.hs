@@ -11,9 +11,8 @@ data Inv = Inv  { invId   :: Int
                 , invArgs :: [Id]
                 , invBody :: Expr
                 }
-         | Prop { propArgs :: [Id]   -- args used in the proposition
-                , propL    :: Expr   -- lhs of the implication
-                , propR    :: Expr   -- rhs of the implication
+         | Prop { propL   :: Expr   -- lhs of the implication
+                , propR   :: Expr   -- rhs of the implication
                 }
 
 data Expr = BinOp     { bOp   :: BinOp

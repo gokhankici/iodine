@@ -4,6 +4,7 @@ configuration.sh
 .*.pl
 .*.smt2
 .log*
+flycheck_*
 
 [._]*.s[a-v][a-z]
 [._]*.sw[a-p]
