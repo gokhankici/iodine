@@ -13,9 +13,12 @@ MAIN_PL="src/${MAIN_MODULE}.pl"
 zparseopts -D -E -- \
            -ir=JUST_IR -vcgen=JUST_VCGEN \
            -debug=VC_DEBUG \
+           -qarmcOpts+:=QARMC_OPTS \
            M:=TOPLEVEL_MODULE \
            -emacs=EMACS \
            h=HELP -help=HELP
+
+QARMC_OPTS=${(@)QARMC_OPTS:#--qarmcOpts}
 
 if [[ $# -eq 0 || -n "$HELP" ]]; then
     echo "usage: ${0:t} [options] <verilog file>"
@@ -29,6 +32,8 @@ verylog options:
       Run vcgen but do not print the resulting Horn Clauses
   --emacs
       Opens the output (IR or VC) in emacs
+  --qarmcOpts <option>
+      The argument of this option is passed to qarmc
   -h, --help
       Prints this help
 
@@ -156,9 +161,9 @@ if [[ -n "$JUST_VCGEN" ]]; then
 fi
 
 if [[ "$(uname)" == "Darwin" ]]; then
-    $QARMC $HSF_FILE
+    $QARMC $QARMC_OPTS $HSF_FILE
 else
-    $QARMC $HSF_FILE | \
+    $QARMC $QARMC_OPTS $HSF_FILE | \
         awk '{ print $0; } /program is correct/ {correct = 1;} END {if(correct) {exit 0;} else {exit 1;}}'
 fi
 
