@@ -3,16 +3,20 @@ module Verylog.HSFGen ( hsfgen ) where
 import Control.Arrow
 
 import Verylog.Language.Parser
-import Verylog.HSF.Types
+
+import Verylog.Solver.Common
+import Verylog.Solver.HSF.Types
 
 import Verylog.Transform.Modularize
 import Verylog.Transform.SanityCheck
 import Verylog.Transform.VCGen
 
-pipeline   :: FilePath -> String -> [HSFClause]
-pipeline f = parse f >>> modularize >>> sanityCheck >>> invs
+type Out = ([QueryNaming], [Inv])  
 
-hsfgen   :: FilePath -> IO [HSFClause]
+pipeline   :: FilePath -> String -> Out
+pipeline f = parse f >>> modularize >>> sanityCheck >>> hsfInvs
+
+hsfgen   :: FilePath -> IO Out
 hsfgen f = do
   s <- readFile f
   return $ pipeline f s 

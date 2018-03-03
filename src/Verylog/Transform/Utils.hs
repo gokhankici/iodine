@@ -10,7 +10,8 @@ import           Data.Char
 import           Data.List
 
 import           Verylog.Language.Types
-import           Verylog.HSF.Types
+import           Verylog.Solver.Common
+import           Verylog.Solver.HSF.Types
 
 data VarFormat = VarFormat { taggedVar   :: Bool
                            , primedVar   :: Bool
@@ -33,7 +34,7 @@ fmt = VarFormat { taggedVar   = False
 -- inside the HSF file
 debugSimple = True -- False
 
-makeVar :: VarFormat -> Id -> HSFExpr
+makeVar :: VarFormat -> Id -> Expr
 makeVar fmt v = Var (makeVarName fmt v)
 
 makeVarName :: VarFormat -> Id -> HSFVar
@@ -80,8 +81,8 @@ allArgs fmt st = let ps = st^.ports
 nextArgs        :: VarFormat -> St -> [Id]
 nextArgs fmt st = allArgs fmt st ++ allArgs fmt{primedVar=True} st
 
-invArgs        :: VarFormat -> AlwaysBlock -> [Id]
-invArgs fmt a = allArgs fmt{leftVar=True} st ++ allArgs fmt{rightVar=True} st
+makeInvArgs        :: VarFormat -> AlwaysBlock -> [Id]
+makeInvArgs fmt a = allArgs fmt{leftVar=True} st ++ allArgs fmt{rightVar=True} st
   where
     st = a^.aSt
 

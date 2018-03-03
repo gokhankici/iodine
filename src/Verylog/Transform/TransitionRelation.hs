@@ -13,7 +13,7 @@ import           Data.List
 
 import           Verylog.Transform.Utils hiding (fmt)
 import           Verylog.Language.Types
-import           Verylog.HSF.Types
+import           Verylog.Solver.Common
 
 type AsgnQueue = M.HashMap Id Int
 
@@ -32,7 +32,7 @@ type S = State TRSt
 data Asgn = BA | NBA  
 
 --------------------------------------------------------------------------------
-next :: VarFormat -> AlwaysBlock -> HSFExpr
+next :: VarFormat -> AlwaysBlock -> Expr
 --------------------------------------------------------------------------------
 next fmt a = Ands es
   where
@@ -79,7 +79,7 @@ next fmt a = Ands es
                 e:_ -> throw e
 
 --------------------------------------------------------------------------------
-nextStmt :: Stmt -> S [HSFExpr]
+nextStmt :: Stmt -> S [Expr]
 --------------------------------------------------------------------------------
 nextStmt (Block{..})           = sequence (nextStmt <$> blockStmts) >>= return . concat
 nextStmt (BlockingAsgn{..})    = nextAsgn BA  lhs rhs
@@ -157,7 +157,7 @@ nextStmt (IfStmt{..})          = do
     setSt          :: (AsgnQueue, AsgnQueue) -> S ()
     setSt (as,bas) = trAs .= as >> trBAs .= bas
     
-    phiNodes :: VarFormat -> AsgnQueue -> AsgnQueue -> [HSFExpr]
+    phiNodes :: VarFormat -> AsgnQueue -> AsgnQueue -> [Expr]
     phiNodes fmt q qDiff = [ BinOp EQU
                              (makeVar fmt'{varId=Just n} v)
                              (makeVar fmt'{varId=M.lookup v q} v)
@@ -169,14 +169,14 @@ nextStmt (IfStmt{..})          = do
 nextStmt Skip                  = return []
 
 --------------------------------------------------------------------------------
-nextAsgn :: Asgn -> Id -> Id -> S [HSFExpr]
+nextAsgn :: Asgn -> Id -> Id -> S [Expr]
 --------------------------------------------------------------------------------
 nextAsgn a l r = do es1 <- uf_eq r
                     es2 <- asgn
                     return $ es1 ++ es2
   where
     ----------------------------------------
-    asgn :: S [HSFExpr]
+    asgn :: S [Expr]
     ----------------------------------------
     asgn = do fmt <- use trFmt
 
@@ -196,7 +196,7 @@ nextAsgn a l r = do es1 <- uf_eq r
                      ]
 
     ----------------------------------------
-    tagRhs :: S HSFExpr
+    tagRhs :: S Expr
     ----------------------------------------
     tagRhs = do c <- isUF r
                 fmt' <- uses trFmt mkTagged
@@ -211,7 +211,7 @@ nextAsgn a l r = do es1 <- uf_eq r
                 
 
     ----------------------------------------
-    ufTagRhs :: S HSFExpr
+    ufTagRhs :: S Expr
     ----------------------------------------
     ufTagRhs = do fmt <- uses trFmt mkTagged
                   vars <- ufAtomsRHS fmt r
@@ -235,7 +235,7 @@ varDeps v = do c <- isUF v
     err = throw (PassError $ "could not find " ++ v ++ " in ufs")
 
 ----------------------------------------
-ufAtomsRHS :: VarFormat -> Id -> S [HSFExpr]
+ufAtomsRHS :: VarFormat -> Id -> S [Expr]
 ----------------------------------------
 -- arguments of the uf formatted with fmt
 ufAtomsRHS fmt u = do c <- isUF u
@@ -247,7 +247,7 @@ ufAtomsRHS fmt u = do c <- isUF u
              
 
 ----------------------------------------
-uf_eq :: Id -> S [HSFExpr]
+uf_eq :: Id -> S [Expr]
 ----------------------------------------
 uf_eq u = do c <- isUF u
              if c
@@ -258,9 +258,9 @@ uf_eq u = do c <- isUF u
                        varsL <- ufAtomsRHS fmtL u
                        varsR <- ufAtomsRHS fmtR u
 
-                       let lhs = Ands $ uncurry (BinOp EQU) <$> zip varsL varsR
-                           rhs = BinOp EQU (makeVar fmtL u) (makeVar fmtR u)
-                       return [makeImpl lhs rhs]
+                       let lhs = zip varsL varsR
+                           rhs = (makeVar fmtL u, makeVar fmtR u)
+                       return [UFCheck lhs rhs]
                else return []
                     
 --------------------------------------------------------------------------------
@@ -270,11 +270,11 @@ uf_eq u = do c <- isUF u
 isUF :: Id -> S Bool
 isUF v = uses (trSt . ufs) (M.member v)
 
-getLastVarRHS       :: VarFormat -> Id -> S HSFExpr
+getLastVarRHS       :: VarFormat -> Id -> S Expr
 getLastVarRHS fmt v = do mi <- uses trBAs (M.lookup v)
                          return $ makeVar fmt{varId=mi} v
 
-getLastVarLHS       :: VarFormat -> Id -> S HSFExpr
+getLastVarLHS       :: VarFormat -> Id -> S Expr
 getLastVarLHS fmt v = do mi <- uses trAs (M.lookup v)
                          return $ makeVar fmt{varId=mi} v
 

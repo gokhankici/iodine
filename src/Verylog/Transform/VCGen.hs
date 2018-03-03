@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Verylog.Transform.VCGen ( invs
+module Verylog.Transform.VCGen ( hsfInvs
                                ) where
 
 import           Control.Lens
@@ -13,30 +13,34 @@ import           Text.Printf
 import           Verylog.Transform.TransitionRelation
 import           Verylog.Transform.Utils
 import           Verylog.Language.Types
-import           Verylog.HSF.Types
+
+import           Verylog.Solver.HSF.Types
+import           Verylog.Solver.Common
 
 --------------------------------------------------------------------------------
-invs :: [AlwaysBlock] -> [HSFClause]
+invs :: [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
-invs as = map queryNaming as
-          ++ concatMap modular_inv as
+invs as = concatMap modular_inv as
           ++ non_interference_checks as
           ++ concatMap provedProperty as
 
+hsfInvs    :: [AlwaysBlock] -> ([QueryNaming], [Inv])
+hsfInvs as = (map queryNaming as, invs as)
+
 --------------------------------------------------------------------------------
-modular_inv :: AlwaysBlock -> [HSFClause]  
+modular_inv :: AlwaysBlock -> [Inv]  
 --------------------------------------------------------------------------------
 modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
   where
     a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
 
 --------------------------------------------------------------------------------
-initial_inv :: AlwaysBlock -> HSFClause
+initial_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
 initial_inv a = Inv (a^.aId) args body
   where
     st    = a^.aSt
-    args  = invArgs fmt a
+    args  = makeInvArgs fmt a
     body1 = Ands [ BinOp EQU (lvar sntz) (rvar sntz)
                  | sntz <- st^.sanitize
                  ]
@@ -47,13 +51,13 @@ initial_inv a = Inv (a^.aId) args body
     
 
 --------------------------------------------------------------------------------
-tag_reset_inv :: AlwaysBlock -> HSFClause
+tag_reset_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
 tag_reset_inv a = Inv (a^.aId) args' body
   where
     st    = a^.aSt
-    args  = invArgs fmt a
-    args' = invArgs fmt{primedVar=True} a
+    args  = makeInvArgs fmt a
+    args' = makeInvArgs fmt{primedVar=True} a
 
     body = let b1 = Ands [ BinOp EQU tv (Number 1)
                          | s <- st^.sources
@@ -73,19 +77,19 @@ tag_reset_inv a = Inv (a^.aId) args' body
                    ]
 
 --------------------------------------------------------------------------------
-next_step_inv :: AlwaysBlock -> HSFClause 
+next_step_inv :: AlwaysBlock -> Inv 
 --------------------------------------------------------------------------------
 next_step_inv a = Inv (a^.aId) args' body
   where
-    args  = invArgs fmt                 a
-    args' = invArgs fmt{primedVar=True} a
+    args  = makeInvArgs fmt                 a
+    args' = makeInvArgs fmt{primedVar=True} a
     body  = Ands [ next fmt{leftVar=True} a
                  , next fmt{rightVar=True} a
                  , Structure (makeInvPred a) args
                  ]
 
 --------------------------------------------------------------------------------
-non_interference_checks :: [AlwaysBlock] -> [HSFClause]
+non_interference_checks :: [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
 non_interference_checks as = non_int_chk as [] []
   where
@@ -125,13 +129,13 @@ readWriteSet a = evalState (comp (a^.aStmt) >> get) (S.empty, S.empty)
     comp Skip                  = return ()
 
 --------------------------------------------------------------------------------
-non_interference_inv :: AlwaysBlock -> AlwaysBlock -> HSFClause 
+non_interference_inv :: AlwaysBlock -> AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
 non_interference_inv a1 a2 = Inv (a2^.aId) args2' body
   where
-    args1  = invArgs fmt a1
-    args2  = invArgs fmt a2
-    args2' = invArgs fmt{primedVar=True} a2 -- TODO: this is not quite right, fix later
+    args1  = makeInvArgs fmt a1
+    args2  = makeInvArgs fmt a2
+    args2' = makeInvArgs fmt{primedVar=True} a2 -- TODO: this is not quite right, fix later
     body   = Ands [ next fmt{leftVar=True}  a1
                   , next fmt{rightVar=True} a1
                   , Ands [ Ands [ BinOp EQU
@@ -154,14 +158,14 @@ non_interference_inv a1 a2 = Inv (a2^.aId) args2' body
                   ]
 
                      
-queryNaming   :: AlwaysBlock -> HSFClause
-queryNaming a = QueryNaming (a^.aId) (invArgs fmt{atomVar=True} a)
+queryNaming   :: AlwaysBlock -> QueryNaming
+queryNaming a = QueryNaming (a^.aId) (makeInvArgs fmt{atomVar=True} a)
 
-provedProperty :: AlwaysBlock -> [HSFClause]
+provedProperty :: AlwaysBlock -> [Inv]
 provedProperty a =
   [ Prop
     (BinOp GE (rtvar s) (Number 1))
-    (Ands [ Structure (makeInvPred a) (invArgs fmt a)
+    (Ands [ Structure (makeInvPred a) (makeInvArgs fmt a)
           , BinOp GE (ltvar s) (Number 1)
           ])
   | s <- a^.aSt^.sinks

@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
 import Control.Exception  (catch)
@@ -18,12 +19,15 @@ main =  do
 
 printResults          :: FilePath -> FilePath -> IO ()
 printResults fin fout = do
-  cs <- hsfgen fin
+  (qs, invs) <- hsfgen fin
+
   withFile fout WriteMode $ \h -> do
-    let pr = hPutStrLn h
+    let pr     = hPutStrLn h
+        prLn c = pr (show c) >> pr ""
     pr "/* -*- mode: prolog -*- */"
     pr "/* vim: set ft=prolog: */\n" 
-    forM_ cs (\c -> pr (pprint c) >> pr "")
+    forM_ qs   prLn
+    forM_ invs prLn
   return ()
 
 peHandle :: IRParseError -> IO ()

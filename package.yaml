@@ -44,7 +44,7 @@ library:
 
 executables:
   vcgen:
-    main:                Main.hs
+    main:                HSFMain.hs
     source-dirs:         app
     ghc-options:
     - -threaded
