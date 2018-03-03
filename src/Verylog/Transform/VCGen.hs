@@ -157,13 +157,16 @@ non_interference_inv a1 a2 = Inv (a2^.aId) args2' body
                      
 provedProperty :: AlwaysBlock -> [Inv]
 provedProperty a =
-  [ Prop
-    (BinOp GE (rtvar s) (Number 1))
-    (Ands [ Structure (makeInvPred a) (makeInvArgs fmt a)
-          , BinOp GE (ltvar s) (Number 1)
-          ])
+  [ Prop { propArgs = args
+         , propR    = BinOp GE (rtvar s) (Number 1)
+         , propL    = Ands [ Structure (makeInvPred a) args
+                           , BinOp GE (ltvar s) (Number 1)
+                           ]
+         }
   | s <- a^.aSt^.sinks
   ]
+  where
+    args = makeInvArgs fmt a
 
 -------------------------------------------------------------------------------- 
 -- Helper functions

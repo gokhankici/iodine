@@ -260,7 +260,10 @@ uf_eq u = do c <- isUF u
 
                        let lhs = zip varsL varsR
                            rhs = (makeVar fmtL u, makeVar fmtR u)
-                       return [UFCheck lhs rhs]
+                       return [UFCheck { ufFunc  = u
+                                       , ufArgs  = lhs
+                                       , ufNames = rhs
+                                       }]
                else return []
                     
 --------------------------------------------------------------------------------

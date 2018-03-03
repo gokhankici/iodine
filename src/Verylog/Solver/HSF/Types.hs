@@ -25,8 +25,8 @@ instance PPrint Inv where
                      $+$ text "("
                      $+$ nest 3 (toDoc invBody)
                      $+$ text ")."
-  toDoc (Prop{..}) = toDoc propHead <+> text ":-" 
-                     $+$ nest 3 (toDoc propBody) <> text "."
+  toDoc (Prop{..}) = toDoc propR <+> text ":-" 
+                     $+$ nest 3 (toDoc propL) <> text "."
                             
 
 instance PPrint Expr where
@@ -35,11 +35,7 @@ instance PPrint Expr where
   toDoc (Number n)       = text $ show n
   toDoc (Var x)          = text x
   toDoc (Ands [])        = text "true"
-  toDoc (Ors [])         = text "true"
   toDoc (Ands es)        = cat $ punctuate (comma <> space) (toDoc <$> es)
-  toDoc (Ors es)         = lparen <+> (cat $ punctuate (semi <> space) (f <$> es)) <+> rparen
-                           where
-                             f e = lparen <+> toDoc e <+> rparen
   toDoc (Structure f as) = text f <> lparen <> printArgs as <> rparen
   toDoc (Ite{..})        = text "ite("
                            <> toDoc  cnd <> comma

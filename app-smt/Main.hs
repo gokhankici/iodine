@@ -18,8 +18,6 @@ printResults fin fout = do
   withFile fout WriteMode $ \h -> do
     let pr     = hPutStrLn h
         prLn c = pr (show c) >> pr ""
-    pr "/* -*- mode: prolog -*- */"
-    pr "/* vim: set ft=prolog: */\n" 
     forM_ gen prLn
   return ()
 

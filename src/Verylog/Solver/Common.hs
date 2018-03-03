@@ -11,8 +11,9 @@ data Inv = Inv  { invId   :: Int
                 , invArgs :: [Id]
                 , invBody :: Expr
                 }
-         | Prop { propHead :: Expr
-                , propBody :: Expr
+         | Prop { propArgs :: [Id]   -- args used in the proposition
+                , propL    :: Expr   -- lhs of the implication
+                , propR    :: Expr   -- rhs of the implication
                 }
 
 data Expr = BinOp     { bOp   :: BinOp
@@ -23,7 +24,6 @@ data Expr = BinOp     { bOp   :: BinOp
                       , exp  :: Expr
                       }
           | Ands      [Expr]
-          | Ors       [Expr]
           | Ite       { cnd     :: Expr
                       , expThen :: Expr
                       , expElse :: Expr
@@ -34,6 +34,7 @@ data Expr = BinOp     { bOp   :: BinOp
           | Number    Int
           | UFCheck   { ufArgs  :: [(Expr,Expr)]
                       , ufNames :: (Expr,Expr)
+                      , ufFunc  :: Id
                       }
 
 nextPred = "next"
