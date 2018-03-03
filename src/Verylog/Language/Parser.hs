@@ -26,6 +26,7 @@ import           Text.Printf
 
 import           Verylog.Language.Types
 import           Verylog.Language.Utils
+-- import           Verylog.Transform.Utils
 
 -----------------------------------------------------------------------------------
 -- | Verylog IR
@@ -33,14 +34,18 @@ import           Verylog.Language.Utils
 
 data ParsePort = PRegister { parsePortName :: String }
                | PWire     { parsePortName :: String }
+               deriving (Show)
 
 data ParseBehavior = PAlways ParseEvent ParseStmt
+                   deriving (Show)
 
 data ParseEvent = PStar
                 | PPosEdge String
                 | PNegEdge String
+                deriving (Show)
 
 data ParseUF = PUF String [String]
+               deriving (Show)
 
 data ParseGate = PContAsgn String String
                | PModuleInst { pmInstName      :: String            -- name of the module
@@ -51,6 +56,7 @@ data ParseGate = PContAsgn String String
                              , pmInstBehaviors :: [ParseBehavior]   -- always blocks
                              , pmInstUFs       :: [ParseUF]         -- uninterpreted functions
                              }
+               deriving (Show)
                          
 data ParseIR = TopModule { mPortNames :: [String]          -- port list (i.e. formal parameters)
                          , mPorts     :: [ParsePort]       -- wires os registers used
@@ -61,6 +67,7 @@ data ParseIR = TopModule { mPortNames :: [String]          -- port list (i.e. fo
              | PSource   String
              | PSink     String
              | PSanitize String
+             deriving (Show)
              
 data ParseStmt = PBlock           [ParseStmt]
                | PBlockingAsgn    String
@@ -71,6 +78,7 @@ data ParseStmt = PBlock           [ParseStmt]
                                   ParseStmt
                                   ParseStmt
                | PSkip
+               deriving (Show)
 
 data ParseSt = ParseSt { _parseSources :: S.HashSet Id
                        , _parseSinks   :: S.HashSet Id
@@ -297,9 +305,9 @@ makeState (TopModule{..}:taints) = evalState comp emptyParseSt
               -- make sure we have at least one source and a sink
               let f = (== 0) . length
               noTaint <- liftM2 (||) (uses (st.sinks) f) (uses (st.sources) f)
-              when noTaint $ throw (PassError "Source or sink taint information is missing")
-
-              use st
+              if noTaint
+                then throw (PassError "Source or sink taint information is missing")
+                else use st
 
 makeState _ = throw (PassError "First ir is not a toplevel module !")
 
@@ -314,14 +322,26 @@ collectTaint (TopModule{..}) = return ()
 -----------------------------------------------------------------------------------
 makeIntermediaryIR :: [ParsePort] -> [ParseGate] -> [ParseBehavior] -> [ParseUF] -> St
 -----------------------------------------------------------------------------------
-makeIntermediaryIR prts gates bhvs ufs = evalState comp emptyParseSt
+makeIntermediaryIR prts gates bhvs us = evalState comp emptyParseSt
   where
     comp = do sequence_ (collectPort <$> prts)
               sequence_ (collectGate <$> reverse gates)
               sequence_ (collectBhv  <$> reverse bhvs)
-              sequence_ (collectUF   <$> reverse ufs)
+              sequence_ (collectUF   <$> reverse us)
               st . ports <~ uses parsePorts S.toList
+              st . ufs   %= flattenUFs
               use st
+
+    ------------------------------------------------------
+    flattenUFs   :: M.HashMap Id [Id] -> M.HashMap Id [Id]
+    ------------------------------------------------------
+    -- make is so that arguments to the uninterpreted functions
+    -- cannot be other uninterpreted functions
+    -- i.e. they can be only registers or wires
+    flattenUFs m = let varDeps v = case M.lookup v m of
+                                     Nothing -> [v]
+                                     Just as -> concatMap varDeps as
+                   in M.mapWithKey (\k _ -> varDeps k) m
 
 -----------------------------------------------------------------------------------
 collectPort :: ParsePort -> State ParseSt ()

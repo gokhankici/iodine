@@ -28,7 +28,7 @@ modular_inv :: AlwaysBlock -> [HSFClause]
 --------------------------------------------------------------------------------
 modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
   where
-    a' = a -- trc (printf "\nalways block #%d:\n" (a^.aId)) a a
+    a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
 
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> HSFClause

@@ -8,6 +8,7 @@ import           Control.Exception
 import           Control.Monad.State.Lazy
 import           Control.Lens
 import qualified Data.HashMap.Strict      as M
+import qualified Data.HashSet             as S
 import           Data.List
 
 import           Verylog.Transform.Utils hiding (fmt)
@@ -16,10 +17,12 @@ import           Verylog.HSF.Types
 
 type AsgnQueue = M.HashMap Id Int
 
-data TRSt = TRSt { _trSt   :: St         -- state of the always block given to the function `next`
-                 , _trFmt  :: VarFormat  -- store the format variable given to the function `next`
-                 , _trAs   :: AsgnQueue  -- assignment counts
-                 , _trBAs  :: AsgnQueue  -- assignment counts (blocking assignments only)
+data TRSt = TRSt { _trSt    :: St           -- state of the always block given to the function `next`
+                 , _trFmt   :: VarFormat    -- store the format variable given to the function `next`
+                 , _trAs    :: AsgnQueue    -- assignment counts
+                 , _trBAs   :: AsgnQueue    -- assignment counts (blocking assignments only)
+                 , _ifConds :: S.HashSet Id -- conditions of the if expressions in the stmt hierarchy
+                 , _errs    :: [PassError]
                  }
 
 makeLenses ''TRSt
@@ -33,7 +36,15 @@ next :: VarFormat -> AlwaysBlock -> HSFExpr
 --------------------------------------------------------------------------------
 next fmt a = Ands es
   where
-    es = evalState comp (TRSt (a^.aSt) fmt M.empty M.empty)
+    es = evalState comp initSt
+
+    initSt = TRSt { _trSt    = a^.aSt
+                  , _trFmt   = fmt
+                  , _trAs    = M.empty
+                  , _trBAs   = M.empty
+                  , _ifConds = S.empty
+                  , _errs    = []
+                  }
 
     comp = do es1 <- nextStmt (a^.aStmt)
 
@@ -62,7 +73,10 @@ next fmt a = Ands es
                                | v <- ps \\ M.keys as -- not updated variables
                                ]
 
-              return $ es1 ++ es2 ++ es3
+              es <- use errs
+              case es of
+                []  -> return (es1 ++ es2 ++ es3)
+                e:_ -> throw e
 
 --------------------------------------------------------------------------------
 nextStmt :: Stmt -> S [HSFExpr]
@@ -87,6 +101,11 @@ nextStmt (IfStmt{..})          = do
                  then uf_eq ifCond
                  else return []
 
+  -- store old if conds, and calculate the new one
+  oldIfConds <- use ifConds
+  cvs <- ifCondVars ifCond 
+  ifConds %= S.union cvs
+
   -- store the current state before running either branch
   oldSt <- getSt
 
@@ -104,7 +123,9 @@ nextStmt (IfStmt{..})          = do
   -- calculate & set the new state
   let newAs  = M.unionWith max thAs  elAs
       newBAs = M.unionWith max thBAs elBAs
+
   setSt (newAs, newBAs)
+  ifConds .= oldIfConds
 
   let thDiff = branchDif thAs elAs
       elDiff = branchDif elAs thAs
@@ -143,6 +164,7 @@ nextStmt (IfStmt{..})          = do
                            | (v,n) <- M.toList qDiff
                            , fmt' <- [fmt, fmt{taggedVar=True}]
                            ]
+    ifCondVars v = varDeps v >>= return . S.fromList
 
 nextStmt Skip                  = return []
 
@@ -177,9 +199,16 @@ nextAsgn a l r = do es1 <- uf_eq r
     tagRhs :: S HSFExpr
     ----------------------------------------
     tagRhs = do c <- isUF r
-                if c
-                  then ufTagRhs
-                  else uses trFmt mkTagged >>= flip getLastVarRHS r 
+                fmt' <- uses trFmt mkTagged
+                ts1 <- if c
+                       then ufTagRhs
+                       else getLastVarRHS fmt' r 
+                ts2 <- (uses ifConds S.toList) >>= mapM (getLastVarRHS fmt')
+                case ts2 of
+                  []     -> return ts1 
+                  t2:t2s -> return $
+                            BinOp PLUS ts1 (foldr (BinOp PLUS) t2 t2s)
+                
 
     ----------------------------------------
     ufTagRhs :: S HSFExpr
@@ -192,11 +221,26 @@ nextAsgn a l r = do es1 <- uf_eq r
 
     mkTagged fmt = fmt{taggedVar=True}
 
+
+----------------------------------------
+varDeps :: Id -> S [Id]
+----------------------------------------
+-- recursively look into the given variables arguments
+-- the returned list only contain ports
+varDeps v = do c <- isUF v
+               if c
+                 then uses (trSt.ufs) (M.lookupDefault err v)
+                 else return [v]
+  where
+    err = throw (PassError $ "could not find " ++ v ++ " in ufs")
+
 ----------------------------------------
 ufAtomsRHS :: VarFormat -> Id -> S [HSFExpr]
 ----------------------------------------
 -- arguments of the uf formatted with fmt
-ufAtomsRHS fmt u = do atoms <- uses (trSt.ufs) (M.lookupDefault err u)
+ufAtomsRHS fmt u = do c <- isUF u
+                      when (not c) $ errs %= (:) err
+                      atoms <- varDeps u
                       sequence $ getLastVarRHS fmt <$> atoms
   where
     err = throw (PassError $ "could not find " ++ u ++ " in ufs")

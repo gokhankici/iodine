@@ -175,5 +175,4 @@ printMap    = brackets
               . text
               . (intercalate ", ")
               . (map mapKV)
-              . (filter (\(_,l) -> length l > 0))
               . M.toList

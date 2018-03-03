@@ -31,7 +31,7 @@ fmt = VarFormat { taggedVar   = False
 
 -- set this variable to True if you want to "simplify" the variables
 -- inside the HSF file
-debugSimple = False
+debugSimple = True -- False
 
 makeVar :: VarFormat -> Id -> HSFExpr
 makeVar fmt v = Var (makeVarName fmt v)
