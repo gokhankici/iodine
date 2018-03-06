@@ -37,6 +37,7 @@ library:
   - -W
   exposed-modules:
   - Verylog.MainCommon
+  - Verylog.FPGen
   - Verylog.HSFGen
   - Verylog.SMTGen
   - Verylog.Language.Parser
@@ -44,6 +45,7 @@ library:
   - Verylog.Transform.TransitionRelation
   - Verylog.Transform.Utils
   - Verylog.Transform.VCGen
+  - Verylog.Solver.FP.Types
   - Verylog.Solver.HSF.Types
   - Verylog.Solver.SMT.Types
 
@@ -60,6 +62,15 @@ executables:
   vcgen-smt:
     main:                Main.hs
     source-dirs:         app-smt
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - verylog-hs
+  vcgen-fp:
+    main:                Main.hs
+    source-dirs:         app-fp
     ghc-options:
     - -threaded
     - -rtsopts

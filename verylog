@@ -61,7 +61,10 @@ elif [[ $# -ne 0 ]]; then
     exit 1
 fi
 
-if [[ "$VCGEN_TARGET" != "hsf" && "$VCGEN_TARGET" != "smt" ]]; then
+if [[ "$VCGEN_TARGET" != "hsf" && 
+      "$VCGEN_TARGET" != "smt" &&
+      "$VCGEN_TARGET" != "fp"
+    ]]; then
     echo "Invalid vcgen target: '$VCGEN_TARGET'" >&2
     exit 1
 fi
@@ -71,9 +74,12 @@ IR_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.pl
 if [[ "$VCGEN_TARGET" == "hsf" ]]; then
     APP=vcgen-hsf
     VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.hsf.pl
-else
+elif [[ "$VCGEN_TARGET" == "smt" ]]; then
     APP=vcgen-smt
     VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.smt2
+elif [[ "$VCGEN_TARGET" == "fp" ]]; then
+    APP=vcgen-fp
+    VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.fq
 fi
 LOGFILE="$THIS_DIR/.log.$(date +%F-%H-%M-%S)"
 
@@ -178,7 +184,7 @@ if [[ "$VCGEN_TARGET" == "hsf" ]]; then
         $QARMC $QARMC_OPTS $VCGEN_FILE | \
             awk '{ print $0; } /program is correct/ {correct = 1;} END {if(correct) {exit 0;} else {exit 1;}}'
     fi
-else
+elif [[ "$VCGEN_TARGET" == "smt" ]]; then
     if [[ "$(uname)" == "Darwin" ]]; then
         z3 $VCGEN_FILE 
     else
@@ -189,6 +195,8 @@ printf("%s\n", string);\
 printf ("%s%s%s\n", "\033[1;31m", string, "\033[0m ");\
 }} NR==1 { if(match($0,/^sat/)){correct = 1;}} {pr($0);} END {if(correct) {exit 0;} else {exit 1;}}'
     fi
+elif [[ "$VCGEN_TARGET" == "fp" ]]; then
+    cat $VCGEN_FILE
 fi
 
 last_err=$?
