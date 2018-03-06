@@ -43,14 +43,11 @@ instance PPrint Expr where
   toDoc (Var x)          = text x
   toDoc (Ands [])        = text "true"
   toDoc (Ands as)        = psep (text "and" : (toDoc <$> as))
-  toDoc (Ite{..})        = psep [ text "ite" 
-                                , toDoc cnd
-                                , toDoc expThen
-                                , toDoc expElse
-                                ]
+  toDoc (Ite{..})        = parens $ text "ite" <+> cat [ ptoDoc cnd
+                                                       , ptoDoc expThen
+                                                       , ptoDoc expElse
+                                                       ]
   toDoc (Structure f as) = parens $ hsep (text <$> (f:as))
-  toDoc (UnOp{..})       = case uOp of
-                             NOT -> text "!" <> toDoc exp
   toDoc (BinOp{..})      = let op = case bOp of
                                       IMPLIES -> "=>"
                                       EQU     -> "="
@@ -93,6 +90,9 @@ ptoDoc = parens . toDoc
 psep :: [Doc] -> Doc
 psep = parens . sep
 
+pcat :: [Doc] -> Doc
+pcat = parens . cat
+
 type S = State (S.HashSet Id)
 
 -- TODO : this is probably not quite right
@@ -105,7 +105,6 @@ allVars s = evalState comp S.empty
 
     f                  :: Expr -> S ()
     f (BinOp{..})      = sequence_ (f <$> [expL, expR])
-    f (UnOp{..})       = f exp
     f (Ands es)        = sequence_ (f <$> es)
     f (Ite{..})        = sequence_ (f <$> [cnd, expThen, expElse])
     f (Structure _ vs) = modify (S.union (S.fromList vs))

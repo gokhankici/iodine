@@ -5,7 +5,6 @@ import Control.Lens
 import Verylog.Language.Types
 
 data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
-data UnOp  = NOT
 
 data Inv = Inv  { invId   :: Int
                 , invArgs :: [Id]
@@ -18,9 +17,6 @@ data Inv = Inv  { invId   :: Int
 data Expr = BinOp     { bOp   :: BinOp
                       , expL  :: Expr
                       , expR  :: Expr
-                      }
-          | UnOp      { uOp  :: UnOp
-                      , exp  :: Expr
                       }
           | Ands      [Expr]
           | Ite       { cnd     :: Expr

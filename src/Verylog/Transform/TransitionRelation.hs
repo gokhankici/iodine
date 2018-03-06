@@ -92,7 +92,7 @@ nextStmt (IfStmt{..})          = do
   -- ---------------------------------------------------------------------------
   fmt <- use trFmt
   let condTrue  = BinOp GE n (Number 1)
-      condFalse = BinOp LE n (Number 0)
+      -- condFalse = BinOp LE n (Number 0)
       n = Var $ makeVarName fmt ifCond
 
   -- if condition is the value of an uninterpreted function,
@@ -132,15 +132,19 @@ nextStmt (IfStmt{..})          = do
       -- thDiff  = trc "thDiff" (thAs,elAs,thDiff') thDiff'
       -- elDiff  = trc "elDiff" (elAs,thAs,elDiff') elDiff'
 
-  let th  = Ands [ Ands (condTrue  : thenClauses)
-                 , Boolean True
-                 , Ands $ phiNodes fmt thAs thDiff
-                 ]
-      el  = Ands [ Ands (condFalse : elseClauses)
-                 , Boolean True
-                 , Ands $ phiNodes fmt elAs elDiff
-                 ]
-      ite = BinOp OR th el
+  -- let th  = Ands [ Ands (condTrue  : thenClauses)
+  --                , Boolean True
+  --                , Ands $ phiNodes fmt thAs thDiff
+  --                ]
+  --     el  = Ands [ Ands (condFalse : elseClauses)
+  --                , Boolean True
+  --                , Ands $ phiNodes fmt elAs elDiff
+  --                ]
+  --     ite = BinOp OR th el
+  let th  = Ands $ thenClauses ++ phiNodes fmt thAs thDiff
+      el  = Ands $ elseClauses ++ phiNodes fmt elAs elDiff
+      ite = Ite condTrue th el
+
   return $ ite : condUFCheck
 
   where

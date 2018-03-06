@@ -4,7 +4,7 @@ module Verylog.Solver.FP.Types where
 
 import           Control.Monad.State.Lazy
 import           Text.PrettyPrint
-import           Text.Printf
+-- import           Text.Printf
 import qualified Data.HashSet               as S
 
 import           Verylog.Language.Types
@@ -29,8 +29,6 @@ instance PPrint Expr where
                                 , toDoc expElse
                                 ]
   toDoc (Structure f as) = parens $ hsep (text <$> (f:as))
-  toDoc (UnOp{..})       = case uOp of
-                             NOT -> text "!" <> toDoc exp
   toDoc (BinOp{..})      = let op = case bOp of
                                       IMPLIES -> "=>"
                                       EQU     -> "="
@@ -71,7 +69,6 @@ allVars s = evalState comp S.empty
 
     f                  :: Expr -> S ()
     f (BinOp{..})      = sequence_ (f <$> [expL, expR])
-    f (UnOp{..})       = f exp
     f (Ands es)        = sequence_ (f <$> es)
     f (Ite{..})        = sequence_ (f <$> [cnd, expThen, expElse])
     f (Structure _ vs) = modify (S.union (S.fromList vs))

@@ -37,18 +37,14 @@ instance PPrint Expr where
   toDoc (Ands [])        = text "true"
   toDoc (Ands es)        = cat $ punctuate (comma <> space) (toDoc <$> es)
   toDoc (Structure f as) = text f <> lparen <> printArgs as <> rparen
-  toDoc (Ite{..})        = text "ite("
-                           <> toDoc  cnd <> comma
-                           <+> toDoc expThen <> comma
-                           <+> toDoc expElse
-                           <> rparen
-  toDoc (UnOp{..})       = case uOp of
-                             NOT -> text "\\+" <> ptoDoc exp
+  toDoc (Ite{..})        = text "ite" <> pcat [ ptoDoc cnd     <> comma
+                                              , ptoDoc expThen <> comma
+                                              , ptoDoc expElse
+                                              ]
   toDoc (BinOp{..})      = case bOp of
                              IMPLIES -> lparen
-                                        <> ptoDoc expL
-                                        <+> text "->"
-                                        <+> ptoDoc expR
+                                        <> ptoDoc expL <+> text "->" <+> ptoDoc expR
+                                        <> semi <+> text "true"
                                         <> rparen
                              EQU     -> toDoc expL <+> equals    <+> toDoc expR
                              LE      -> toDoc expL <+> text "=<" <+> toDoc expR
@@ -61,15 +57,22 @@ instance PPrint Expr where
                                              , semi   <> text "   " <> toDoc expR
                                              , rparen
                                              ]
-  toDoc (UFCheck{..}) = toDoc d
+  toDoc (UFCheck{..}) = doc
     where
-      d          = BinOp OR (UnOp NOT antecedent) consequent
+      doc        = lparen
+                   <> cat [ nest 1 $ text "\\+" <> ptoDoc antecedent
+                          , semi <+> toDoc consequent
+                          ]
+                   <> rparen
       antecedent = Ands $ uncurry (BinOp EQU) <$> ufArgs
       consequent = uncurry (BinOp EQU) ufNames
       
 
 ptoDoc :: PPrint a => a -> Doc
 ptoDoc = parens . toDoc
+
+pcat :: [Doc] -> Doc
+pcat = parens . cat
 
 instance Show QueryNaming where
   show = pprint
