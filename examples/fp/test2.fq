@@ -1,0 +1,31 @@
+qualif Bla(x:int, y:int) : (x = y)
+
+bind 1 x : {v: int | true }
+bind 2 y : {v: int | true }
+
+
+constraint:
+  env [1]
+  lhs {v : int | x=1}
+  rhs {v : int | $k1[arg1 := x]}
+  id 1 tag []
+
+constraint:
+  env [2]
+  lhs {v : int | y=1}
+  rhs {v : int | $k2[arg2 := y]}
+  id 2 tag []
+
+constraint:
+  env [1;2]
+  lhs {v : int | [$k1[arg1 := x]; $k2[arg2 := y]]}
+  rhs {v : int | x=y}
+  id 3 tag []
+
+wf:
+  env []
+  reft {arg1 : int | $k1 }
+
+wf:
+  env []
+  reft {arg2 : int | $k2 }

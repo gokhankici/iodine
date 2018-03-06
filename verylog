@@ -179,18 +179,27 @@ if [[ "$VCGEN_TARGET" == "hsf" ]]; then
             awk '{ print $0; } /program is correct/ {correct = 1;} END {if(correct) {exit 0;} else {exit 1;}}'
     fi
 else
-    z3 $VCGEN_FILE
+    if [[ "$(uname)" == "Darwin" ]]; then
+        z3 $VCGEN_FILE 
+    else
+        z3 $VCGEN_FILE  | \
+            awk 'function pr(string) {if (correct) {\
+printf("%s\n", string);\
+} else {\
+printf ("%s%s%s\n", "\033[1;31m", string, "\033[0m ");\
+}} NR==1 { if(match($0,/^sat/)){correct = 1;}} {pr($0);} END {if(correct) {exit 0;} else {exit 1;}}'
+    fi
 fi
 
 last_err=$?
 
 echo
-echo '################################################################################'
-echo '# TEMPORARY FILES ##############################################################'
-echo '################################################################################'
-echo "IR file : ${IR_FILE}"
-echo "VC file : ${VCGEN_FILE}"
-echo '################################################################################'
+echo '--------------------------------------------------------------------------------'
+echo '--- Temporary Files ------------------------------------------------------------'
+echo '--------------------------------------------------------------------------------'
+echo "IR : ${IR_FILE//$HOME/~}"
+echo "VC : ${VCGEN_FILE//$HOME/~}"
+echo '--------------------------------------------------------------------------------'
 
 exit $last_err
 

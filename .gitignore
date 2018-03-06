@@ -6,6 +6,8 @@ configuration.sh
 .log*
 flycheck_*
 
+.liquid/
+
 [._]*.s[a-v][a-z]
 [._]*.sw[a-p]
 [._]s[a-v][a-z]
