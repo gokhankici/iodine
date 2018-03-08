@@ -34,10 +34,9 @@ dependencies:
 library:
   source-dirs:           src
   ghc-options:
-  - -W
+  - -Werror
   exposed-modules:
   - Verylog.MainCommon
-  - Verylog.FPGen
   - Verylog.HSFGen
   - Verylog.SMTGen
   - Verylog.Language.Parser
@@ -45,7 +44,6 @@ library:
   - Verylog.Transform.TransitionRelation
   - Verylog.Transform.Utils
   - Verylog.Transform.VCGen
-  - Verylog.Solver.FP.Types
   - Verylog.Solver.HSF.Types
   - Verylog.Solver.SMT.Types
   - SMT2FP.SMT.Parser
@@ -60,6 +58,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Werror
     dependencies:
     - verylog-hs
   vcgen-smt:
@@ -69,20 +68,12 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    dependencies:
-    - verylog-hs
-  vcgen-fp:
-    main:                Main.hs
-    source-dirs:         app-fp
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+    - -Werror
     dependencies:
     - verylog-hs
   smt2fp:
     main:                Main.hs
-    source-dirs:         smt2fp
+    source-dirs:         app-smt2fp
     ghc-options:
     - -threaded
     - -rtsopts
@@ -100,5 +91,6 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Werror
     dependencies:
     - verylog-hs

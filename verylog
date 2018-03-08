@@ -1,13 +1,14 @@
 #!/usr/bin/env zsh
+# vim: set foldmethod=marker:
 
+# Some sanity checks {{{
 if [[ "$(uname)" != "Darwin" &&  "$(expr substr $(uname -s) 1 5)" != "Linux"  ]]; then
     echo "${0:t} is not supported in your platform" 1>&2
     exit 1
 fi
+# }}}
 
-THIS_DIR=${0:A:h}
-MAIN_MODULE='verylog' 
-MAIN_PL="src/${MAIN_MODULE}.pl" 
+# Argument parsing {{{
 
 zparseopts -D -E -- \
            -ir=JUST_IR -vcgen=JUST_VCGEN \
@@ -17,10 +18,6 @@ zparseopts -D -E -- \
            M:=TOPLEVEL_MODULE \
            -emacs=EMACS \
            h=HELP -help=HELP
-
-QARMC_OPTS=${(@)QARMC_OPTS:#--qarmcOpts}
-
-VCGEN_TARGET=${SOLVER[2]:-hsf}
 
 if [[ $# -eq 0 || -n "$HELP" ]]; then
     echo "usage: ${0:t} [options] <verilog file>"
@@ -36,7 +33,7 @@ verylog options:
       Opens the output (IR or VC) in emacs
   --qarmcOpts <option>
       The argument of this option is passed to qarmc
-  --solver ( hsf | smt )
+  --solver ( hsf | smt | fp )
       Specifies the target of the vcgen (default is hsf)
   -h, --help
       Prints this help
@@ -61,6 +58,7 @@ elif [[ $# -ne 0 ]]; then
     exit 1
 fi
 
+VCGEN_TARGET=${SOLVER[2]:-hsf}
 if [[ "$VCGEN_TARGET" != "hsf" && 
       "$VCGEN_TARGET" != "smt" &&
       "$VCGEN_TARGET" != "fp"
@@ -69,8 +67,17 @@ if [[ "$VCGEN_TARGET" != "hsf" &&
     exit 1
 fi
 
+QARMC_OPTS=${(@)QARMC_OPTS:#--qarmcOpts}
+
+# }}}
+
+# Set up global variables {{{
+THIS_DIR=${0:A:h}
+
 PREPROCESSED_FILE=${FILENAME:A:h}/.${FILENAME:t:r}.preproc.v
+
 IR_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.pl
+
 if [[ "$VCGEN_TARGET" == "hsf" ]]; then
     APP=vcgen-hsf
     VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.hsf.pl
@@ -78,14 +85,18 @@ elif [[ "$VCGEN_TARGET" == "smt" ]]; then
     APP=vcgen-smt
     VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.smt2
 elif [[ "$VCGEN_TARGET" == "fp" ]]; then
-    APP=vcgen-fp
+    APP=vcgen_fp
     VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.fq
 fi
+
 LOGFILE="$THIS_DIR/.log.$(date +%F-%H-%M-%S)"
 
 CONF_FILE="${THIS_DIR}/configuration.sh"
-CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
 
+CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
+# }}}
+
+# Read the configuration file {{{
 if [[ -f "$CONF_FILE" ]]; then
     source $CONF_FILE
 
@@ -111,7 +122,9 @@ else
     echo "please use the file ${CONF_SKELETON_FILE:t} as a skeleton to create that file" 1>&2
     exit 1
 fi
+# }}}
 
+# Stage 1 : Verilog -> IR {{{
 # output of this function is redirected to the IR_FILE
 print_IR() {
     cat <<EOF
@@ -145,20 +158,32 @@ EOF
     rm -f "$LOGFILE" "$PREPROCESSED_FILE"
 }
 
-function check_race() {
-    echo "not implemented"
-    return 1
-}
-
 print_IR $TOPLEVEL_MODULE > $IR_FILE
 
 if [[ -n "$JUST_IR" ]]; then
     [[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $IR_FILE || cat $IR_FILE
     exit 0
 fi
+# }}}
+
+# Stage 2 : IR -> Verification Conditions {{{
+function vcgen_fp() {
+    ir_file=$1
+    fq_file=$2
+    smt_file=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.smt2
+    
+    vcgen-smt $ir_file $smt_file
+    last_err=$?
+    if [[ $last_err -ne 0 ]]; then
+        echo "vcgen-smt failed on '$ir_file'" 1>&2
+        exit 1
+    fi
+    
+    smt2fp $smt_file $fq_file
+}
 
 pushd $THIS_DIR
-stack exec -- $APP $IR_FILE $VCGEN_FILE
+$APP $IR_FILE $VCGEN_FILE
 last_err=$?
 echo "\n"
 popd
@@ -176,7 +201,9 @@ if [[ -n "$JUST_VCGEN" ]]; then
     [[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $VCGEN_FILE || cat $VCGEN_FILE
     exit 0
 fi
+# }}}
 
+# Stage 3 : Check Verification Conditions {{{
 if [[ "$VCGEN_TARGET" == "hsf" ]]; then
     if [[ "$(uname)" == "Darwin" ]]; then
         $QARMC $QARMC_OPTS $VCGEN_FILE
@@ -196,7 +223,7 @@ printf ("%s%s%s\n", "\033[1;31m", string, "\033[0m ");\
 }} NR==1 { if(match($0,/^sat/)){correct = 1;}} {pr($0);} END {if(correct) {exit 0;} else {exit 1;}}'
     fi
 elif [[ "$VCGEN_TARGET" == "fp" ]]; then
-    cat $VCGEN_FILE
+    fixpoint $VCGEN_FILE --eliminate=some
 fi
 
 last_err=$?
@@ -210,5 +237,6 @@ echo "VC : ${VCGEN_FILE//$HOME/~}"
 echo '--------------------------------------------------------------------------------'
 
 exit $last_err
+# }}}
 
 
