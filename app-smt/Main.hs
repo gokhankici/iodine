@@ -6,7 +6,6 @@ import System.IO
 
 import Verylog.MainCommon  
 import Verylog.SMTGen
-import Verylog.Solver.SMT.Types
 
 main :: IO ()
 main = runMain printResults

@@ -1,12 +1,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
-import Control.Monad
 import System.IO
 
 import Verylog.MainCommon  
 import Verylog.FPGen
-import Verylog.Solver.FP.Types
 
 main :: IO ()
 main = runMain printResults

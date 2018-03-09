@@ -84,6 +84,7 @@ instance PPrint BinOp where
   toDoc GE      = text ">="
   toDoc IMPLIES = text "=>"
 
+psep :: [Doc] -> Doc
 psep = parens . sep
 
 instance PPrint Term where

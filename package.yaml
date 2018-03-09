@@ -34,7 +34,7 @@ dependencies:
 library:
   source-dirs:           src
   ghc-options:
-  - -Werror
+  - -W -Werror
   exposed-modules:
   - Verylog.MainCommon
   - Verylog.HSFGen
@@ -60,7 +60,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Werror
+    - -W -Werror
     dependencies:
     - verylog-hs
   vcgen-smt:
@@ -70,7 +70,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Werror
+    - -W -Werror
     dependencies:
     - verylog-hs
   vcgen-fp:
@@ -80,7 +80,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Werror
+    - -W -Werror
     dependencies:
     - verylog-hs
   smt2fp:
@@ -90,7 +90,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Werror
+    - -W -Werror
     dependencies:
     - verylog-hs
     - ansi-terminal
@@ -103,6 +103,6 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Werror
+    - -W -Werror
     dependencies:
     - verylog-hs

@@ -4,11 +4,12 @@
 
 module Verylog.Solver.FP.Types where
 
+import           Control.Exception
 import           Control.Monad.Reader
 import           Control.Lens
 import           Text.PrettyPrint
 import           Text.Printf
-import qualified Data.HashSet               as S
+import qualified Data.Set                   as S
 import qualified Data.HashMap.Strict        as M
 
 import           Verylog.Language.Types hiding (St, ufs)
@@ -186,6 +187,36 @@ makeWFConstraints = return []
 typeDef :: Doc -> Doc -> Doc
 typeDef ty ref = 
     braces (text "v" <> colon <+> ty <+> text "|" <+> ref)
+
+getBindIds :: Expr -> R [Int]
+getBindIds e = mapM getBindId ids
+  where
+    ids = S.toList (getIds e) 
+
+    getBindId   :: Id -> R Int
+    getBindId v = views binds (bindId . (M.lookupDefault (err v) v))
+
+    err v = throw $ PassError $ printf "cannot find %s in binders" v
+
+    helper []     = S.empty
+    helper (e:es) = foldr (\e s -> getIds e `S.union` s) (getIds e) es
+
+    getIds :: Expr -> S.Set Id
+    getIds (BinOp{..})      = helper [expL, expR]
+    getIds (Ands es)        = helper es
+    getIds (Ite{..})        = helper [cnd, expThen, expElse]
+    getIds (Structure _ as) = S.fromList as
+    getIds (Var v)          = S.singleton v
+    getIds (UFCheck{..})    = 
+      let (as1,as2) = unzip $ map (over both idFromExp) ufArgs
+          (n1,n2)   = ufNames & both %~ idFromExp
+      in S.fromList $ n1:n2:as1 ++ as2
+    getIds (Number _)       = S.empty
+    getIds (Boolean _)      = S.empty
+
+idFromExp :: Expr -> Id
+idFromExp (Var v) = v
+idFromExp _       = throw $ PassError "given expr is not a variable"
 
 instance Show FPSt where
   show = pprint

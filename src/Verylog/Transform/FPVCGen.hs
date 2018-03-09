@@ -3,7 +3,6 @@
 module Verylog.Transform.FPVCGen ( fpInvs
                                  ) where
 
-import           Control.Exception
 import           Control.Monad.State.Lazy
 import           Control.Lens
 import qualified Data.HashMap.Strict      as M
@@ -102,6 +101,3 @@ getBindsFromExp (Boolean _)      = return ()
 getBindsFromExps :: [Expr] -> S ()
 getBindsFromExps = sequence_ . (map getBindsFromExp)
 
-idFromExp :: Expr -> Id
-idFromExp (Var v) = v
-idFromExp _       = throw $ PassError "given expr is not a variable"
