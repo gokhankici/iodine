@@ -85,7 +85,8 @@ elif [[ "$VCGEN_TARGET" == "smt" ]]; then
     APP=vcgen-smt
     VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.smt2
 elif [[ "$VCGEN_TARGET" == "fp" ]]; then
-    APP=vcgen_fp
+    # APP=vcgen_fp
+    APP=vcgen-fp
     VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.fq
 fi
 
