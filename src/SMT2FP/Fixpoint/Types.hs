@@ -10,7 +10,8 @@ data FQInv = FQInv { invName  :: Id
                    , invArity :: Int
                    }
 
-data FQUF = FQUF { ufName  :: Id
+data FQUF = FQUF { ufId    :: Int
+                 , ufName  :: Id
                  , ufArity :: Int
                  }
 
@@ -100,6 +101,11 @@ instance PPrint FQWFConstraint where
       body = vcat [ text "env" <+> brackets empty
                   , text "reft" <+> text "<<<reft>>>" -- TODO
                   ]
+
+instance PPrint FQUF where
+  toDoc (FQUF{..}) =
+    text "bind" <+> int ufId <+> text ufName <+> colon <+>
+    braces (text "v" <+> colon <+> text "<<<map>>>" <+> text "|" <+> text "true")
 
 instance Show FQBind where
   show = pprint

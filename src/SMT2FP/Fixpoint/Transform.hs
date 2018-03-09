@@ -45,12 +45,27 @@ smt2fp cs = evalState comp emptySt
 --------------------------------------------------------------------------------
 gather1 :: Command -> S ()
 --------------------------------------------------------------------------------
-gather1 (DeclareFun{..}) =
-  invs %= M.insert dfName (FQInv { invName  = dfName
-                                 , invArity = length dfArgs
-                                 })
-gather1 (DeclareConst{..}) =
-  ufs %= M.insert dcName (FQUF { ufName  = dcName
+gather1 (DeclareFun{..}) = do
+  let inv = FQInv { invName  = dfName
+                  , invArity = length dfArgs
+                  }
+  invs %= M.insert dfName inv
+  sequence_ (addArg <$> invArgs inv)
+  where
+    addArg         :: Id -> S ()
+    addArg argName = do
+      n' <- use n
+      n += 1
+      let b = FQBind { bindId   = n'
+                     , bindName = argName
+                     , bindExpr = FQBoolean True
+                     }
+      binds %= M.insert argName b
+
+gather1 (DeclareConst{..}) = do
+  n' <- use n; n += 1
+  ufs %= M.insert dcName (FQUF { ufId    = n'
+                               , ufName  = dcName
                                , ufArity = l dcArg
                                })
   where
@@ -155,4 +170,6 @@ emitWFConstraints = do
 -- helper functions
 --------------------------------------------------------------------------------
 invArgs :: FQInv -> [Id]
-invArgs (FQInv{..}) = []
+invArgs (FQInv{..}) = makeArg <$> [2..invArity]
+  where
+    makeArg argN = printf "arg_%d_%s" argN invName
