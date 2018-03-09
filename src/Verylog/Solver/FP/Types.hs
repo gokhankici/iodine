@@ -90,7 +90,7 @@ printExpr (BinOp{..})      = do
       pr = parens r
       op = case bOp of
              IMPLIES -> "==>"
-             EQU     -> "=="
+             EQU     -> "="
              LE      -> "<="
              GE      -> ">="
              PLUS    -> "+"
@@ -119,11 +119,28 @@ makeConstraints = view constraints >>= mapM helper . zip [1..]
                       ]
       let res  = vcat [ text "constraint:"
                       , nest 2 body
+                      , text " "
                       ]
       return res
 
 makeWFConstraints :: RDs
-makeWFConstraints = return []
+makeWFConstraints = view invs >>= mapM helper
+  where
+    helper                  :: Pr InvFun
+    helper inv@(InvFun{..}) = do
+      let (arg1:args) = fst <$> argVars inv
+      ids <- getBindIds (Var <$> args)
+
+      let body = vcat [ text "env"  <+> brackets (hsep $ punctuate semi (int <$> ids))
+                      , text "reft" <+> braces ( 
+                          text arg1 <+> colon <+> text "int" <+>
+                          text "|" <+> text "int"
+                          )
+                      ]
+      return $ vcat [ text "wf:"
+                    , nest 2 body
+                    , text " "
+                    ]
 
 typeDef :: Doc -> Doc -> Doc
 typeDef ty ref = 
