@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module Verylog.Solver.Common where
 
 import Text.Printf
@@ -40,3 +42,17 @@ makeInvPred a = makeInv (a^.aId)
 
 makeInv :: Int -> String
 makeInv n = printf "inv%d" n
+
+flattenExpr :: Expr -> Expr
+flattenExpr e = Ands (ands e)
+  where
+    ands e@(BinOp{..}) =
+      case bOp of
+        AND -> concatMap ands [expL, expR]
+        _   -> [e]
+    ands (Ands es)     = concatMap ands es
+    ands (Ite{..})     = [ BinOp IMPLIES cnd expThen
+                         , BinOp OR      cnd expElse
+                         ]
+    ands (UFCheck{..}) = []
+    ands e             = [e]

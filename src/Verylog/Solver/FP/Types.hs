@@ -75,28 +75,29 @@ printExpr (Boolean False)  = return $ text "false"
 printExpr (Number n)       = return $ text $ show n
 printExpr (Var x)          = return $ text x
 printExpr (Ands [])        = return $ text "true"
-printExpr (Ands as)        = mapM printExpr as >>= return . brackets . sep . punctuate semi
+printExpr (Ands as)        = mapM printExpr as >>= return . parens . sep . punctuate (text " && ")
 printExpr (Ite{..})        = printExpr $ Ands [ BinOp IMPLIES cnd expThen
                                               , BinOp OR      cnd expElse
                                               ]
-printExpr (Structure f as) = return $ text f <> args
+printExpr (Structure f as) = return $ text f' <> args
   where
+    f'          = printf "$%s" f
     mkSet (l,r) = text (printf "[%s := %s]" l r)
     args        = hcat $ mkSet <$> zip (fst <$> argVars' f as) as
 printExpr (BinOp{..})      = do
   l <- printExpr expL
   r <- printExpr expR
-  let pl = parens l
-      pr = parens r
+  let pl = l
+      pr = r
       op = case bOp of
              IMPLIES -> "==>"
-             EQU     -> "="
+             EQU     -> "=="
              LE      -> "<="
              GE      -> ">="
              PLUS    -> "+"
              AND     -> "&&"
              OR      -> "||"
-  return $ parens $ sep [pl, text op, pr]
+  return $ sep [pl, text op, pr]
 printExpr (UFCheck{..}) = printExpr (Boolean True)
 
 makeConstraints :: RDs
@@ -109,8 +110,8 @@ makeConstraints = view constraints >>= mapM helper . zip [1..]
     mkC :: Int -> Expr -> Expr -> R Doc
     mkC i expL expR = do
       ids <- getBindIds [expL, expR]
-      l   <- printExpr expL
-      r   <- printExpr expR
+      l   <- printExpr $ flattenExpr expL
+      r   <- printExpr $ flattenExpr expR
       
       let body = vcat [ text "env" <+> brackets (hsep $ punctuate semi (int <$> ids))
                       , text "lhs" <+> typeDef (text "int") l

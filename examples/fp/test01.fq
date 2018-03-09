@@ -10,7 +10,7 @@ bind 7 f    : {v : Map_t Int Int | true}
 
 constraint:
   env [1;2]
-  lhs {v : int | x=y}
+  lhs {v : int | [x=y; true]}
   rhs {v : int | $k1[arg1 := x][arg2 := y]}
   id 1 tag []
 
