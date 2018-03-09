@@ -10,8 +10,8 @@ data Inv = Inv  { invId   :: Int
                 , invArgs :: [Id]
                 , invBody :: Expr
                 }
-         | Prop { propL   :: Expr   -- lhs of the implication
-                , propR   :: Expr   -- rhs of the implication
+         | Prop { propL   :: Expr   -- lhs of "the implication"
+                , propR   :: Expr   -- rhs of "the implication"
                 }
 
 data Expr = BinOp     { bOp   :: BinOp
@@ -36,4 +36,7 @@ nextPred = "next"
 invPred  = "inv"
 
 makeInvPred   :: AlwaysBlock -> String
-makeInvPred a = printf "inv%d" (a^.aId)
+makeInvPred a = makeInv (a^.aId)
+
+makeInv :: Int -> String
+makeInv n = printf "inv%d" n

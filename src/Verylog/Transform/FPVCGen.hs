@@ -18,12 +18,13 @@ import Text.Printf
 
 fpInvs    :: [AlwaysBlock] -> FPSt
 fpInvs as = FPSt { _constraints = cs
-                 , _invs        = invFun <$> as
+                 , _invs        = ifs
                  , _ufs         = ufConsts
-                 , _binds       = getBinds cs
+                 , _binds       = getBinds cs ifs
                  }
   where
-    cs = invs as
+    cs  = invs as
+    ifs = invFun <$> as
     invFun a = InvFun { invFunName  = makeInvPred a
                       , invFunArity = length $ makeInvArgs fmt a
                       }
@@ -38,8 +39,12 @@ fpInvs as = FPSt { _constraints = cs
 
 type S = State (Int, (M.HashMap Id FQBind))
 
-getBinds    :: [Inv] -> M.HashMap Id FQBind
-getBinds is = evalState (sequence_ (getBind <$> is) >> use _2) (0, M.empty)
+getBinds       :: [Inv] -> [InvFun] -> M.HashMap Id FQBind
+getBinds is fs = evalState comp (0, M.empty)
+  where
+    comp = do sequence_ (getBind <$> is)
+              addArgs fs
+              use _2
 
 getBind            :: Inv -> S ()
 getBind (Prop{..}) = getBindsFromExps [propL, propR]
@@ -77,15 +82,18 @@ getBindsFromExp (UFCheck{..})    = do
                                   , bindRef  = "true"
                                   })
     makeUFType n =
-      if   n > 0
-      then printf "v = Map_t (%s) Int" (intercalate "," (replicate n "Int"))
-      else "int"
+      let argsStr = intercalate "," (replicate n "Int") 
+          argTup  = if n > 1 then printf "(%s)" argsStr else argsStr
+      in if   n > 0
+         then printf "Map_t %s Int" argTup
+         else "int"
 
     addSel :: Id -> [Id] -> S ()
     addSel name args = do
-      let selIn  = printf "(%s)" (intercalate "," args) :: String
+      let selIn  = printf "%s" (intercalate "," args) :: String
+          selTup = if length args > 1 then printf "(%s)" selIn else selIn
           selRef = if   length args > 0
-                   then printf "v = Map_select %s %s" ufFunc selIn 
+                   then printf "v = Map_select %s %s" ufFunc selTup
                    else printf "v = %s" ufFunc
           
       n' <- use _1; _1 += 1
@@ -94,10 +102,28 @@ getBindsFromExp (UFCheck{..})    = do
                                   , bindType = "int"
                                   , bindRef  = selRef
                                   })
-  
 getBindsFromExp (Number _)       = return ()
 getBindsFromExp (Boolean _)      = return ()
 
 getBindsFromExps :: [Expr] -> S ()
 getBindsFromExps = sequence_ . (map getBindsFromExp)
 
+addArgs :: [InvFun] -> S ()
+addArgs invs = do
+  n <- use _1
+  m <- use _2
+  let addInvArgs inv@(InvFun{..}) (n,m) =
+        let binder argName n = FQBind { bindId   = n
+                                      , bindName = argName
+                                      , bindType = "int"
+                                      , bindRef  = "true"
+                                      }
+            args = tail $ argVars inv
+            m' = foldr
+                 (\(argName,n1) m ->
+                     M.insert argName (binder argName (n1+n)) m)
+                 m
+                 args
+            n' = n + invFunArity
+        in  (n', m')
+  put $ foldr addInvArgs (n, m) invs

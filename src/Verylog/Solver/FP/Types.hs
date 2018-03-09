@@ -70,128 +70,70 @@ printBind (FQBind{..}) =
   typeDef (text bindType) (text bindRef)
 
 printExpr :: Pr Expr
-printExpr _ = return empty
+printExpr (Boolean True)   = return $ text "true"
+printExpr (Boolean False)  = return $ text "false"
+printExpr (Number n)       = return $ text $ show n
+printExpr (Var x)          = return $ text x
+printExpr (Ands [])        = return $ text "true"
+printExpr (Ands as)        = mapM printExpr as >>= return . brackets . sep . punctuate semi
+printExpr (Ite{..})        = printExpr $ Ands [ BinOp IMPLIES cnd expThen
+                                              , BinOp OR      cnd expElse
+                                              ]
+printExpr (Structure f as) = return $ text f <> args
+  where
+    mkSet (l,r) = text (printf "[%s := %s]" l r)
+    args        = hcat $ mkSet <$> zip (fst <$> argVars' f as) as
+printExpr (BinOp{..})      = do
+  l <- printExpr expL
+  r <- printExpr expR
+  let pl = parens l
+      pr = parens r
+      op = case bOp of
+             IMPLIES -> "==>"
+             EQU     -> "=="
+             LE      -> "<="
+             GE      -> ">="
+             PLUS    -> "+"
+             AND     -> "&&"
+             OR      -> "||"
+  return $ parens $ sep [pl, text op, pr]
+printExpr (UFCheck{..}) = printExpr (Boolean True)
 
 makeConstraints :: RDs
-makeConstraints = return []
+makeConstraints = view constraints >>= mapM helper . zip [1..]
+  where
+    helper                 :: Pr (Int, Inv)
+    helper (n, (Inv{..}))  = mkC n invBody (Structure (makeInv invId) invArgs)
+    helper (n, (Prop{..})) = mkC n propL   propR
+  
+    mkC :: Int -> Expr -> Expr -> R Doc
+    mkC i expL expR = do
+      ids <- getBindIds [expL, expR]
+      l   <- printExpr expL
+      r   <- printExpr expR
+      
+      let body = vcat [ text "env" <+> brackets (hsep $ punctuate semi (int <$> ids))
+                      , text "lhs" <+> typeDef (text "int") l
+                      , text "rhs" <+> typeDef (text "int") r
+                      , text "id" <+> int i <+> text "tag []"
+                      ]
+      let res  = vcat [ text "constraint:"
+                      , nest 2 body
+                      ]
+      return res
 
 makeWFConstraints :: RDs
 makeWFConstraints = return []
-
--- instance PPrint Inv where
---   toDoc (Prop{..}) = vcat [ text "constraint:"
---                           , nest 2 body
---                           ]
---     where
---       body = vcat [ text "env" <+> brackets empty
---                   , text "lhs" <+> typeDef constraintLhs
---                   , text "rhs" <+> typeDef constraintRhs
---                   , text "id" <+> int constraintId <+> text "tag []"
---                   ]
---     -- parens $ text "assert" <+> chk
---     -- where
---     --   chk     = forallArgs (BinOp IMPLIES invBody (Structure invName invArgs))
---     --   invName = printf "%s%d" invPred invId
-
---   toDoc (Inv{..}) = parens $ text "assert" <+> chk
---     where
---       chk = forallArgs (BinOp IMPLIES propL propR)
-
--- instance PPrint Expr where
---   toDoc (Boolean True)   = text "true"
---   toDoc (Boolean False)  = text "false"
---   toDoc (Number n)       = text $ show n
---   toDoc (Var x)          = text x
---   toDoc (Ands [])        = text "true"
---   toDoc (Ands as)        = psep (text "and" : (toDoc <$> as))
---   toDoc (Ite{..})        = parens $ text "ite" <+> cat [ ptoDoc cnd
---                                                        , ptoDoc expThen
---                                                        , ptoDoc expElse
---                                                        ]
---   toDoc (Structure f as) = parens $ hsep (text <$> (f:as))
---   toDoc (BinOp{..})      = let op = case bOp of
---                                       IMPLIES -> "=>"
---                                       EQU     -> "="
---                                       LE      -> "<="
---                                       GE      -> ">="
---                                       PLUS    -> "+"
---                                       AND     -> "and"
---                                       OR      -> "or"
---                            in psep [ text op
---                                    , toDoc expL
---                                    , toDoc expR
---                                    ]
---   toDoc (UFCheck{..}) = psep [ text "and"
---                              , (sel (fst ufNames) (fst <$> ufArgs))
---                              , (sel (snd ufNames) (snd <$> ufArgs))
---                              ]
---     where
---       sel f args = psep [ text "="
---                         , toDoc f
---                         , psep (text "select" : text ufFunc : (toDoc <$> args))
---                         ]
-
--- instance PPrint InvFun where
---   toDoc (InvFun{..}) = parens $ hsep [ text "declare-fun"
---                                      , text invFunName
---                                      , parens $ hsep (replicate invFunArity (text "Int"))
---                                      , text "Bool"
---                                      ]
-
--- instance PPrint UFConst where
---   toDoc (UFConst{..}) = parens $ hsep [ text "declare-const"
---                                       , text ufConstName
---                                       , parens $ hsep $
---                                         text "Array" : (replicate (ufConstArity+1) (text "Int"))
---                                       ]
-
--- ptoDoc :: PPrint a => a -> Doc
--- ptoDoc = parens . toDoc
-
--- psep :: [Doc] -> Doc
--- psep = parens . sep
-
--- pcat :: [Doc] -> Doc
--- pcat = parens . cat
-
--- type S = State (S.HashSet Id)
-
--- -- TODO : this is probably not quite right
--- --------------------------------------------------------------------------------
--- allVars :: Expr -> [Id]
--- --------------------------------------------------------------------------------
--- allVars s = evalState comp S.empty
---   where
---     comp = f s >> get >>= return . S.toList
-
---     f                  :: Expr -> S ()
---     f (BinOp{..})      = sequence_ (f <$> [expL, expR])
---     f (Ands es)        = sequence_ (f <$> es)
---     f (Ite{..})        = sequence_ (f <$> [cnd, expThen, expElse])
---     f (Structure _ vs) = modify (S.union (S.fromList vs))
---     f (Var v)          = modify (S.insert v)
---     f (Boolean _)      = return ()
---     f (Number _)       = return ()
---     f (UFCheck{..})    = sequence_ (f <$> as ++ t2l ufNames)
---       where
---         as        = concatMap t2l ufArgs
---         t2l (x,y) = [x,y]
-
--- instance Show Inv where
---   show = pprint
--- instance Show InvFun where
---   show = pprint
--- instance Show UFConst where
---   show = pprint
 
 typeDef :: Doc -> Doc -> Doc
 typeDef ty ref = 
     braces (text "v" <> colon <+> ty <+> text "|" <+> ref)
 
-getBindIds :: Expr -> R [Int]
-getBindIds e = mapM getBindId ids
+getBindIds :: [Expr] -> R [Int]
+getBindIds es = mapM getBindId ids
   where
-    ids = S.toList (getIds e) 
+    ids   = S.toList idSet
+    idSet = foldr (\e s -> s `S.union` getIds e ) S.empty es
 
     getBindId   :: Id -> R Int
     getBindId v = views binds (bindId . (M.lookupDefault (err v) v))
@@ -205,7 +147,9 @@ getBindIds e = mapM getBindId ids
     getIds (BinOp{..})      = helper [expL, expR]
     getIds (Ands es)        = helper es
     getIds (Ite{..})        = helper [cnd, expThen, expElse]
-    getIds (Structure _ as) = S.fromList as
+    getIds (Structure f as) = S.fromList (as ++ args)
+      where
+        args = tail $ fst <$> argVars' f as
     getIds (Var v)          = S.singleton v
     getIds (UFCheck{..})    = 
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs
@@ -220,3 +164,14 @@ idFromExp _       = throw $ PassError "given expr is not a variable"
 
 instance Show FPSt where
   show = pprint
+
+argVars :: InvFun -> [(Id,Int)]
+argVars (InvFun{..}) = 
+  let name n1 = printf "arg_%s_%d" invFunName n1
+      ns      = [1..invFunArity]
+  in zip (name <$> ns) ns
+
+argVars' :: Id -> [Id] -> [(Id,Int)]
+argVars' f as = argVars InvFun{ invFunName  = f
+                              , invFunArity = length as
+                              }
