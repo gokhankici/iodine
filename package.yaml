@@ -30,6 +30,7 @@ dependencies:
 - semigroups
 - unordered-containers
 - ansi-terminal
+- liquid-fixpoint
 
 library:
   source-dirs:           src
@@ -48,9 +49,6 @@ library:
   - Verylog.Solver.HSF.Types
   - Verylog.Solver.SMT.Types
   - Verylog.Solver.FP.Types
-  - SMT2FP.SMT.Parser
-  - SMT2FP.Fixpoint.Types
-  - SMT2FP.Fixpoint.Transform
 
 executables:
   vcgen-hsf:
@@ -83,17 +81,6 @@ executables:
     - -W -Werror
     dependencies:
     - verylog-hs
-  smt2fp:
-    main:                Main.hs
-    source-dirs:         app-smt2fp
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    - -W -Werror
-    dependencies:
-    - verylog-hs
-    - ansi-terminal
 
 tests:
   vcgen-test:

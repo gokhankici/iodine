@@ -9,7 +9,7 @@ import qualified Data.HashMap.Strict      as M
 
 import           Verylog.Language.Types 
 import           Verylog.Solver.Common
-import           Verylog.Solver.FP.Types hiding (invs, ufs)
+import           Verylog.Solver.FP.Types
 import           Verylog.Transform.Utils
 import           Verylog.Transform.VCGen
 
@@ -17,10 +17,9 @@ import Data.List (intercalate)
 import Text.Printf
 
 fpInvs    :: [AlwaysBlock] -> FPSt
-fpInvs as = FPSt { _constraints = cs
-                 , _invs        = ifs
-                 , _ufs         = ufConsts
-                 , _binds       = getBinds cs ifs
+fpInvs as = FPSt { _fpConstraints = cs
+                 , _fpInvs        = ifs
+                 , _fpBinds       = getBinds cs ifs
                  }
   where
     cs  = invs as
@@ -28,13 +27,6 @@ fpInvs as = FPSt { _constraints = cs
     invFun a = InvFun { invFunName  = makeInvPred a
                       , invFunArity = length $ makeInvArgs fmt a
                       }
-
-    ufConsts = M.foldlWithKey' (\ufcs k v -> ufConst k v : ufcs) [] allUFs
-    allUFs   = foldr (\a m -> M.union (a^.aSt^.ufs) m) M.empty as
-
-    ufConst n vs = UFConst { ufConstName  = n
-                           , ufConstArity = length vs
-                           }
 
 
 type S = State (Int, (M.HashMap Id FQBind))

@@ -2,7 +2,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 
-module Verylog.Solver.FP.Types where
+module Verylog.Solver.FP.Types
+  ( FQBind(..)
+  , InvFun(..)
+  , UFConst(..)
+  , FPSt(..)
+  , idFromExp
+  , argVars
+  ) where
 
 import           Control.Exception
 import           Control.Monad.Reader
@@ -14,8 +21,6 @@ import qualified Data.HashMap.Strict        as M
 
 import           Verylog.Language.Types hiding (St, ufs)
 import           Verylog.Solver.Common
-
-type SMTVar = String
 
 data FQBind = FQBind { bindId   :: Int
                      , bindName :: Id
@@ -31,10 +36,10 @@ data UFConst = UFConst { ufConstName  :: Id
                        , ufConstArity :: Int
                        }
 
-data FPSt = FPSt { _constraints :: [Inv]
-                 , _invs        :: [InvFun]
-                 , _ufs         :: [UFConst]
-                 , _binds       :: M.HashMap Id FQBind
+data FPSt = FPSt { _fpConstraints :: [Inv]
+                 , _fpInvs      :: [InvFun]
+                 -- , _fpUfs       :: [UFConst]
+                 , _fpBinds     :: M.HashMap Id FQBind
                  }
 
 makeLenses ''FPSt
@@ -60,7 +65,7 @@ qualifiers = vcat $ text <$> [ "qualif Eq(x:int, y:int) : (x = y)"
                              ]
 printBinds :: RDs
 printBinds = do
-  bs <- views binds M.elems
+  bs <- views fpBinds M.elems
   mapM printBind bs
 
 printBind :: Pr FQBind
@@ -101,7 +106,7 @@ printExpr (BinOp{..})      = do
 printExpr (UFCheck{..}) = printExpr (Boolean True)
 
 makeConstraints :: RDs
-makeConstraints = view constraints >>= mapM helper . zip [1..]
+makeConstraints = view fpConstraints >>= mapM helper . zip [1..]
   where
     helper                 :: Pr (Int, Inv)
     helper (n, (Inv{..}))  = mkC n invBody (Structure (makeInv invId) invArgs)
@@ -125,7 +130,7 @@ makeConstraints = view constraints >>= mapM helper . zip [1..]
       return res
 
 makeWFConstraints :: RDs
-makeWFConstraints = view invs >>= mapM helper
+makeWFConstraints = view fpInvs >>= mapM helper
   where
     helper                  :: Pr InvFun
     helper inv@(InvFun{..}) = do
@@ -154,7 +159,7 @@ getBindIds es = mapM getBindId ids
     idSet = foldr (\e s -> s `S.union` getIds e ) S.empty es
 
     getBindId   :: Id -> R Int
-    getBindId v = views binds (bindId . (M.lookupDefault (err v) v))
+    getBindId v = views fpBinds (bindId . (M.lookupDefault (err v) v))
 
     err v = throw $ PassError $ printf "cannot find %s in binders" v
 
