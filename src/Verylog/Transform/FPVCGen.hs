@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Verylog.Transform.FPVCGen ( fpInvs
+module Verylog.Transform.FPVCGen ( toFpSt
                                  ) where
 
 import           Control.Monad.State.Lazy
@@ -16,8 +16,8 @@ import           Verylog.Transform.VCGen
 import Data.List (intercalate)
 import Text.Printf
 
-fpInvs    :: [AlwaysBlock] -> FPSt
-fpInvs as = FPSt { _fpConstraints = cs
+toFpSt    :: [AlwaysBlock] -> FPSt
+toFpSt as = FPSt { _fpConstraints = cs
                  , _fpInvs        = ifs
                  , _fpBinds       = getBinds cs ifs
                  }

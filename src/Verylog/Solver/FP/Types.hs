@@ -6,9 +6,15 @@ module Verylog.Solver.FP.Types
   ( FQBind(..)
   , InvFun(..)
   , UFConst(..)
+
   , FPSt(..)
+  , fpConstraints
+  , fpInvs
+  , fpBinds
+
   , idFromExp
   , argVars
+  , argVars'
   ) where
 
 import           Control.Exception
@@ -37,9 +43,9 @@ data UFConst = UFConst { ufConstName  :: Id
                        }
 
 data FPSt = FPSt { _fpConstraints :: [Inv]
-                 , _fpInvs      :: [InvFun]
+                 , _fpInvs        :: [InvFun]
+                 , _fpBinds       :: M.HashMap Id FQBind
                  -- , _fpUfs       :: [UFConst]
-                 , _fpBinds     :: M.HashMap Id FQBind
                  }
 
 makeLenses ''FPSt
