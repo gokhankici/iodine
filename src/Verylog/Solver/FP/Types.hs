@@ -18,20 +18,18 @@ module Verylog.Solver.FP.Types
   ) where
 
 import           Control.Exception
--- import           Control.Monad.Reader
 import           Control.Lens
--- import           Text.PrettyPrint
 import           Text.Printf
--- import qualified Data.Set                   as S
 import qualified Data.HashMap.Strict        as M
+import qualified Language.Fixpoint.Types    as FQ
 
 import           Verylog.Language.Types hiding (St, ufs)
 import           Verylog.Solver.Common
 
 data FQBind = FQBind { bindId   :: Int
                      , bindName :: Id
-                     , bindType :: String
-                     , bindRef  :: String
+                     , bindType :: FQ.Sort
+                     , bindRef  :: FQ.Expr
                      }
 
 data InvFun = InvFun { invFunName  :: Id
@@ -45,10 +43,24 @@ data UFConst = UFConst { ufConstName  :: Id
 data FPSt = FPSt { _fpConstraints :: [Inv]
                  , _fpInvs        :: [InvFun]
                  , _fpBinds       :: M.HashMap Id FQBind
-                 -- , _fpUfs       :: [UFConst]
                  }
 
 makeLenses ''FPSt
+
+idFromExp :: Expr -> Id
+idFromExp (Var v) = v
+idFromExp _       = throw $ PassError "given expr is not a variable"
+
+argVars :: InvFun -> [(Id,Int)]
+argVars (InvFun{..}) = 
+  let name n1 = printf "arg_%s_%d" invFunName n1
+      ns      = [1..invFunArity]
+  in zip (name <$> ns) ns
+
+argVars' :: Id -> [Id] -> [(Id,Int)]
+argVars' f as = argVars InvFun{ invFunName  = f
+                              , invFunArity = length as
+                              }
 
 -- type R    = Reader FPSt
 -- type RDs  = Reader FPSt [Doc]
@@ -187,20 +199,5 @@ makeLenses ''FPSt
 --     getIds (Number _)       = S.empty
 --     getIds (Boolean _)      = S.empty
 
-idFromExp :: Expr -> Id
-idFromExp (Var v) = v
-idFromExp _       = throw $ PassError "given expr is not a variable"
-
 -- instance Show FPSt where
 --   show = pprint
-
-argVars :: InvFun -> [(Id,Int)]
-argVars (InvFun{..}) = 
-  let name n1 = printf "arg_%s_%d" invFunName n1
-      ns      = [1..invFunArity]
-  in zip (name <$> ns) ns
-
-argVars' :: Id -> [Id] -> [(Id,Int)]
-argVars' f as = argVars InvFun{ invFunName  = f
-                              , invFunArity = length as
-                              }

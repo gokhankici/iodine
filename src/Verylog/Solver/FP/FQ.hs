@@ -10,64 +10,33 @@ import           Control.Exception
 import           Control.Lens
 import           Control.Monad.Reader
 import qualified Data.Set                   as S
+import qualified Data.HashSet               as HS
 import qualified Data.HashMap.Strict        as M
 import           Text.Printf
 
 import qualified Language.Fixpoint.Types    as FQ
 import           Language.Fixpoint.Types    hiding (Expr(..))
 
--- import Language.Fixpoint.Types.Constraints
--- import Language.Fixpoint.Types.Constraints
--- import Language.Fixpoint.Types.Refinements
--- import Language.Fixpoint.Types.PrettyPrint
--- import Language.Fixpoint.Types.Environments
--- import Language.Fixpoint.Solver
-
--- FI	 
---   cm       :: !(HashMap SubcId (c a))     cst id |-> Horn Constraint
---   ws       :: !(HashMap KVar (WfC a))     Kvar |-> WfC defining its scope/args
---   bs       :: !BindEnv                    Bind |-> (Symbol, SortedReft)
---   gLits    :: !(SEnv Sort)                Global Constant symbols
---   dLits    :: !(SEnv Sort)                Distinct Constant symbols
---   kuts     :: !Kuts                       Set of KVars *not* to eliminate
---   quals    :: ![Qualifier]                Abstract domain
---   bindInfo :: !(HashMap BindId a)         Metadata about binders
---   ddecls   :: ![DataDecl]                 User-defined data declarations
---   hoInfo   :: !HOInfo                     Higher Order info
---   asserts  :: ![Triggered Expr]
---   ae       :: AxiomEnv	
-
-
--- fi :: [SubC a] ->
---       [WfC a] ->
---       BindEnv ->
---       SEnv Sort ->
---       SEnv Sort ->
---       Kuts ->
---       [Qualifier] ->
---       HashMap BindId a ->
---       Bool ->
---       Bool ->
---       [Triggered Expr] ->
---       AxiomEnv ->
---       [DataDecl] ->
---       GInfo SubC a
-
 toFqFormat :: FPSt -> GInfo SubC ()
 toFqFormat fpst =
   let cns         = makeConstraints   fpst
       wfs         = makeWFConstraints fpst
-      binders     = undefined
-      gConsts     = undefined
-      dConsts     = undefined
-      cuts        = undefined
-      qualifiers  = undefined
-      bindMds     = undefined
-      highOrBinds = undefined
-      highOrQuals = undefined
-      assrts      = undefined
-      axiomEnv    = undefined
-      dataDecls   = undefined
+      binders     = makeBinders       (fpst ^. fpBinds)
+      gConsts     = emptySEnv
+      dConsts     = emptySEnv
+      cuts        = KS HS.empty
+      qualifiers  = [ mkQual
+                      (symbol "v")
+                      [(symbol "x", FInt), (symbol "x", FInt)] 
+                      (FQ.PAtom Eq (eVar "x") (eVar "y"))
+                      (dummyPos "")
+                    ]
+      bindMds     = M.empty
+      highOrBinds = False
+      highOrQuals = False
+      assrts      = []
+      axiomEnv    = AEnv [] [] M.empty
+      dataDecls   = []
   in  fi cns wfs binders gConsts dConsts cuts qualifiers bindMds highOrBinds highOrQuals assrts axiomEnv dataDecls 
 
 makeConstraints :: FPSt -> [SubC ()]
@@ -95,6 +64,14 @@ makeWFConstraints fpst = concatMap mwf (fpst ^. fpInvs)
          (RR FInt (Reft (symbol arg1, prop True)))
          ()
 
+makeBinders   :: M.HashMap Id FQBind -> FQ.BindEnv
+makeBinders m = bindEnvFromList l
+  where
+    l                 = mkBE <$> M.elems m
+    mkBE (FQBind{..}) = ( bindId
+                        , FQ.symbol bindName
+                        , (RR bindType (reft (FQ.symbol "v") bindRef))
+                        )
 
 convertExpr :: Expr -> FQ.Expr
 convertExpr (BinOp{..}) =

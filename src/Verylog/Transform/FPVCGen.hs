@@ -6,15 +6,13 @@ module Verylog.Transform.FPVCGen ( toFpSt
 import           Control.Monad.State.Lazy
 import           Control.Lens
 import qualified Data.HashMap.Strict      as M
+import qualified Language.Fixpoint.Types  as FQ
 
 import           Verylog.Language.Types 
 import           Verylog.Solver.Common
 import           Verylog.Solver.FP.Types
 import           Verylog.Transform.Utils
 import           Verylog.Transform.VCGen
-
-import Data.List (intercalate)
-import Text.Printf
 
 toFpSt    :: [AlwaysBlock] -> FPSt
 toFpSt as = FPSt { _fpConstraints = cs
@@ -53,8 +51,8 @@ getBindsFromExp (Var v)          = do
     n' <- use _1; _1 += 1
     _2 %= M.insert v (FQBind { bindId   = n'
                              , bindName = v
-                             , bindType = "int"
-                             , bindRef  = "true"
+                             , bindType = FQ.FInt
+                             , bindRef  = FQ.prop True
                              })
 getBindsFromExp (UFCheck{..})    = do
   getBindsFromExps $ uncurry (++) $ unzip ufArgs
@@ -71,28 +69,26 @@ getBindsFromExp (UFCheck{..})    = do
       _2 %= M.insert name (FQBind { bindId   = n'
                                   , bindName = name
                                   , bindType = makeUFType arity
-                                  , bindRef  = "true"
+                                  , bindRef  = FQ.prop True
                                   })
     makeUFType n =
-      let argsStr = intercalate "," (replicate n "Int") 
-          argTup  = if n > 1 then printf "(%s)" argsStr else argsStr
-      in if   n > 0
-         then printf "Map_t %s Int" argTup
-         else "int"
+      if   n > 0
+      then FQ.mapSort FQ.FInt (makeUFType (n-1))
+      else FQ.FInt
 
     addSel :: Id -> [Id] -> S ()
     addSel name args = do
-      let selIn  = printf "%s" (intercalate "," args) :: String
-          selTup = if length args > 1 then printf "(%s)" selIn else selIn
-          selRef = if   length args > 0
-                   then printf "v = Map_select %s %s" ufFunc selTup
-                   else printf "v = %s" ufFunc
+      let selRef = if   length args > 0
+                   then FQ.mkEApp
+                        (FQ.dummyLoc (FQ.symbol name))
+                        (FQ.eVar <$> args)
+                   else FQ.eVar ufFunc
           
       n' <- use _1; _1 += 1
       _2 %= M.insert name (FQBind { bindId   = n'
                                   , bindName = name
-                                  , bindType = "int"
-                                  , bindRef  = selRef
+                                  , bindType = FQ.FInt
+                                  , bindRef  = FQ.PAtom FQ.Eq (FQ.eVar "v") selRef
                                   })
 getBindsFromExp (Number _)       = return ()
 getBindsFromExp (Boolean _)      = return ()
@@ -107,8 +103,8 @@ addArgs invs = do
   let addInvArgs inv@(InvFun{..}) (n,m) =
         let binder argName n = FQBind { bindId   = n
                                       , bindName = argName
-                                      , bindType = "int"
-                                      , bindRef  = "true"
+                                      , bindType = FQ.FInt
+                                      , bindRef  = FQ.prop True
                                       }
             args = tail $ argVars inv
             m' = foldr
