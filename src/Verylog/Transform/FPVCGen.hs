@@ -80,8 +80,8 @@ getBindsFromExp (UFCheck{..})    = do
     addSel name args = do
       let selRef = if   length args > 0
                    then FQ.mkEApp
-                        (FQ.dummyLoc (FQ.symbol name))
-                        (FQ.eVar <$> args)
+                        (FQ.dummyLoc (FQ.symbol "Map_select"))
+                        (FQ.eVar <$> ufFunc:args)
                    else FQ.eVar ufFunc
           
       n' <- use _1; _1 += 1

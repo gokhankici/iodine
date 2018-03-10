@@ -17,6 +17,8 @@ import           Text.Printf
 import qualified Language.Fixpoint.Types    as FQ
 import           Language.Fixpoint.Types    hiding (Expr(..))
 
+-- import Debug.Trace
+
 toFqFormat :: FPSt -> GInfo SubC ()
 toFqFormat fpst =
   let cns         = makeConstraints   fpst
@@ -26,8 +28,8 @@ toFqFormat fpst =
       dConsts     = emptySEnv
       cuts        = KS HS.empty
       qualifiers  = [ mkQual
-                      (symbol "v")
-                      [(symbol "x", FInt), (symbol "x", FInt)] 
+                      (symbol "Eq")
+                      [(symbol "x", FInt), (symbol "y", FInt)] 
                       (FQ.PAtom Eq (eVar "x") (eVar "y"))
                       (dummyPos "")
                     ]
@@ -42,8 +44,8 @@ toFqFormat fpst =
 makeConstraints :: FPSt -> [SubC ()]
 makeConstraints fpst = mc <$> (fpst ^. fpConstraints)
   where
-    mc (Inv{..})  = helper (Structure (makeInv invId) invArgs) invBody
-    mc (Prop{..}) = helper propL propR
+    mc (Inv{..})  = helper invBody (Structure (makeInv invId) invArgs)
+    mc (Prop{..}) = helper propL   propR
     env es        = insertsIBindEnv (getBindIds fpst es) emptyIBindEnv
     helper el er  = mkSubC
                     (env [el,er])
@@ -61,7 +63,9 @@ makeWFConstraints fpst = concatMap mwf (fpst ^. fpInvs)
           ids = getBindIds fpst (Var <$> args)
       in wfC
          (insertsIBindEnv ids emptyIBindEnv)
-         (RR FInt (Reft (symbol arg1, prop True)))
+         (RR FInt (Reft ( symbol arg1
+                        , FQ.PKVar (KV $ symbol invFunName) (mkSubst [])
+                        )))
          ()
 
 makeBinders   :: M.HashMap Id FQBind -> FQ.BindEnv
@@ -92,10 +96,11 @@ convertExpr (Ite{..}) = pIte c el er
     c  = convertExpr cnd
     el = convertExpr expThen
     er = convertExpr expElse
-convertExpr (Structure f as) = mkEApp fe args
+convertExpr (Structure f as) = FQ.PKVar (KV (symbol f)) sub
   where
-    fe   = dummyLoc (symbol f)
-    args = convertExpr . Var <$> as
+    syms = (symbol . fst) <$> argVars' f as
+    es   = eVar <$> as
+    sub  = mkSubst (zip syms es)
 convertExpr (Var v)       = eVar v
 convertExpr (UFCheck{..}) = prop True
 convertExpr (Number n)    = expr n
