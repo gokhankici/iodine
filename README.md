@@ -7,7 +7,7 @@ fill the missing parts.
 
 To build, you need to install
 [stack](https://docs.haskellstack.org/en/stable/README/#how-to-install). When
-installed, just run `stack build`.
+installed, just run `stack install`.
 
 ## Command Line Options
 

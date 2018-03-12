@@ -85,7 +85,6 @@ elif [[ "$VCGEN_TARGET" == "smt" ]]; then
     APP=vcgen-smt
     VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.smt2
 elif [[ "$VCGEN_TARGET" == "fp" ]]; then
-    # APP=vcgen_fp
     APP=vcgen-fp
     VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.fq
 fi
@@ -95,6 +94,8 @@ LOGFILE="$THIS_DIR/.log.$(date +%F-%H-%M-%S)"
 CONF_FILE="${THIS_DIR}/configuration.sh"
 
 CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
+
+QARMC_DEFAULT_OPTS=-get-model
 # }}}
 
 # Read the configuration file {{{
@@ -168,26 +169,10 @@ fi
 # }}}
 
 # Stage 2 : IR -> Verification Conditions {{{
-function vcgen_fp() {
-    ir_file=$1
-    fq_file=$2
-    smt_file=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.smt2
-    
-    vcgen-smt $ir_file $smt_file
-    last_err=$?
-    if [[ $last_err -ne 0 ]]; then
-        echo "vcgen-smt failed on '$ir_file'" 1>&2
-        exit 1
-    fi
-    
-    smt2fp $smt_file $fq_file
-}
 
-pushd $THIS_DIR
 $APP $IR_FILE $VCGEN_FILE
 last_err=$?
 echo "\n"
-popd
 
 if [[ $last_err -ne 0 ]]; then
     echo "[VCGEN ERROR]" 1>&2
@@ -207,9 +192,9 @@ fi
 # Stage 3 : Check Verification Conditions {{{
 if [[ "$VCGEN_TARGET" == "hsf" ]]; then
     if [[ "$(uname)" == "Darwin" ]]; then
-        $QARMC $QARMC_OPTS $VCGEN_FILE
+        $QARMC $QARMC_DEFAULT_OPTS $QARMC_OPTS $VCGEN_FILE
     else
-        $QARMC $QARMC_OPTS $VCGEN_FILE | \
+        $QARMC $QARMC_DEFAULT_OPTS $QARMC_OPTS $VCGEN_FILE | \
             awk '{ print $0; } /program is correct/ {correct = 1;} END {if(correct) {exit 0;} else {exit 1;}}'
     fi
 elif [[ "$VCGEN_TARGET" == "smt" ]]; then
@@ -224,7 +209,7 @@ printf ("%s%s%s\n", "\033[1;31m", string, "\033[0m ");\
 }} NR==1 { if(match($0,/^sat/)){correct = 1;}} {pr($0);} END {if(correct) {exit 0;} else {exit 1;}}'
     fi
 elif [[ "$VCGEN_TARGET" == "fp" ]]; then
-    fixpoint $VCGEN_FILE --eliminate=some
+    cat .liquid/out.fqout
 fi
 
 last_err=$?

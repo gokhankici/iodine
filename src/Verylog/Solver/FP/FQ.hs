@@ -29,7 +29,7 @@ toFqFormat fpst =
       cuts        = KS HS.empty
       qualifiers  = [ mkQual
                       (symbol "Eq")
-                      [(symbol "x", FInt), (symbol "y", FInt)] 
+                      [(symbol "v", FInt), (symbol "x", FInt), (symbol "y", FInt)] 
                       (FQ.PAtom Eq (eVar "x") (eVar "y"))
                       (dummyPos "")
                     ]
@@ -131,7 +131,7 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
     getIds (UFCheck{..})    = 
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs
           (n1,n2)   = ufNames & both %~ idFromExp
-      in S.fromList $ n1:n2:as1 ++ as2
+      in S.fromList $ ufFunc:n1:n2:as1 ++ as2
     getIds (Number _)       = S.empty
     getIds (Boolean _)      = S.empty
 

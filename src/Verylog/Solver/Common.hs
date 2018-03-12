@@ -25,7 +25,10 @@ data Expr = BinOp     { bOp   :: BinOp
                       , expThen :: Expr
                       , expElse :: Expr
                       }
-          | Structure Id [Id]
+          | Structure { propName   :: Id
+                      , propArgs   :: [Id]
+                      -- , propParams :: [Id]
+                      }
           | Var       Id
           | Boolean   Bool
           | Number    Int

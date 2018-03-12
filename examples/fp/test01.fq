@@ -10,22 +10,22 @@ bind 7 f    : {v : Map_t Int Int | true}
 
 constraint:
   env [1;2]
-  lhs {v : int | [x=y; true]}
-  rhs {v : int | $k1[arg1 := x][arg2 := y]}
+  lhs {v : int | [x=y]}
+  rhs {v : int | $inv0[arg1 := x][arg2 := y]}
   id 1 tag []
 
 constraint:
   env [1;2;5;6;7]
-  lhs {v : int | $k1[arg1 := x][arg2 := y]}
-  rhs {v : int | $k1[arg1 := xo][arg2 := yo]}
+  lhs {v : int | $inv0[arg1 := x][arg2 := y]}
+  rhs {v : int | $inv0[arg1 := xo][arg2 := yo]}
   id 2 tag []
 
 constraint:
   env [1;2]
-  lhs {v : int | $k1[arg1 := x][arg2 := y]}
+  lhs {v : int | $inv0[arg1 := x][arg2 := y]}
   rhs {v : int | x=y}
   id 3 tag []
 
 wf:
   env [4]
-  reft {arg1 : int | $k1 }
+  reft {arg1 : int | $inv0 }
