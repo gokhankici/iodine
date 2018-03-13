@@ -45,9 +45,9 @@ main  = do
                      , save      = True
                      , srcFile   = fin
                      } 
-
   if skipSolve
     then saveQuery cfg finfo >> exitSuccess
     else do res <- solve cfg finfo
             let statStr = render . resultDoc . fmap fst
             putStrLn $ statStr $ resStatus res
+            exitWith (resultExit $ resStatus res)

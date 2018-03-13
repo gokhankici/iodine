@@ -58,7 +58,8 @@ elif [[ $# -ne 0 ]]; then
     exit 1
 fi
 
-VCGEN_TARGET=${SOLVER[2]:-hsf}
+VCGEN_TARGET=${SOLVER[2]:-fp}
+
 if [[ "$VCGEN_TARGET" != "hsf" && 
       "$VCGEN_TARGET" != "smt" &&
       "$VCGEN_TARGET" != "fp"
@@ -87,6 +88,7 @@ elif [[ "$VCGEN_TARGET" == "smt" ]]; then
 elif [[ "$VCGEN_TARGET" == "fp" ]]; then
     APP=vcgen_fp
     VCGEN_FILE=${FILENAME:A:h}/.liquid/${IR_FILE:t}.fq
+    FQOUT_FILE=${FILENAME:A:h}/.liquid/${IR_FILE:t}.fqout
 fi
 
 LOGFILE="$THIS_DIR/.log.$(date +%F-%H-%M-%S)"
@@ -214,7 +216,7 @@ printf ("%s%s%s\n", "\033[1;31m", string, "\033[0m ");\
 }} NR==1 { if(match($0,/^sat/)){correct = 1;}} {pr($0);} END {if(correct) {exit 0;} else {exit 1;}}'
     fi
 elif [[ "$VCGEN_TARGET" == "fp" ]]; then
-    cat .liquid/out.fqout
+    cat $FQOUT_FILE
 fi
 
 last_err=$?
