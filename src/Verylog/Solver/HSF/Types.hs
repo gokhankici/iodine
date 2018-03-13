@@ -36,7 +36,7 @@ instance PPrint Expr where
   toDoc (Var x)          = text x
   toDoc (Ands [])        = text "true"
   toDoc (Ands es)        = cat $ punctuate (comma <> space) (toDoc <$> es)
-  toDoc (Structure f as) = text f <> lparen <> printArgs as <> rparen
+  toDoc (Structure{..})  = text propName <> lparen <> printArgs propArgs <> rparen
   toDoc (Ite{..})        = text "ite" <> pcat [ ptoDoc cnd     <> comma
                                               , ptoDoc expThen <> comma
                                               , ptoDoc expElse

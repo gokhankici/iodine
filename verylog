@@ -85,8 +85,8 @@ elif [[ "$VCGEN_TARGET" == "smt" ]]; then
     APP=vcgen-smt
     VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.smt2
 elif [[ "$VCGEN_TARGET" == "fp" ]]; then
-    APP=vcgen-fp
-    VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.fq
+    APP=vcgen_fp
+    VCGEN_FILE=${FILENAME:A:h}/.liquid/${IR_FILE:t}.fq
 fi
 
 LOGFILE="$THIS_DIR/.log.$(date +%F-%H-%M-%S)"
@@ -96,6 +96,11 @@ CONF_FILE="${THIS_DIR}/configuration.sh"
 CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
 
 QARMC_DEFAULT_OPTS=-get-model
+
+function vcgen_fp() {
+    vcgen-fp $VC_DEBUG $JUST_VCGEN $@[1]
+}
+
 # }}}
 
 # Read the configuration file {{{
@@ -152,7 +157,7 @@ EOF
             $IVL $@ -O >(cat 1>&2) $PREPROCESSED_FILE
         fi
         echo "\n[PARSER ERROR]" 1>&2
-        exit 1
+        exit $last_err
     fi
     
     popd
@@ -176,7 +181,7 @@ echo "\n"
 
 if [[ $last_err -ne 0 ]]; then
     echo "[VCGEN ERROR]" 1>&2
-    exit 1 
+    exit $last_err
 fi
 
 if [[ -n "$VC_DEBUG" ]]; then

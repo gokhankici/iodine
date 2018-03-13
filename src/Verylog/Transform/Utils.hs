@@ -18,6 +18,7 @@ data VarFormat = VarFormat { taggedVar   :: Bool
                            , rightVar    :: Bool
                            , atomVar     :: Bool
                            , varId       :: Maybe Int
+                           , paramVar    :: Bool
                            }
                  deriving (Show)
 
@@ -27,6 +28,7 @@ fmt = VarFormat { taggedVar   = False
                 , rightVar    = False
                 , atomVar     = False
                 , varId       = Nothing
+                , paramVar    = False
                 } 
 
 -- set this variable to True if you want to "simplify" the variables
@@ -46,11 +48,14 @@ makeVarName fmt@(VarFormat{..}) v =
                 else case v of
                        []  -> throw (PassError "empty var")
                        h:t -> (toUpper h):t
-       in printf "%s%s%s%s%s%s" atom v' pos vid prime tag 
-  else printf "%sV%s%s%s%s_%s" atom pos tag prime vid v
+       in printf "%s%s%s%s%s%s%s" par atom v' pos vid prime tag 
+  else printf "%s%sV%s%s%s%s_%s" par atom pos tag prime vid v
 
   where
     atom | atomVar   = "v"
+         | otherwise = ""
+
+    par  | paramVar  = "arg_"
          | otherwise = ""
 
     tag  | debugSimple && taggedVar = "_t"
@@ -84,6 +89,12 @@ makeInvArgs        :: VarFormat -> AlwaysBlock -> [Id]
 makeInvArgs fmt a = allArgs fmt{leftVar=True} st ++ allArgs fmt{rightVar=True} st
   where
     st = a^.aSt
+
+makeInvParams        :: AlwaysBlock -> [Id]
+makeInvParams a = allArgs fmt'{leftVar=True} st ++ allArgs fmt'{rightVar=True} st
+  where
+    st   = a^.aSt
+    fmt' = fmt{paramVar=True}
 
 trc         :: Show b => String -> b -> a -> a
 trc msg b a = trace (printf "%s%s" msg (show b)) a

@@ -29,7 +29,10 @@ forallArgs e = psep [text "forall" , args, toDoc e]
 instance PPrint Inv where
   toDoc (Inv{..})  = parens $ text "assert" <+> chk
     where
-      chk     = forallArgs (BinOp IMPLIES invBody (Structure invName invArgs))
+      chk     = forallArgs (BinOp IMPLIES invBody Structure{ propName   = invName
+                                                           , propArgs   = invArgs
+                                                           , propParams = invParams
+                                                           })
       invName = printf "%s%d" invPred invId
 
   toDoc (Prop{..}) = parens $ text "assert" <+> chk
@@ -47,7 +50,7 @@ instance PPrint Expr where
                                                        , ptoDoc expThen
                                                        , ptoDoc expElse
                                                        ]
-  toDoc (Structure f as) = parens $ hsep (text <$> (f:as))
+  toDoc (Structure{..})  = parens $ hsep (text <$> (propName:propArgs))
   toDoc (BinOp{..})      = let op = case bOp of
                                       IMPLIES -> "=>"
                                       EQU     -> "="
@@ -107,7 +110,7 @@ allVars s = evalState comp S.empty
     f (BinOp{..})      = sequence_ (f <$> [expL, expR])
     f (Ands es)        = sequence_ (f <$> es)
     f (Ite{..})        = sequence_ (f <$> [cnd, expThen, expElse])
-    f (Structure _ vs) = modify (S.union (S.fromList vs))
+    f (Structure{..})  = modify (S.union (S.fromList propArgs))
     f (Var v)          = modify (S.insert v)
     f (Boolean _)      = return ()
     f (Number _)       = return ()

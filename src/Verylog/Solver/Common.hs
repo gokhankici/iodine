@@ -8,9 +8,10 @@ import Verylog.Language.Types
 
 data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
 
-data Inv = Inv  { invId   :: Int
-                , invArgs :: [Id]
-                , invBody :: Expr
+data Inv = Inv  { invId     :: Int
+                , invArgs   :: [Id]
+                , invBody   :: Expr
+                , invParams :: [Id]
                 }
          | Prop { propL   :: Expr   -- lhs of "the implication"
                 , propR   :: Expr   -- rhs of "the implication"
@@ -27,7 +28,7 @@ data Expr = BinOp     { bOp   :: BinOp
                       }
           | Structure { propName   :: Id
                       , propArgs   :: [Id]
-                      -- , propParams :: [Id]
+                      , propParams :: [Id]
                       }
           | Var       Id
           | Boolean   Bool

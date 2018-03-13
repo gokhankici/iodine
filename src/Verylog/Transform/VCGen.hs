@@ -11,7 +11,7 @@ import qualified Data.HashMap.Strict      as M
 import           Text.Printf
 
 import           Verylog.Transform.TransitionRelation
-import           Verylog.Transform.Utils
+import           Verylog.Transform.Utils as U
 import           Verylog.Language.Types
 
 -- import           Verylog.Solver.HSF.Types
@@ -34,7 +34,11 @@ modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-initial_inv a = Inv (a^.aId) args body
+initial_inv a = Inv { invId     = a^.aId
+                    , invArgs   = args
+                    , invBody   = body
+                    , invParams = makeInvParams a
+                    }
   where
     st    = a^.aSt
     args  = makeInvArgs fmt a
@@ -50,7 +54,11 @@ initial_inv a = Inv (a^.aId) args body
 --------------------------------------------------------------------------------
 tag_reset_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-tag_reset_inv a = Inv (a^.aId) args' body
+tag_reset_inv a = Inv { invId     = a^.aId
+                      , invArgs   = args'
+                      , invBody   = body
+                      , invParams = makeInvParams a
+                      }
   where
     st    = a^.aSt
     args  = makeInvArgs fmt a
@@ -70,19 +78,29 @@ tag_reset_inv a = Inv (a^.aId) args' body
                          | p <- st^.ports
                          ]
            in Ands [ b1, b2, b3
-                   , Structure (makeInvPred a) args
+                   , Structure{ propName   = makeInvPred a
+                              , propArgs   = args
+                              , propParams = makeInvParams a
+                              }
                    ]
 
 --------------------------------------------------------------------------------
 next_step_inv :: AlwaysBlock -> Inv 
 --------------------------------------------------------------------------------
-next_step_inv a = Inv (a^.aId) args' body
+next_step_inv a = Inv { invId     = a^.aId
+                      , invArgs   = args'
+                      , invBody   = body
+                      , invParams = makeInvParams a
+                      }
   where
     args  = makeInvArgs fmt                 a
     args' = makeInvArgs fmt{primedVar=True} a
     body  = Ands [ next fmt{leftVar=True} a
                  , next fmt{rightVar=True} a
-                 , Structure (makeInvPred a) args
+                 , Structure{ propName   = makeInvPred a
+                            , propArgs   = args
+                            , propParams = makeInvParams a
+                            }
                  ]
 
 --------------------------------------------------------------------------------
@@ -128,11 +146,15 @@ readWriteSet a = evalState (comp (a^.aStmt) >> get) (S.empty, S.empty)
 --------------------------------------------------------------------------------
 non_interference_inv :: AlwaysBlock -> AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-non_interference_inv a1 a2 = Inv (a2^.aId) args2' body
+non_interference_inv a1 a2 = Inv { invId     = a2^.aId
+                                 , invArgs   = args2'
+                                 , invBody   = body
+                                 , invParams = makeInvParams a2
+                                 }
   where
     args1  = makeInvArgs fmt a1
     args2  = makeInvArgs fmt a2
-    args2' = makeInvArgs fmt{primedVar=True} a2 -- TODO: this is not quite right, fix later
+    args2' = makeInvArgs fmt{primedVar=True} a2
     body   = Ands [ next fmt{leftVar=True}  a1
                   , next fmt{rightVar=True} a1
                   , Ands [ Ands [ BinOp EQU
@@ -150,15 +172,24 @@ non_interference_inv a1 a2 = Inv (a2^.aId) args2' body
                                 ]
                          | v <- (a2^.aSt^.ports) \\ (a1^.aSt^.ports)
                          ]
-                  , Structure (makeInvPred a1) args1
-                  , Structure (makeInvPred a2) args2
+                  , Structure{ propName   = makeInvPred a1
+                             , propArgs   = args1
+                             , propParams = makeInvParams a1
+                             }
+                  , Structure{ propName   = makeInvPred a2
+                             , propArgs   = args2
+                             , propParams = makeInvParams a2
+                             }
                   ]
 
                      
 provedProperty :: AlwaysBlock -> [Inv]
 provedProperty a =
   [ Prop { propR = BinOp GE (rtvar s) (Number 1)
-         , propL = Ands [ Structure (makeInvPred a) args
+         , propL = Ands [ Structure{ propName   = makeInvPred a
+                                   , propArgs   = args
+                                   , propParams = makeInvParams a
+                                   }
                         , BinOp GE (ltvar s) (Number 1)
                         ]
          }

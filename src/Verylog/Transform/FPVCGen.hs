@@ -44,7 +44,7 @@ getBindsFromExp :: Expr -> S ()
 getBindsFromExp (BinOp{..})      = getBindsFromExps [expL, expR]
 getBindsFromExp (Ands es)        = getBindsFromExps es
 getBindsFromExp (Ite{..})        = getBindsFromExps [cnd, expThen, expElse]
-getBindsFromExp (Structure _ as) = getBindsFromExps (Var <$> as)
+getBindsFromExp (Structure{..})  = getBindsFromExps (Var <$> propArgs)
 getBindsFromExp (Var v)          = do
   has <- uses _2 (M.member v)
   when (not has) $ do
