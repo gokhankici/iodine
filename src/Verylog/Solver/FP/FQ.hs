@@ -62,11 +62,11 @@ makeWFConstraints :: FPSt -> [WfC ()]
 makeWFConstraints fpst = concatMap mwf (fpst ^. fpInvs)
   where
     mwf i@(InvFun{..}) =
-      let (arg1:args) = fst <$> argVars i
-          ids = getBindIds fpst (Var <$> args)
+      let args = fst <$> argVars i
+          ids  = getBindIds fpst (Var <$> args)
       in wfC
          (insertsIBindEnv ids emptyIBindEnv)
-         (RR FInt (Reft ( symbol arg1
+         (RR FInt (Reft ( symbol "v"
                         , FQ.PKVar (KV $ symbol invFunName) (mkSubst [])
                         )))
          ()
@@ -129,7 +129,7 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
     getIds (Ite{..})        = helper [cnd, expThen, expElse]
     getIds (Structure{..}) = S.fromList (propArgs ++ args)
       where
-        args = tail $ fst <$> argVars' propName propArgs
+        args = fst <$> argVars' propName propArgs
     getIds (Var v)          = S.singleton v
     getIds (UFCheck{..})    = 
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs

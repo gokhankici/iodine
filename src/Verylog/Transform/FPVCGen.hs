@@ -5,6 +5,7 @@ module Verylog.Transform.FPVCGen ( toFpSt
 
 import           Control.Monad.State.Lazy
 import           Control.Lens
+import           Data.List
 import qualified Data.HashMap.Strict      as M
 import qualified Language.Fixpoint.Types  as FQ
 
@@ -79,9 +80,11 @@ getBindsFromExp (UFCheck{..})    = do
     addSel :: Id -> [Id] -> S ()
     addSel name args = do
       let selRef = if   length args > 0
-                   then FQ.mkEApp
-                        (FQ.dummyLoc (FQ.symbol "Map_select"))
-                        (FQ.eVar <$> ufFunc:args)
+                   then let (v1:vs) = FQ.eVar <$> args
+                            selF    = FQ.dummyLoc (FQ.symbol "Map_select")
+                            base    = FQ.mkEApp selF [FQ.eVar ufFunc, v1]
+                            f acc v = FQ.mkEApp selF [acc, v]
+                        in  foldl' f base vs
                    else FQ.eVar ufFunc
           
       n' <- use _1; _1 += 1
@@ -106,7 +109,7 @@ addArgs invs = do
                                       , bindType = FQ.FInt
                                       , bindRef  = FQ.prop True
                                       }
-            args = tail $ argVars inv
+            args = argVars inv
             m' = foldr
                  (\(argName,n1) m ->
                      M.insert argName (binder argName (n1+n)) m)
