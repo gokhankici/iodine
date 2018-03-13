@@ -15,44 +15,54 @@ import System.Environment (getArgs)
 import System.Exit
 import Text.PrettyPrint
 
-import Debug.Trace
-
 data Flag = VCGen
           | Debug
+          | FQFile
           deriving (Show, Eq, Ord)
 
 options :: [OptDescr Flag]
 options =
   [ Option [] ["vcgen"] (NoArg VCGen) "Just vcgen, do not solve"
   , Option [] ["debug"] (NoArg Debug) "Just vcgen, do not solve"
+  , Option [] ["fq"]    (NoArg FQFile) "run fixpoint on the given file"
   ]
+
+parseOpts :: IO (Bool, FilePath, Bool)
+parseOpts = do
+  args <- getArgs
+  return $
+    case getOpt Permute options args of
+      (opts,rest,[]) ->
+        let b     = isJust $ find (\o -> o == VCGen || o == Debug) opts
+            [fin] = rest
+            fq    = isJust $ find (\o -> o == FQFile) opts
+        in  (b, fin, fq)
+      (_,_,errs) ->
+        error (concat errs ++ usageInfo header options)
+        where
+          header = "Usage: vcgen-fp [OPTION...] files..."
+  
 
 main :: IO ()
 main  = do
-  args <- getArgs
-  let (skipSolve,fin) =
-        case getOpt Permute options args of
-          (opts,rest,[]) ->
-            let b     = isJust $ find (\o -> o == VCGen || o == Debug) $ trace (show opts) opts
-                [fin] = rest
-            in  (b, fin)
-          (_,_,errs) ->
-            error (concat errs ++ usageInfo header options)
-            where
-              header = "Usage: vcgen-fp [OPTION...] files..."
+  (skipSolve, fin, runFixpoint) <- parseOpts
 
   finfo <- fpgen fin
   let cfg = defConfig{ eliminate = Some
                      , save      = True
                      , srcFile   = fin
                      } 
-  if skipSolve
-    then saveQuery cfg finfo >> exitSuccess
-    else do res <- solve cfg finfo
-            let statStr = render . resultDoc . fmap fst
-            let stat = resStatus res
-            colorStrLn (getColor stat) (statStr stat)
-            exitWith (resultExit $ resStatus res)
+  if runFixpoint
+    then solveFQ defConfig{ srcFile   = fin
+                          , eliminate = Some
+                          } >>= exitWith
+    else if skipSolve
+         then saveQuery cfg finfo >> exitSuccess
+         else do res <- solve cfg finfo
+                 let statStr = render . resultDoc . fmap fst
+                 let stat = resStatus res
+                 colorStrLn (getColor stat) (statStr stat)
+                 exitWith (resultExit $ resStatus res)
 
 colorStrLn   :: Color -> String -> IO ()
 colorStrLn c = withColor c . putStrLn
