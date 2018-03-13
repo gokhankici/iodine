@@ -46,9 +46,9 @@ instance PPrint Expr where
   toDoc (Var x)          = text x
   toDoc (Ands [])        = text "true"
   toDoc (Ands as)        = psep (text "and" : (toDoc <$> as))
-  toDoc (Ite{..})        = parens $ text "ite" <+> cat [ ptoDoc cnd
-                                                       , ptoDoc expThen
-                                                       , ptoDoc expElse
+  toDoc (Ite{..})        = parens $ text "ite" <+> cat [ toDoc cnd
+                                                       , toDoc expThen
+                                                       , toDoc expElse
                                                        ]
   toDoc (Structure{..})  = parens $ hsep (text <$> (propName:propArgs))
   toDoc (BinOp{..})      = let op = case bOp of

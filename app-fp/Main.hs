@@ -9,6 +9,7 @@ import Language.Fixpoint.Types.Config
 
 import Data.List
 import Data.Maybe
+import System.Console.ANSI
 import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit
@@ -49,5 +50,18 @@ main  = do
     then saveQuery cfg finfo >> exitSuccess
     else do res <- solve cfg finfo
             let statStr = render . resultDoc . fmap fst
-            putStrLn $ statStr $ resStatus res
+            let stat = resStatus res
+            colorStrLn (getColor stat) (statStr stat)
             exitWith (resultExit $ resStatus res)
+
+colorStrLn   :: Color -> String -> IO ()
+colorStrLn c = withColor c . putStrLn
+
+withColor :: Color -> IO () -> IO ()
+withColor c act
+   = do setSGR [ SetConsoleIntensity BoldIntensity, SetColor Foreground Vivid c]
+        act
+        setSGR [ Reset]
+
+getColor (Safe) = Green
+getColor (_)    = Red
