@@ -24,7 +24,7 @@ toFqFormat fpst =
   let cns         = makeConstraints   fpst
       wfs         = makeWFConstraints fpst
       binders     = makeBinders       (fpst ^. fpBinds)
-      gConsts     = emptySEnv
+      gConsts     = getUFGlobals fpst
       dConsts     = emptySEnv
       cuts        = KS HS.empty
       qualifiers  = [ mkQual
@@ -105,7 +105,16 @@ convertExpr (Structure{..}) = FQ.PKVar (KV (symbol propName)) sub
     es   = eVar <$> propArgs
     sub  = mkSubst (zip syms es)
 convertExpr (Var v)       = eVar v
-convertExpr (UFCheck{..}) = prop True
+convertExpr (UFCheck{..}) =
+  let (largs, rargs) = unzip ufArgs
+      (l, r)         = ufNames
+      f              = dummyLoc $ symbol ufFunc
+      mkVar          = eVar . idFromExp
+      lSel           = mkEApp f (mkVar <$> largs)
+      rSel           = mkEApp f (mkVar <$> rargs)
+  in  pAnd [ FQ.PAtom Eq (mkVar l) lSel
+           , FQ.PAtom Eq (mkVar r) rSel
+           ]
 convertExpr (Number n)    = expr n
 convertExpr (Boolean b)   = prop b
 
@@ -134,7 +143,19 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
     getIds (UFCheck{..})    = 
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs
           (n1,n2)   = ufNames & both %~ idFromExp
-      in S.fromList $ ufFunc:n1:n2:as1 ++ as2
+      in S.fromList $ n1:n2:as1 ++ as2
     getIds (Number _)       = S.empty
     getIds (Boolean _)      = S.empty
+
+
+getUFGlobals :: FPSt -> SEnv Sort
+getUFGlobals fpst = fromListSEnv $ snd $ M.foldrWithKey mkGlobF (0, []) (fpst^.fpUFs)
+  where
+    mkGlobF f arity (n,l) =
+      let s = if   arity > 0
+              then mkFFunc n (replicate (arity+1) FInt)
+              else FInt
+          g = (symbol f, s)
+      in (n+1, g:l)
+    
 

@@ -5,7 +5,6 @@ module Verylog.Transform.FPVCGen ( toFpSt
 
 import           Control.Monad.State.Lazy
 import           Control.Lens
-import           Data.List
 import qualified Data.HashMap.Strict      as M
 import qualified Language.Fixpoint.Types  as FQ
 
@@ -19,6 +18,7 @@ toFpSt    :: [AlwaysBlock] -> FPSt
 toFpSt as = FPSt { _fpConstraints = cs
                  , _fpInvs        = ifs
                  , _fpBinds       = getBinds cs ifs
+                 , _fpUFs         = M.unions $ (M.map length) . (view (aSt . ufs)) <$> as
                  }
   where
     cs  = invs as
@@ -28,9 +28,9 @@ toFpSt as = FPSt { _fpConstraints = cs
                       }
 
 
-type S = State (Int, (M.HashMap Id FQBind))
+type S = State (Int, BindMap)
 
-getBinds       :: [Inv] -> [InvFun] -> M.HashMap Id FQBind
+getBinds       :: [Inv] -> [InvFun] -> BindMap
 getBinds is fs = evalState comp (0, M.empty)
   where
     comp = do sequence_ (getBind <$> is)
@@ -55,44 +55,8 @@ getBindsFromExp (Var v)          = do
                              , bindType = FQ.FInt
                              , bindRef  = FQ.prop True
                              })
-getBindsFromExp (UFCheck{..})    = do
+getBindsFromExp (UFCheck{..})    =
   getBindsFromExps $ uncurry (++) $ unzip ufArgs
-  let (as1,as2) = unzip $ map (over both idFromExp) ufArgs
-      (n1,n2)   = ufNames & both %~ idFromExp
-      arity     = length ufArgs
-  addUf ufFunc arity
-  addSel n1 as1
-  addSel n2 as2
-  where
-    addUf            :: Id -> Int -> S ()
-    addUf name arity = do
-      n' <- use _1; _1 += 1
-      _2 %= M.insert name (FQBind { bindId   = n'
-                                  , bindName = name
-                                  , bindType = makeUFType arity
-                                  , bindRef  = FQ.prop True
-                                  })
-    makeUFType n =
-      if   n > 0
-      then FQ.mapSort FQ.FInt (makeUFType (n-1))
-      else FQ.FInt
-
-    addSel :: Id -> [Id] -> S ()
-    addSel name args = do
-      let selRef = if   length args > 0
-                   then let (v1:vs) = FQ.eVar <$> args
-                            selF    = FQ.dummyLoc (FQ.symbol "Map_select")
-                            base    = FQ.mkEApp selF [FQ.eVar ufFunc, v1]
-                            f acc v = FQ.mkEApp selF [acc, v]
-                        in  foldl' f base vs
-                   else FQ.eVar ufFunc
-          
-      n' <- use _1; _1 += 1
-      _2 %= M.insert name (FQBind { bindId   = n'
-                                  , bindName = name
-                                  , bindType = FQ.FInt
-                                  , bindRef  = FQ.PAtom FQ.Eq (FQ.eVar "v") selRef
-                                  })
 getBindsFromExp (Number _)       = return ()
 getBindsFromExp (Boolean _)      = return ()
 
@@ -117,4 +81,6 @@ addArgs invs = do
                  args
             n' = n + invFunArity
         in  (n', m')
-  put $ foldr addInvArgs (n, m) invs
+  let (n', m') = foldr addInvArgs (n, m) invs
+  _1 .= n'
+  _2 .= m'

@@ -6,11 +6,14 @@ module Verylog.Solver.FP.Types
   ( FQBind(..)
   , InvFun(..)
   , UFConst(..)
+  , BindMap
+  , UFMap
 
   , FPSt(..)
   , fpConstraints
   , fpInvs
   , fpBinds
+  , fpUFs
 
   , idFromExp
   , argVars
@@ -39,10 +42,14 @@ data InvFun = InvFun { invFunName  :: Id
 data UFConst = UFConst { ufConstName  :: Id
                        , ufConstArity :: Int
                        }
+ 
+type BindMap = M.HashMap Id FQBind
+type UFMap   = M.HashMap Id Int
 
 data FPSt = FPSt { _fpConstraints :: [Inv]
                  , _fpInvs        :: [InvFun]
-                 , _fpBinds       :: M.HashMap Id FQBind
+                 , _fpBinds       :: BindMap
+                 , _fpUFs         :: UFMap
                  }
 
 makeLenses ''FPSt
