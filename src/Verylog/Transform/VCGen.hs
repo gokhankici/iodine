@@ -8,7 +8,7 @@ import           Control.Monad.State.Lazy
 import           Data.List
 import qualified Data.HashSet               as S
 import qualified Data.HashMap.Strict      as M
-import           Text.Printf
+-- import           Text.Printf
 
 import           Verylog.Transform.TransitionRelation
 import           Verylog.Transform.Utils as U
@@ -29,7 +29,7 @@ modular_inv :: AlwaysBlock -> [Inv]
 --------------------------------------------------------------------------------
 modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
   where
-    a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
+    a' = a --trc (printf "\nalways block #%d:\n" (a^.aId)) a a
 
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> Inv
