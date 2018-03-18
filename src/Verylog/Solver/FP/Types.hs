@@ -35,8 +35,9 @@ data FQBind = FQBind { bindId   :: Int
                      , bindRef  :: FQ.Expr
                      }
 
-data InvFun = InvFun { invFunName  :: Id
-                     , invFunArity :: Int
+data InvFun = InvFun { invFunName   :: Id
+                     , invFunArity  :: Int
+                     , invFunParams :: [Id]
                      }
 
 data UFConst = UFConst { ufConstName  :: Id
@@ -65,6 +66,7 @@ argVars (InvFun{..}) =
   in zip (name <$> ns) ns
 
 argVars' :: Id -> [Id] -> [(Id,Int)]
-argVars' f as = argVars InvFun{ invFunName  = f
-                              , invFunArity = length as
+argVars' f as = argVars InvFun{ invFunName   = f
+                              , invFunArity  = length as
+                              , invFunParams = as
                               }

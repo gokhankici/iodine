@@ -21,11 +21,13 @@ toFpSt as = FPSt { _fpConstraints = cs
                  , _fpUFs         = M.unions $ (M.map length) . (view (aSt . ufs)) <$> as
                  }
   where
-    cs  = invs as
-    ifs = invFun <$> as
-    invFun a = InvFun { invFunName  = makeInvPred a
-                      , invFunArity = length $ makeInvArgs fmt a
-                      }
+    cs   = invs as
+    ifs  = invFun <$> as
+    invFun a = let args = makeInvArgs fmt a
+               in InvFun { invFunName   = makeInvPred a
+                         , invFunArity  = length args
+                         , invFunParams = args
+                         }
 
 
 type S = State (Int, BindMap)
