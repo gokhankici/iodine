@@ -11,17 +11,21 @@ function blue()  { print -P "%F{blue}%B$1%b%f" }
 function green() { print -P "%F{green}%B$1%b%f" }
 function red()   { print -P "%F{red}%B$1%b%f" }
 
+MIPS_DIR="$IVL_DIR/benchmarks/472-mips-pipelined"
 
 typeset -A TESTS
-TESTS=( "01 - 01 - tr-test-1"    "-M test $THIS_DIR/test/verilog/tr-test-1.v" \
-        "01 - 02 - tr-test-2"    "-M test $THIS_DIR/test/verilog/tr-test-2.v" \
-        "01 - 03 - tr-test-3"    "-M test $THIS_DIR/test/verilog/tr-test-3.v" \
-        "01 - 04 - tr-test-4"    "-M test $THIS_DIR/test/verilog/tr-test-4.v" \
-        "01 - 05 - tr-test-5"    "-M test $THIS_DIR/test/verilog/tr-test-5.v" \
-        "01 - 06 - tr-test-6"    "-M test $THIS_DIR/test/verilog/tr-test-6.v" \
+TESTS=( "01 - 01 - tr-test-1" "-M test $THIS_DIR/test/verilog/tr-test-1.v" \
+        "01 - 02 - tr-test-2" "-M test $THIS_DIR/test/verilog/tr-test-2.v" \
+        "01 - 03 - tr-test-3" "-M test $THIS_DIR/test/verilog/tr-test-3.v" \
+        "01 - 04 - tr-test-4" "-M test $THIS_DIR/test/verilog/tr-test-4.v" \
+        "01 - 05 - tr-test-5" "-M test $THIS_DIR/test/verilog/tr-test-5.v" \
+        "01 - 06 - tr-test-6" "-M test $THIS_DIR/test/verilog/tr-test-6.v" \
 
-        "02 - 01 - stall hand"   "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
-        "02. mips fragment" "-M mips_pipeline $IVL_DIR/benchmarks/472-mips-pipelined/472-mips-fragment.v" \
+        "02 - 01 - stall hand" "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
+
+        "03 - 01 - mips fragment stub" "-M mips_pipeline $MIPS_DIR/472-mips-fragment.v"   \
+        "03 - 02 - mips fragment v2"   "-M mips_pipeline $MIPS_DIR/472-mips-fragment-2.v" \
+        "03 - 03 - mips fragment v3"   "-M mips_pipeline $MIPS_DIR/472-mips-fragment-3.v" \
       )
 
 echo
