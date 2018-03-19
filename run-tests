@@ -5,7 +5,9 @@ CONF_FILE=$THIS_DIR/configuration.sh
 
 source $CONF_FILE
 
-zparseopts -D -E -- u=UNIT -unit=UNIT
+zparseopts -D -E -- \
+	u=UNIT -unit=UNIT \
+	-name:=NAME
 
 function blue()  { print -P "%F{blue}%B$1%b%f" }
 function green() { print -P "%F{green}%B$1%b%f" }
@@ -13,20 +15,52 @@ function red()   { print -P "%F{red}%B$1%b%f" }
 
 MIPS_DIR="$IVL_DIR/benchmarks/472-mips-pipelined"
 
-typeset -A TESTS
-TESTS=( "01 - 01 - tr-test-1" "-M test $THIS_DIR/test/verilog/tr-test-1.v" \
-        "01 - 02 - tr-test-2" "-M test $THIS_DIR/test/verilog/tr-test-2.v" \
-        "01 - 03 - tr-test-3" "-M test $THIS_DIR/test/verilog/tr-test-3.v" \
-        "01 - 04 - tr-test-4" "-M test $THIS_DIR/test/verilog/tr-test-4.v" \
-        "01 - 05 - tr-test-5" "-M test $THIS_DIR/test/verilog/tr-test-5.v" \
-        "01 - 06 - tr-test-6" "-M test $THIS_DIR/test/verilog/tr-test-6.v" \
+typeset -A SIMPLE_TESTS
+SIMPLE_TESTS=( \
+	"01 - 01 - tr-test-1" "-M test $THIS_DIR/test/verilog/tr-test-1.v" \
+	"01 - 02 - tr-test-2" "-M test $THIS_DIR/test/verilog/tr-test-2.v" \
+	"01 - 03 - tr-test-3" "-M test $THIS_DIR/test/verilog/tr-test-3.v" \
+	"01 - 04 - tr-test-4" "-M test $THIS_DIR/test/verilog/tr-test-4.v" \
+	"01 - 05 - tr-test-5" "-M test $THIS_DIR/test/verilog/tr-test-5.v" \
+	"01 - 06 - tr-test-6" "-M test $THIS_DIR/test/verilog/tr-test-6.v" \
 
-        "02 - 01 - stall hand" "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
+	"01 - 07 - stall hand" "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
+	)
 
-        "03 - 01 - mips fragment stub" "-M mips_pipeline $MIPS_DIR/472-mips-fragment.v"   \
-        "03 - 02 - mips fragment v2"   "-M mips_pipeline $MIPS_DIR/472-mips-fragment-2.v" \
-        "03 - 03 - mips fragment v3"   "-M mips_pipeline $MIPS_DIR/472-mips-fragment-3.v" \
-      )
+typeset -A MIPS_STUB_TESTS
+MIPS_STUB_TESTS=( \
+	"02 - 01 - mips fragment stub" "-M mips_pipeline $MIPS_DIR/472-mips-fragment.v"   \
+	"02 - 02 - mips fragment v2"   "-M mips_pipeline $MIPS_DIR/472-mips-fragment-2.v" \
+	"02 - 03 - mips fragment v3"   "-M mips_pipeline $MIPS_DIR/472-mips-fragment-3.v" \
+	)
+
+typeset -A MIPS_MODULE_TESTS
+MIPS_MODULE_TESTS=( \
+	)
+
+if   [[ "$NAME[2]" == "simple" ]]; then
+	typeset -A TESTS
+	TESTS=( ${(kv)SIMPLE_TESTS} )
+
+elif [[ "$NAME[2]" == "mips-stub" ]]; then
+	typeset -A TESTS
+	TESTS=( ${(kv)MIPS_STUB_TESTS} )
+
+elif [[ "$NAME[2]" == "mips-module" ]]; then
+	typeset -A TESTS
+	TESTS=( ${(kv)MIPS_MODULE_TESTS} )
+
+elif [[ -z "$NAME" ]]; then
+	typeset -A TESTS
+	TESTS=( \
+		${(kv)SIMPLE_TESTS} \
+		${(kv)MIPS_STUB_TESTS} \
+		${(kv)MIPS_MODULE_TESTS} \
+		)
+else
+	echo "unrecognized --name argument: $NAME[2]" >&2
+	exit 1
+fi
 
 echo
 
@@ -48,30 +82,30 @@ function run_unit_tests() {
 	fi
 }
 
-# run_unit_tests
-
-if [[ -z "$UNIT" ]]; then
-    for test_name in ${(ok)TESTS}; do
-        blue "================================================================================"
-        blue "   RUNNING $test_name"
-        blue "================================================================================"
-
-        test_input="${TESTS[$test_name]}"
-        local -a test_arr
-        test_arr=("${(@s/ /)test_input}")
-        
-		echo "$THIS_DIR/verylog ${test_arr} $@"
-        if ! $THIS_DIR/verylog ${test_arr} $@; then
-            echo
-            red "================================================================================"
-            red "   TEST '$test_name' FAILED !" 1>&2
-            red "================================================================================"
-            exit 1
-        else
-            echo "\n"
-        fi
-    done
+if [[ -n "$UNIT" ]]; then
+	run_unit_tests
 fi
+
+for test_name in ${(ok)TESTS}; do
+	blue "================================================================================"
+	blue "   RUNNING $test_name"
+	blue "================================================================================"
+
+	test_input="${TESTS[$test_name]}"
+	local -a test_arr
+	test_arr=("${(@s/ /)test_input}")
+
+	echo "$THIS_DIR/verylog ${test_arr} $@"
+	if ! $THIS_DIR/verylog ${test_arr} $@; then
+		echo
+		red "================================================================================"
+		red "   TEST '$test_name' FAILED !" 1>&2
+		red "================================================================================"
+		exit 1
+	else
+		echo "\n"
+	fi
+done
 
 green "================================================================================"
 green "   ALL TESTS PASSED !"
