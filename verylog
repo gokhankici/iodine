@@ -60,8 +60,8 @@ fi
 
 VCGEN_TARGET=${SOLVER[2]:-fp}
 
-if [[ "$VCGEN_TARGET" != "hsf" && 
-      "$VCGEN_TARGET" != "smt" &&
+if [[ # "$VCGEN_TARGET" != "hsf" && 
+      # "$VCGEN_TARGET" != "smt" &&
       "$VCGEN_TARGET" != "fp"
     ]]; then
     echo "Invalid vcgen target: '$VCGEN_TARGET'" >&2

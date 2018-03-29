@@ -5,6 +5,7 @@ module Verylog.Solver.FP.FQ ( toFqFormat ) where
 import Verylog.Solver.Common
 import Verylog.Solver.FP.Types
 import Verylog.Language.Types
+import Verylog.Transform.Utils
 
 import           Control.Exception
 import           Control.Lens
@@ -67,15 +68,16 @@ makeConstraints fpst = mc <$> (fpst ^. fpConstraints)
                     ()
 
 makeWFConstraints :: FPSt -> [WfC ()]
-makeWFConstraints fpst = concatMap mwf (fpst ^. fpInvs)
+makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
   where
-    mwf i@(InvFun{..}) =
-      let args = fst <$> argVars i
-          ids  = getBindIds fpst (Var <$> args)
+    mwf a@(AB{..}) =
+      let allArgs = makeInvArgs fmt a
+                    ++ makeInvArgs fmt{primedVar=True} a
+          ids = getBindIds fpst (Var <$> allArgs)
       in wfC
          (insertsIBindEnv ids emptyIBindEnv)
          (RR FInt (Reft ( symbol "v"
-                        , FQ.PKVar (KV $ symbol invFunName) (mkSubst [])
+                        , FQ.PKVar (KV $ symbol (makeInvPred a)) (mkSubst [])
                         )))
          ()
 
@@ -107,11 +109,12 @@ convertExpr (Ite{..}) = pIte c el er
     c  = convertExpr cnd
     el = convertExpr expThen
     er = convertExpr expElse
-convertExpr (Structure{..}) = FQ.PKVar (KV (symbol propName)) sub
-  where
-    syms = (symbol . fst) <$> argVars' propName propArgs
-    es   = eVar <$> propArgs
-    sub  = mkSubst (zip syms es)
+convertExpr (Structure{..}) = prop True
+-- convertExpr (Structure{..}) = FQ.PKVar (KV (symbol propName)) sub
+--   where
+--     syms = (symbol . fst) <$> argVars' propName propArgs
+--     es   = eVar <$> propArgs
+--     sub  = mkSubst (zip syms es)
 convertExpr (Var v)       = eVar v
 convertExpr (UFCheck{..}) =
   let (largs, rargs) = unzip ufArgs
@@ -144,9 +147,7 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
     getIds (BinOp{..})      = helper [expL, expR]
     getIds (Ands es)        = helper es
     getIds (Ite{..})        = helper [cnd, expThen, expElse]
-    getIds (Structure{..}) = S.fromList (propArgs ++ args)
-      where
-        args = fst <$> argVars' propName propArgs
+    getIds (Structure{..}) = S.fromList propArgs
     getIds (Var v)          = S.singleton v
     getIds (UFCheck{..})    = 
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs

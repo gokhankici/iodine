@@ -11,32 +11,25 @@ import qualified Language.Fixpoint.Types  as FQ
 import           Verylog.Language.Types 
 import           Verylog.Solver.Common
 import           Verylog.Solver.FP.Types
-import           Verylog.Transform.Utils
+-- import           Verylog.Transform.Utils
 import           Verylog.Transform.VCGen
 
 toFpSt    :: [AlwaysBlock] -> FPSt
 toFpSt as = FPSt { _fpConstraints = cs
-                 , _fpInvs        = ifs
-                 , _fpBinds       = getBinds cs ifs
+                 , _fpABs         = as
+                 , _fpBinds       = getBinds cs
                  , _fpUFs         = M.unions $ (M.map length) . (view (aSt . ufs)) <$> as
                  }
   where
     cs   = invs as
-    ifs  = invFun <$> as
-    invFun a = let args = makeInvArgs fmt a
-               in InvFun { invFunName   = makeInvPred a
-                         , invFunArity  = length args
-                         , invFunParams = args
-                         }
 
 
 type S = State (Int, BindMap)
 
-getBinds       :: [Inv] -> [InvFun] -> BindMap
-getBinds is fs = evalState comp (0, M.empty)
+getBinds    :: [Inv] -> BindMap
+getBinds is = evalState comp (0, M.empty)
   where
     comp = do sequence_ (getBind <$> is)
-              addArgs fs
               use _2
 
 getBind            :: Inv -> S ()
@@ -65,24 +58,23 @@ getBindsFromExp (Boolean _)      = return ()
 getBindsFromExps :: [Expr] -> S ()
 getBindsFromExps = sequence_ . (map getBindsFromExp)
 
-addArgs :: [InvFun] -> S ()
-addArgs invs = do
-  n <- use _1
-  m <- use _2
-  let addInvArgs inv@(InvFun{..}) (n,m) =
-        let binder argName n = FQBind { bindId   = n
-                                      , bindName = argName
-                                      , bindType = FQ.FInt
-                                      , bindRef  = FQ.prop True
-                                      }
-            args = argVars inv
-            m' = foldr
-                 (\(argName,n1) m ->
-                     M.insert argName (binder argName (n1+n)) m)
-                 m
-                 args
-            n' = n + invFunArity
-        in  (n', m')
-  let (n', m') = foldr addInvArgs (n, m) invs
-  _1 .= n'
-  _2 .= m'
+-- addArgs invs = do
+--   n <- use _1
+--   m <- use _2
+--   let addInvArgs inv@(InvFun{..}) (n,m) =
+--         let binder argName n = FQBind { bindId   = n
+--                                       , bindName = argName
+--                                       , bindType = FQ.FInt
+--                                       , bindRef  = FQ.prop True
+--                                       }
+--             args = argVars inv
+--             m' = foldr
+--                  (\(argName,n1) m ->
+--                      M.insert argName (binder argName (n1+n)) m)
+--                  m
+--                  args
+--             n' = n + invFunArity
+--         in  (n', m')
+--   let (n', m') = foldr addInvArgs (n, m) invs
+--   _1 .= n'
+--   _2 .= m'

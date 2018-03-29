@@ -36,6 +36,7 @@ MIPS_STUB_TESTS=( \
 
 typeset -A MIPS_MODULE_TESTS
 MIPS_MODULE_TESTS=( \
+	"03 - 01 - control pipeline" "-M control_pipeline $MIPS_DIR/control_pipeline.v" \
 	)
 
 if   [[ "$NAME[2]" == "simple" ]]; then
