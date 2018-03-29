@@ -17,8 +17,6 @@ import           Text.Printf
 import qualified Language.Fixpoint.Types    as FQ
 import           Language.Fixpoint.Types    hiding (Expr(..))
 
--- import Debug.Trace
-
 toFqFormat :: FPSt -> GInfo SubC ()
 toFqFormat fpst =
   let cns         = makeConstraints   fpst
@@ -27,11 +25,21 @@ toFqFormat fpst =
       gConsts     = getUFGlobals fpst
       dConsts     = emptySEnv
       cuts        = KS HS.empty
-      qualifiers  = [ mkQual
-                      (symbol "Eq")
-                      [(symbol "v", FInt), (symbol "x", FInt), (symbol "y", FInt)] 
+      qualifiers  = traceFix "qualifiers" qualifiers'
+      qualifiers' = [ mkQual
+                      (symbol (printf "Eq%d" (n::Int) :: String))
+                      [ QP (symbol "v") PatNone FInt
+                      , QP (symbol "x") (PatPrefix (symbol pre_x) 1) FInt
+                      , QP (symbol "y") (PatPrefix (symbol pre_y) 1) FInt
+                      ] 
                       (FQ.PAtom Eq (eVar "x") (eVar "y"))
                       (dummyPos "")
+                    | (n,(pre_x,pre_y)) <- zip [1..]
+                                           [ ("VL_"   , "VR_")
+                                           , ("VLP_"  , "VRP_")
+                                           , ("VLT_"  , "VRT_")
+                                           , ("VLTP_" , "VRTP_")
+                                           ]
                     ]
       bindMds     = M.empty
       highOrBinds = False
