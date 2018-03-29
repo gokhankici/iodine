@@ -16,7 +16,7 @@ import qualified Data.HashMap.Strict        as M
 import           Text.Printf
 
 import qualified Language.Fixpoint.Types    as FQ
-import           Language.Fixpoint.Types    hiding (Expr(..))
+import           Language.Fixpoint.Types    hiding (Expr(..), KV)
 
 toFqFormat :: FPSt -> GInfo SubC ()
 toFqFormat fpst =
@@ -53,10 +53,9 @@ toFqFormat fpst =
 makeConstraints :: FPSt -> [SubC ()]
 makeConstraints fpst = mc <$> (fpst ^. fpConstraints)
   where
-    mc (Inv{..})  = helper invBody Structure { propName   = makeInv invId
-                                             , propArgs   = invArgs
-                                             , propParams = invParams
-                                             }
+    mc (Inv{..})  = helper invBody KV{ kvId   = invId
+                                     , kvSubs = [] -- TODO
+                                     }
     mc (Prop{..}) = helper propL   propR
     env es        = insertsIBindEnv (getBindIds fpst es) emptyIBindEnv
     helper el er  = mkSubC
@@ -109,12 +108,7 @@ convertExpr (Ite{..}) = pIte c el er
     c  = convertExpr cnd
     el = convertExpr expThen
     er = convertExpr expElse
-convertExpr (Structure{..}) = prop True
--- convertExpr (Structure{..}) = FQ.PKVar (KV (symbol propName)) sub
---   where
---     syms = (symbol . fst) <$> argVars' propName propArgs
---     es   = eVar <$> propArgs
---     sub  = mkSubst (zip syms es)
+convertExpr (KV{..})      = prop True -- TODO
 convertExpr (Var v)       = eVar v
 convertExpr (UFCheck{..}) =
   let (largs, rargs) = unzip ufArgs
@@ -147,7 +141,7 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
     getIds (BinOp{..})      = helper [expL, expR]
     getIds (Ands es)        = helper es
     getIds (Ite{..})        = helper [cnd, expThen, expElse]
-    getIds (Structure{..}) = S.fromList propArgs
+    getIds (KV{..})         = S.fromList $ uncurry (++) . unzip $ kvSubs
     getIds (Var v)          = S.singleton v
     getIds (UFCheck{..})    = 
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs

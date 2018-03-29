@@ -34,55 +34,56 @@ modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-initial_inv a = Inv { invId     = a^.aId
-                    , invArgs   = args
-                    , invBody   = body
-                    , invParams = makeInvParams a
-                    }
+initial_inv a = Horn { hBody = Boolean True
+                     , hHead = KV { kvId   = a^aId
+                                  , kvSubs = sub1++sub2
+                                  }
+                     }
   where
-    st    = a^.aSt
-    args  = makeInvArgs fmt a
-    body1 = Ands [ BinOp EQU (lvar sntz) (rvar sntz)
-                 | sntz <- st^.sanitize
-                 ]
-    body2 = Ands [ BinOp EQU tv (Number 0)
-                 | s <- st^.ports, tv <- [ltvar, rtvar] <*> [s]
-                 ]
-    body  = Ands [ body1, body2 ]
+    st   = a^aSt
+    sub1 = [ ( lvar' sntz
+             , Var $ rvar' sntz
+             )
+           | sntz <- st^.sanitize
+           ]
+    sub2 = [ ( tv
+             , Number 0
+             )
+           | s <- st^.ports, tv <- [ltvar', rtvar'] <*> [s]
+           ]
     
 
 --------------------------------------------------------------------------------
 tag_reset_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-tag_reset_inv a = Inv { invId     = a^.aId
-                      , invArgs   = args'
-                      , invBody   = body
-                      , invParams = makeInvParams a
-                      }
+tag_reset_inv a = Horn { hBody = KV { kvId   = a^.aId
+                                    , kvSubs = bsubs
+                                    }
+                       , hHead = KV { kvId   = a^.aId
+                                    , kvSubs = hsubs
+                                    }
+                       }
   where
     st    = a^.aSt
+
     args  = makeInvArgs fmt a
     args' = makeInvArgs fmt{primedVar=True} a
+    bsubs = zipWith (\ v v' -> (v', Var v)) args args'
 
-    body = let b1 = Ands [ BinOp EQU tv (Number 1)
-                         | s <- st^.sources
-                         , tv <- [ltvar', rtvar'] <*> [s]
-                         ]
-               b2 = Ands [ BinOp EQU tv (Number 0)
-                         | v <- (st^.ports) \\ (st^.sources)
-                         , tv <- [ltvar', rtvar'] <*> [v]
-                         ]
-               b3 = Ands [ Ands [ BinOp EQU (lvar' p) (lvar p)
-                                , BinOp EQU (rvar' p) (rvar p)
-                                ]
-                         | p <- st^.ports
-                         ]
-           in Ands [ b1, b2, b3
-                   , Structure{ propName   = makeInvPred a
-                              , propArgs   = args
-                              , propParams = makeInvParams a
-                              }
-                   ]
+    hsubs  = hsubs1 ++ hsubs2 ++ hsubs3
+    hsubs1 = concat [ [ (lvar' p, Var $ lvar p)
+                      , (rvar' p, Var $ rvar p)
+                      ]
+                    | p <- st^.ports
+                    ]
+    hsubs2 = [ (tv, Number 1)
+             | s <- st^.sources
+             , tv <- [ltvar', rtvar'] <*> [s]
+             ]
+    hsubs3 = [ (tv, Number 0)
+             | v <- (st^.ports) \\ (st^.sources)
+             , tv <- [ltvar', rtvar'] <*> [v]
+             ]
 
 --------------------------------------------------------------------------------
 next_step_inv :: AlwaysBlock -> Inv 

@@ -37,11 +37,11 @@ getBind (Prop{..}) = getBindsFromExps [propL, propR]
 getBind (Inv{..})  = getBindsFromExp invBody
 
 getBindsFromExp :: Expr -> S ()
-getBindsFromExp (BinOp{..})      = getBindsFromExps [expL, expR]
-getBindsFromExp (Ands es)        = getBindsFromExps es
-getBindsFromExp (Ite{..})        = getBindsFromExps [cnd, expThen, expElse]
-getBindsFromExp (Structure{..})  = getBindsFromExps (Var <$> propArgs)
-getBindsFromExp (Var v)          = do
+getBindsFromExp (BinOp{..}) = getBindsFromExps [expL, expR]
+getBindsFromExp (Ands es)   = getBindsFromExps es
+getBindsFromExp (Ite{..})   = getBindsFromExps [cnd, expThen, expElse]
+getBindsFromExp (KV{..})    = getBindsFromExps (Var <$> uncurry (++) . unzip $ kvSubs)
+getBindsFromExp (Var v)     = do
   has <- uses _2 (M.member v)
   when (not has) $ do
     n' <- use _1; _1 += 1

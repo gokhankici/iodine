@@ -8,13 +8,8 @@ import Verylog.Language.Types
 
 data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
 
-data Inv = Inv  { invId     :: Int
-                , invArgs   :: [Id]
-                , invBody   :: Expr
-                , invParams :: [Id]
-                }
-         | Prop { propL   :: Expr   -- lhs of "the implication"
-                , propR   :: Expr   -- rhs of "the implication"
+data Inv = Horn { hBody :: Expr -- body of the horn clause
+                , hHead :: Expr -- head of the horn clause
                 }
 
 data Expr = BinOp     { bOp   :: BinOp
@@ -26,9 +21,8 @@ data Expr = BinOp     { bOp   :: BinOp
                       , expThen :: Expr
                       , expElse :: Expr
                       }
-          | Structure { propName   :: Id
-                      , propArgs   :: [Id]
-                      , propParams :: [Id]
+          | KV        { kvId   :: Int
+                      , kvSubs :: [(Id,Expr)]
                       }
           | Var       Id
           | Boolean   Bool
