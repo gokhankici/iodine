@@ -31,13 +31,13 @@ type S = State TRSt
 
 data Asgn = BA | NBA  
 
---------------------------------------------------------------------------------
-next :: VarFormat -> AlwaysBlock -> Expr
---------------------------------------------------------------------------------
-next fmt a = Ands es
-  where
-    es = evalState comp initSt
+type Updates = [(Id, Expr)]
 
+--------------------------------------------------------------------------------
+next :: VarFormat -> AlwaysBlock -> (Expr,Updates)
+--------------------------------------------------------------------------------
+next fmt a = evalState comp initSt
+  where
     initSt = TRSt { _trSt    = a^.aSt
                   , _trFmt   = fmt
                   , _trAs    = M.empty
@@ -52,30 +52,30 @@ next fmt a = Ands es
               as  <- use trAs
 
               -- set the primed vars for the lhs of the assignments
-              let es2 = concat [ [ BinOp EQU
-                                   (makeVar fmt{taggedVar=True, primedVar=True} v)
-                                   (makeVar fmt{taggedVar=True, varId=Just n} v)
-                                 , BinOp EQU
-                                   (makeVar fmt{primedVar=True} v)
-                                   (makeVar fmt{varId=Just n} v)
+              let up1 = concat [ [ (,)
+                                   (makeVarName fmt{taggedVar=True, primedVar=True} v)
+                                   (makeVar     fmt{taggedVar=True, varId=Just n} v)
+                                 , (,)
+                                   (makeVarName fmt{primedVar=True} v)
+                                   (makeVar     fmt{varId=Just n} v)
                                  ]
                                | (v,n) <- M.toList as -- blocking assignments
                                ]
 
               -- set the primed vars for the untouched variables
-              let es3 = concat [ [ BinOp EQU
-                                   (makeVar fmt{taggedVar=True, primedVar=True} v)
-                                   (makeVar fmt{taggedVar=True} v) -- vt' = vt
-                                 , BinOp EQU
-                                   (makeVar fmt{primedVar=True} v)
-                                   (makeVar fmt v) -- v' = v
+              let up2 = concat [ [ (,)
+                                   (makeVarName fmt{taggedVar=True, primedVar=True} v)
+                                   (makeVar     fmt{taggedVar=True} v) -- vt' = vt
+                                 , (,)
+                                   (makeVarName fmt{primedVar=True} v)
+                                   (makeVar     fmt v) -- v' = v
                                  ]
                                | v <- ps \\ M.keys as -- not updated variables
                                ]
 
               es <- use errs
               case es of
-                []  -> return (es1 ++ es2 ++ es3)
+                []  -> return (Ands es1, up1 ++ up2)
                 e:_ -> throw e
 
 --------------------------------------------------------------------------------

@@ -15,7 +15,7 @@ import qualified Data.HashSet               as HS
 import qualified Data.HashMap.Strict        as M
 import           Text.Printf
 
-import qualified Language.Fixpoint.Types    as FQ
+import qualified Language.Fixpoint.Types    as FQT
 import           Language.Fixpoint.Types    hiding (Expr(..), KV)
 
 toFqFormat :: FPSt -> GInfo SubC ()
@@ -33,7 +33,7 @@ toFqFormat fpst =
                       , QP (symbol "x") (PatPrefix (symbol pre_x) 1) FInt
                       , QP (symbol "y") (PatPrefix (symbol pre_y) 1) FInt
                       ] 
-                      (FQ.PAtom Eq (eVar "x") (eVar "y"))
+                      (FQT.PAtom Eq (eVar "x") (eVar "y"))
                       (dummyPos "")
                     | (n,(pre_x,pre_y)) <- zip [1..]
                                            [ ("VL_"   , "VR_")
@@ -53,15 +53,12 @@ toFqFormat fpst =
 makeConstraints :: FPSt -> [SubC ()]
 makeConstraints fpst = mc <$> (fpst ^. fpConstraints)
   where
-    mc (Inv{..})  = helper invBody KV{ kvId   = invId
-                                     , kvSubs = [] -- TODO
-                                     }
-    mc (Prop{..}) = helper propL   propR
+    mc (Horn{..})  = helper hBody hHead
     env es        = insertsIBindEnv (getBindIds fpst es) emptyIBindEnv
-    helper el er  = mkSubC
-                    (env [el,er])
-                    (RR FInt (Reft (symbol "v", convertExpr el)))
-                    (RR FInt (Reft (symbol "v", convertExpr er)))
+    helper bdy hd = mkSubC
+                    (env [bdy,hd])
+                    (RR FInt (Reft (symbol "v", convertExpr bdy)))
+                    (RR FInt (Reft (symbol "v", convertExpr hd)))
                     Nothing     -- id
                     []          -- tags
                     ()
@@ -76,29 +73,29 @@ makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
       in wfC
          (insertsIBindEnv ids emptyIBindEnv)
          (RR FInt (Reft ( symbol "v"
-                        , FQ.PKVar (KV $ symbol (makeInvPred a)) (mkSubst [])
+                        , FQT.PKVar (FQT.KV $ symbol (makeInvPred a)) (mkSubst [])
                         )))
          ()
 
-makeBinders   :: M.HashMap Id FQBind -> FQ.BindEnv
+makeBinders   :: M.HashMap Id FQBind -> FQT.BindEnv
 makeBinders m = bindEnvFromList l
   where
     l                 = mkBE <$> M.elems m
     mkBE (FQBind{..}) = ( bindId
-                        , FQ.symbol bindName
-                        , (RR bindType (reft (FQ.symbol "v") bindRef))
+                        , FQT.symbol bindName
+                        , (RR bindType (reft (FQT.symbol "v") bindRef))
                         )
 
-convertExpr :: Expr -> FQ.Expr
+convertExpr :: Expr -> FQT.Expr
 convertExpr (BinOp{..}) =
   case bOp of
-    EQU     -> FQ.PAtom Eq   el er
-    LE      -> FQ.PAtom Le   el er
-    GE      -> FQ.PAtom Ge   el er
-    PLUS    -> FQ.EBin  Plus el er
+    EQU     -> FQT.PAtom Eq   el er
+    LE      -> FQT.PAtom Le   el er
+    GE      -> FQT.PAtom Ge   el er
+    PLUS    -> FQT.EBin  Plus el er
     AND     -> pAnd [el, er]
     OR      -> pOr [el, er]
-    IMPLIES -> FQ.PImp el er
+    IMPLIES -> FQT.PImp el er
   where
     el = convertExpr expL
     er = convertExpr expR
@@ -117,8 +114,8 @@ convertExpr (UFCheck{..}) =
       mkVar          = eVar . idFromExp
       lSel           = mkEApp f (mkVar <$> largs)
       rSel           = mkEApp f (mkVar <$> rargs)
-  in  pAnd [ FQ.PAtom Eq (mkVar l) lSel
-           , FQ.PAtom Eq (mkVar r) rSel
+  in  pAnd [ FQT.PAtom Eq (mkVar l) lSel
+           , FQT.PAtom Eq (mkVar r) rSel
            ]
 convertExpr (Number n)    = expr n
 convertExpr (Boolean b)   = prop b
@@ -141,7 +138,8 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
     getIds (BinOp{..})      = helper [expL, expR]
     getIds (Ands es)        = helper es
     getIds (Ite{..})        = helper [cnd, expThen, expElse]
-    getIds (KV{..})         = S.fromList $ uncurry (++) . unzip $ kvSubs
+    getIds (KV{..})         = let (vs,es) = unzip kvSubs
+                              in S.fromList vs `S.union` helper es
     getIds (Var v)          = S.singleton v
     getIds (UFCheck{..})    = 
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs

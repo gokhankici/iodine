@@ -35,7 +35,7 @@ dependencies:
 library:
   source-dirs:           src
   ghc-options:
-  - -W -Werror
+  - -Wall 
   exposed-modules:
   - Verylog.MainCommon
   - Verylog.FPGen
@@ -54,7 +54,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -W -Werror
+    - -Wall 
     dependencies:
     - verylog-hs
 
@@ -66,6 +66,6 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -W -Werror
+    - -Wall 
     dependencies:
     - verylog-hs

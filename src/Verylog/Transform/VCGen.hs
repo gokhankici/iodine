@@ -3,6 +3,7 @@
 module Verylog.Transform.VCGen ( invs
                                ) where
 
+import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Lazy
 import           Data.List
@@ -35,30 +36,24 @@ modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
 initial_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
 initial_inv a = Horn { hBody = Boolean True
-                     , hHead = KV { kvId   = a^aId
-                                  , kvSubs = sub1++sub2
+                     , hHead = KV { kvId   = a ^. aId
+                                  , kvSubs = sub1 ++ sub2
                                   }
                      }
   where
-    st   = a^aSt
-    sub1 = [ ( lvar' sntz
-             , Var $ rvar' sntz
-             )
-           | sntz <- st^.sanitize
+    st   = a ^. aSt
+    sub1 = [ (n_lvar' sntz, rvar' sntz)
+           | sntz <- st ^. sanitize
            ]
-    sub2 = [ ( tv
-             , Number 0
-             )
-           | s <- st^.ports, tv <- [ltvar', rtvar'] <*> [s]
+    sub2 = [ (tv, Number 0)
+           | s <- st^.ports, tv <- [n_ltvar', n_rtvar'] <*> [s]
            ]
     
 
 --------------------------------------------------------------------------------
 tag_reset_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-tag_reset_inv a = Horn { hBody = KV { kvId   = a^.aId
-                                    , kvSubs = bsubs
-                                    }
+tag_reset_inv a = Horn { hBody = prevKV a
                        , hHead = KV { kvId   = a^.aId
                                     , kvSubs = hsubs
                                     }
@@ -66,43 +61,33 @@ tag_reset_inv a = Horn { hBody = KV { kvId   = a^.aId
   where
     st    = a^.aSt
 
-    args  = makeInvArgs fmt a
-    args' = makeInvArgs fmt{primedVar=True} a
-    bsubs = zipWith (\ v v' -> (v', Var v)) args args'
-
     hsubs  = hsubs1 ++ hsubs2 ++ hsubs3
-    hsubs1 = concat [ [ (lvar' p, Var $ lvar p)
-                      , (rvar' p, Var $ rvar p)
+    hsubs1 = concat [ [ (n_lvar' p, lvar p)
+                      , (n_rvar' p, rvar p)
                       ]
                     | p <- st^.ports
                     ]
     hsubs2 = [ (tv, Number 1)
              | s <- st^.sources
-             , tv <- [ltvar', rtvar'] <*> [s]
+             , tv <- [n_ltvar', n_rtvar'] <*> [s]
              ]
     hsubs3 = [ (tv, Number 0)
              | v <- (st^.ports) \\ (st^.sources)
-             , tv <- [ltvar', rtvar'] <*> [v]
+             , tv <- [n_ltvar', n_rtvar'] <*> [v]
              ]
 
 --------------------------------------------------------------------------------
 next_step_inv :: AlwaysBlock -> Inv 
 --------------------------------------------------------------------------------
-next_step_inv a = Inv { invId     = a^.aId
-                      , invArgs   = args'
-                      , invBody   = body
-                      , invParams = makeInvParams a
-                      }
+next_step_inv a = Horn { hBody = body
+                       , hHead = KV { kvId   = a^.aId
+                                    , kvSubs = ul ++ ur
+                                    }
+                       }
   where
-    args  = makeInvArgs fmt                 a
-    args' = makeInvArgs fmt{primedVar=True} a
-    body  = Ands [ next fmt{leftVar=True} a
-                 , next fmt{rightVar=True} a
-                 , Structure{ propName   = makeInvPred a
-                            , propArgs   = args
-                            , propParams = makeInvParams a
-                            }
-                 ]
+    (nl,ul) = next fmt{leftVar=True}  a
+    (nr,ur) = next fmt{rightVar=True} a
+    body    = Ands [prevKV a, nl, nr]
 
 --------------------------------------------------------------------------------
 non_interference_checks :: [AlwaysBlock] -> [Inv]
@@ -147,57 +132,52 @@ readWriteSet a = evalState (comp (a^.aStmt) >> get) (S.empty, S.empty)
 --------------------------------------------------------------------------------
 non_interference_inv :: AlwaysBlock -> AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-non_interference_inv a1 a2 = Inv { invId     = a2^.aId
-                                 , invArgs   = args2'
-                                 , invBody   = body
-                                 , invParams = makeInvParams a2
-                                 }
+-- when a1 takes a step, a2 still holds
+non_interference_inv a1 a2 = Horn { hBody = body
+                                  , hHead = KV { kvId   = a2 ^. aId
+                                               , kvSubs = updates2_1 ++ updates2_2
+                                               }
+                                  }
   where
-    args1  = makeInvArgs fmt a1
-    args2  = makeInvArgs fmt a2
-    args2' = makeInvArgs fmt{primedVar=True} a2
-    body   = Ands [ next fmt{leftVar=True}  a1
-                  , next fmt{rightVar=True} a1
-                  , Ands [ Ands [ BinOp EQU
-                                  (makeVar fmt{leftVar=True, primedVar=True} v)
-                                  (makeVar fmt{leftVar=True} v)
-                                , BinOp EQU
-                                  (makeVar fmt{rightVar=True, primedVar=True} v)
-                                  (makeVar fmt{rightVar=True} v)
-                                , BinOp EQU
-                                  (makeVar fmt{taggedVar=True, leftVar=True, primedVar=True} v)
-                                  (makeVar fmt{taggedVar=True, leftVar=True} v)
-                                , BinOp EQU
-                                  (makeVar fmt{taggedVar=True, rightVar=True, primedVar=True} v)
-                                  (makeVar fmt{taggedVar=True, rightVar=True} v)
-                                ]
-                         | v <- (a2^.aSt^.ports) \\ (a1^.aSt^.ports)
+    (nl1,ul1) = next fmt{leftVar=True}  a1
+    (nr1,ur1) = next fmt{rightVar=True} a1
+    updates1  = ul1 ++ ur1
+    lukap v   = case lookup v updates1 of
+                  Nothing -> throw $ PassError "cannot find v in updates1"
+                  Just e  -> (v,e)
+    updates2_1  = concat [ [ (n_lvar' v,  lvar v)  -- l' = l
+                           , (n_rvar' v,  rvar v)  -- r' = r
+                           , (n_ltvar' v, ltvar v) -- lt' = lt
+                           , (n_rtvar' v, rtvar v) -- rt' = rt
+                           ]
+                         -- variables not updated by a1 stay the same
+                         | v <- (a2^.aSt^.ports) \\ (a1^.aSt^.ports) 
                          ]
-                  , Structure{ propName   = makeInvPred a1
-                             , propArgs   = args1
-                             , propParams = makeInvParams a1
-                             }
-                  , Structure{ propName   = makeInvPred a2
-                             , propArgs   = args2
-                             , propParams = makeInvParams a2
-                             }
+    updates2_2 = [ lukap v
+                 | p <- (a2^.aSt^.ports) `intersect` (a1^.aSt^.ports) 
+                 , v <- primes p
+                 ]
+    
+    body   = Ands [ prevKV a1
+                  , prevKV a2
+                  , nl1
+                  , nr1
                   ]
 
                      
 provedProperty :: AlwaysBlock -> [Inv]
 provedProperty a =
-  [ Prop { propR = BinOp GE (rtvar s) (Number 1)
-         , propL = Ands [ Structure{ propName   = makeInvPred a
-                                   , propArgs   = args
-                                   , propParams = makeInvParams a
-                                   }
+  [ Horn { hHead = BinOp GE (rtvar s) (Number 1)
+         , hBody = Ands [ KV { kvId   = a ^. aId
+                             , kvSubs = [ (n_rtvar' s, rtvar s)
+                                        , (n_ltvar' s, ltvar s)
+                                        ]
+                             }
                         , BinOp GE (ltvar s) (Number 1)
                         ]
          }
   | s <- a^.aSt^.sinks
   ]
-  where
-    args = makeInvArgs fmt a
 
 -------------------------------------------------------------------------------- 
 -- Helper functions
@@ -211,3 +191,34 @@ lvar'  = makeVar fmt{primedVar=True, leftVar=True}
 rvar'  = makeVar fmt{primedVar=True, rightVar=True}
 ltvar' = makeVar fmt{primedVar=True, taggedVar=True, leftVar=True}
 rtvar' = makeVar fmt{primedVar=True, taggedVar=True, rightVar=True}
+
+n_lvar   = makeVarName fmt{leftVar=True}
+n_rvar   = makeVarName fmt{rightVar=True}
+n_ltvar  = makeVarName fmt{taggedVar=True, leftVar=True}
+n_rtvar  = makeVarName fmt{taggedVar=True, rightVar=True}
+
+n_lvar'  = makeVarName fmt{primedVar=True, leftVar=True}
+n_rvar'  = makeVarName fmt{primedVar=True, rightVar=True}
+n_ltvar' = makeVarName fmt{primedVar=True, taggedVar=True, leftVar=True}
+n_rtvar' = makeVarName fmt{primedVar=True, taggedVar=True, rightVar=True}
+
+-- kv[x' := x][y' := y][...]
+prevKV   :: AlwaysBlock -> Expr
+prevKV a = KV { kvId   = a^.aId
+              , kvSubs = subs
+              } 
+  where
+    args  = makeInvArgs fmt a
+    args' = makeInvArgs fmt{primedVar=True} a
+    subs  = zipWith (\ v v' -> (v', Var v)) args args'
+
+primes :: Id -> [Id]
+primes v = [ makeVarName f v
+           | f <- [ f'{leftVar=True}
+                  , f'{rightVar=True}
+                  , f'{taggedVar=True, leftVar=True}
+                  , f'{taggedVar=True, rightVar=True}
+                  ]
+           ]
+  where
+    f' = fmt{primedVar=True}

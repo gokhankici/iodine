@@ -33,14 +33,15 @@ getBinds is = evalState comp (0, M.empty)
               use _2
 
 getBind            :: Inv -> S ()
-getBind (Prop{..}) = getBindsFromExps [propL, propR]
-getBind (Inv{..})  = getBindsFromExp invBody
+getBind (Horn{..}) = getBindsFromExps [hBody, hHead]
 
 getBindsFromExp :: Expr -> S ()
 getBindsFromExp (BinOp{..}) = getBindsFromExps [expL, expR]
 getBindsFromExp (Ands es)   = getBindsFromExps es
 getBindsFromExp (Ite{..})   = getBindsFromExps [cnd, expThen, expElse]
-getBindsFromExp (KV{..})    = getBindsFromExps (Var <$> uncurry (++) . unzip $ kvSubs)
+getBindsFromExp (KV{..})    = getBindsFromExps (Var <$> vs) >> getBindsFromExps es
+  where
+    (vs,es) = unzip kvSubs
 getBindsFromExp (Var v)     = do
   has <- uses _2 (M.member v)
   when (not has) $ do
