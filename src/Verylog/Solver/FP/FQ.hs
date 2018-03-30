@@ -105,7 +105,11 @@ convertExpr (Ite{..}) = pIte c el er
     c  = convertExpr cnd
     el = convertExpr expThen
     er = convertExpr expElse
-convertExpr (KV{..})      = prop True -- TODO
+convertExpr (KV{..})      = FQT.PKVar
+                            (FQT.KV $ symbol (makeInv kvId))
+                            (mkSubst $ f <$> kvSubs)
+  where
+    f (v,e) = (symbol v, convertExpr e)
 convertExpr (Var v)       = eVar v
 convertExpr (UFCheck{..}) =
   let (largs, rargs) = unzip ufArgs
