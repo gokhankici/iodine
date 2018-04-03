@@ -11,7 +11,7 @@ import qualified Language.Fixpoint.Types  as FQ
 import           Verylog.Language.Types 
 import           Verylog.Solver.Common
 import           Verylog.Solver.FP.Types
--- import           Verylog.Transform.Utils
+import           Verylog.Transform.Utils
 import           Verylog.Transform.VCGen
 
 toFpSt    :: [AlwaysBlock] -> FPSt
@@ -27,10 +27,20 @@ toFpSt as = FPSt { _fpConstraints = cs
 type S = State (Int, BindMap)
 
 getBinds    :: [Inv] -> BindMap
-getBinds is = evalState comp (0, M.empty)
+getBinds is = evalState comp (length constants + 1, m)
   where
     comp = do sequence_ (getBind <$> is)
               use _2
+
+    m = foldr constBind M.empty (zip [1..] constants)
+    constBind (i, (name, val)) =
+      M.insert name FQBind { bindId   = i
+                           , bindName = name
+                           , bindType = FQ.FInt
+                           , bindRef  = FQ.PAtom FQ.Eq
+                                        (FQ.EVar $ FQ.symbol "v")
+                                        (FQ.ECon $ FQ.I val)
+                           }
 
 getBind            :: Inv -> S ()
 getBind (Horn{..}) = getBindsFromExps [hBody, hHead]

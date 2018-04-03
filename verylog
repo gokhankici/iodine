@@ -58,15 +58,13 @@ elif [[ $# -ne 0 ]]; then
     exit 1
 fi
 
-VCGEN_TARGET=${SOLVER[2]:-fp}
+# VCGEN_TARGET=${SOLVER[2]:-fp}
 
-if [[ # "$VCGEN_TARGET" != "hsf" && 
-      # "$VCGEN_TARGET" != "smt" &&
-      "$VCGEN_TARGET" != "fp"
-    ]]; then
-    echo "Invalid vcgen target: '$VCGEN_TARGET'" >&2
-    exit 1
-fi
+# if [["$VCGEN_TARGET" != "fp"]]; then
+#     echo "Invalid vcgen target: '$VCGEN_TARGET'" >&2
+#     exit 1
+# fi
+VCGEN_TARGET='fp'
 
 QARMC_OPTS=${(@)QARMC_OPTS:#--qarmcOpts}
 

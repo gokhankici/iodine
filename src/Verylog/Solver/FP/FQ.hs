@@ -10,6 +10,7 @@ import Verylog.Transform.Utils
 import           Control.Exception
 import           Control.Lens
 import           Control.Monad.Reader
+import qualified Data.List                  as L
 import qualified Data.Set                   as S
 import qualified Data.HashSet               as HS
 import qualified Data.HashMap.Strict        as M
@@ -26,8 +27,8 @@ toFqFormat fpst =
       gConsts     = getUFGlobals fpst
       dConsts     = emptySEnv
       cuts        = KS HS.empty
-      qualifiers  = traceFix "qualifiers" qualifiers'
-      qualifiers' = [ mkQual
+      -- qualifiers  = traceFix "qualifiers" qualifiers'
+      qualifiers  = [ mkQual
                       (symbol (printf "Eq%d" (n::Int) :: String))
                       [ QP (symbol "v") PatNone FInt
                       , QP (symbol "x") (PatPrefix (symbol pre_x) 1) FInt
@@ -121,7 +122,7 @@ convertExpr (UFCheck{..}) =
   in  pAnd [ FQT.PAtom Eq (mkVar l) lSel
            , FQT.PAtom Eq (mkVar r) rSel
            ]
-convertExpr (Number n)    = expr n
+convertExpr (Number n)    = FQT.EVar $ FQT.symbol $ getConstantName n
 convertExpr (Boolean b)   = prop b
 
 getBindIds :: FPSt -> [Expr] -> [Int]
@@ -149,7 +150,7 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs
           (n1,n2)   = ufNames & both %~ idFromExp
       in S.fromList $ n1:n2:as1 ++ as2
-    getIds (Number _)       = S.empty
+    getIds (Number n)       = S.singleton $ getConstantName n
     getIds (Boolean _)      = S.empty
 
 

@@ -98,3 +98,16 @@ makeInvParams a = allArgs fmt'{leftVar=True} st ++ allArgs fmt'{rightVar=True} s
 
 trc         :: Show b => String -> b -> a -> a
 trc msg b a = trace (printf "%s%s" msg (show b)) a
+
+constants :: [(String,Integer)]
+constants = [ ("zero", 0)
+            , ("one",  1)
+            ]
+
+getConstantName :: Int -> String
+getConstantName n =
+  case find ((==) n' . snd) constants of
+    Just (name,_) -> name
+    Nothing       -> throw $ PassError $ printf "constant %d is not defined (should be 0 or 1)" n
+  where
+    n' = toInteger n

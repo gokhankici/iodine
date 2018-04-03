@@ -23,6 +23,7 @@ options =
   , Option [] ["print-finfo"] (NoArg PrintFInfo) "Just vcgen, do not solve"
   ]
 
+parseOpts :: IO (String, Bool, Bool)
 parseOpts = do
   args <- getArgs
   return $
@@ -51,8 +52,8 @@ main  = do
   case () of
     _ | skipSolve -> saveQuery cfg finfo >> exitSuccess
       | prFInfo   -> do
-          finfo <- parseFInfo [fin] :: IO (FInfo ())
-          putStrLn $ show finfo
+          fInfo <- parseFInfo [fin] :: IO (FInfo ())
+          putStrLn $ show fInfo
       | otherwise -> do
           res <- solve cfg finfo
           let statStr = render . resultDoc . fmap fst
@@ -69,5 +70,6 @@ withColor c act
         act
         setSGR [ Reset]
 
+getColor        :: FixResult a -> Color
 getColor (Safe) = Green
 getColor (_)    = Red
