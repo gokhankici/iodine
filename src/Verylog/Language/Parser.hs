@@ -161,7 +161,7 @@ parseTaint = spaceConsumer
                 )
              <* char '.' <* spaceConsumer
   where
-    taintId = ("v_" ++) <$> identifier
+    taintId = identifier -- ("v_" ++) <$> identifier
 
 parseStmt :: Parser ParseStmt  
 parseStmt = rWord "block"      *> parens (PBlock           <$> list parseStmt)
