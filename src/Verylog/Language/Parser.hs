@@ -27,6 +27,7 @@ import           Text.Printf
 import           Verylog.Language.Types
 import           Verylog.Language.Utils
 -- import           Verylog.Transform.Utils
+import Debug.Trace
 
 -----------------------------------------------------------------------------------
 -- | Verylog IR
@@ -289,9 +290,10 @@ instance Exception IRParseError
 -----------------------------------------------------------------------------------
 makeState :: [ParseIR] -> St
 -----------------------------------------------------------------------------------
-makeState (TopModule{..}:taints) = evalState comp emptyParseSt
+makeState topIRs@(TopModule{..}:_) = trace (show (resultState^.sanitize)) resultState
   where
-    comp = do sequence_ $ collectTaint <$> taints -- collect taint information
+    resultState = evalState comp emptyParseSt
+    comp = do sequence_ $ collectTaint <$> topIRs -- collect taint information
               st .= makeIntermediaryIR mPorts mGates mBehaviors mUFs -- create intermediary IR from parse IR
   
               -- update IR state's taint info from parse IR 
@@ -317,7 +319,19 @@ collectTaint :: ParseIR -> State ParseSt ()
 collectTaint (PSource s)     = parseSources  %= S.insert s
 collectTaint (PSink s)       = parseSinks    %= S.insert s
 collectTaint (PSanitize s)   = parseSanitize %= S.insert s
-collectTaint (TopModule{..}) = return ()
+collectTaint (TopModule{..}) = do sequence_ $ sanitizeWire   <$> mPorts
+                                  sequence_ $ sanitizeModule <$> mGates
+                                  return ()
+  where
+    sanitizeWire :: ParsePort -> State ParseSt ()
+    sanitizeWire (PRegister _) = return ()
+    sanitizeWire (PWire s)     = parseSanitize %= S.insert s
+
+    sanitizeModule :: ParseGate -> State ParseSt ()
+    sanitizeModule (PModuleInst{..}) = do sequence_ $ sanitizeWire   <$> pmInstPorts
+                                          sequence_ $ sanitizeModule <$> pmInstGates
+    sanitizeModule (PContAsgn _ _)   = return ()
+    
     
 -----------------------------------------------------------------------------------
 makeIntermediaryIR :: [ParsePort] -> [ParseGate] -> [ParseBehavior] -> [ParseUF] -> St

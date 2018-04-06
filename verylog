@@ -58,15 +58,7 @@ elif [[ $# -ne 0 ]]; then
     exit 1
 fi
 
-# VCGEN_TARGET=${SOLVER[2]:-fp}
-
-# if [["$VCGEN_TARGET" != "fp"]]; then
-#     echo "Invalid vcgen target: '$VCGEN_TARGET'" >&2
-#     exit 1
-# fi
 VCGEN_TARGET='fp'
-
-QARMC_OPTS=${(@)QARMC_OPTS:#--qarmcOpts}
 
 # }}}
 
@@ -77,17 +69,9 @@ PREPROCESSED_FILE=${FILENAME:A:h}/.${FILENAME:t:r}.preproc.v
 
 IR_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.pl
 
-if [[ "$VCGEN_TARGET" == "hsf" ]]; then
-    APP=vcgen-hsf
-    VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.hsf.pl
-elif [[ "$VCGEN_TARGET" == "smt" ]]; then
-    APP=vcgen-smt
-    VCGEN_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.smt2
-elif [[ "$VCGEN_TARGET" == "fp" ]]; then
-    APP=vcgen_fp
-    VCGEN_FILE=${FILENAME:A:h}/.liquid/${IR_FILE:t}.fq
-    FQOUT_FILE=${FILENAME:A:h}/.liquid/${IR_FILE:t}.fqout
-fi
+APP=vcgen_fp
+VCGEN_FILE=${FILENAME:A:h}/.liquid/${IR_FILE:t}.fq
+FQOUT_FILE=${FILENAME:A:h}/.liquid/${IR_FILE:t}.fqout
 
 LOGFILE="$THIS_DIR/.log.$(date +%F-%H-%M-%S)"
 
@@ -98,7 +82,7 @@ CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
 QARMC_DEFAULT_OPTS=-get-model
 
 function vcgen_fp() {
-    vcgen-fp $VC_DEBUG $JUST_VCGEN $@[1]
+    vcgen-fp $JUST_VCGEN $@[1]
 }
 
 # }}}
@@ -116,14 +100,6 @@ if [[ -f "$CONF_FILE" ]]; then
         exit 1
     fi
     
-    QARMC=${HORN_SOLVE_DIR:A}/qarmc5/qarmc
-    
-    if [[ -z "${HORN_SOLVE_DIR}" || ! -x "$QARMC" ]]; then
-        echo "HORN_SOLVE_DIR variable in ${CONF_FILE:t} does not seem right" 1>&2
-        echo "currently it's set to ${HORN_SOLVE_DIR:A}" 1>&2
-        exit 1
-    fi
-
 else
     echo "missing ${CONF_FILE}" 1>&2
     echo "please use the file ${CONF_SKELETON_FILE:t} as a skeleton to create that file" 1>&2
@@ -195,29 +171,7 @@ fi
 # }}}
 
 # Stage 3 : Check Verification Conditions {{{
-if [[ "$VCGEN_TARGET" == "hsf" ]]; then
-    if [[ "$(uname)" == "Darwin" ]]; then
-        $QARMC $QARMC_DEFAULT_OPTS $QARMC_OPTS $VCGEN_FILE
-    else
-        $QARMC $QARMC_DEFAULT_OPTS $QARMC_OPTS $VCGEN_FILE | \
-            awk '{ print $0; } /program is correct/ {correct = 1;} END {if(correct) {exit 0;} else {exit 1;}}'
-    fi
-elif [[ "$VCGEN_TARGET" == "smt" ]]; then
-    if [[ "$(uname)" == "Darwin" ]]; then
-        z3 $VCGEN_FILE 
-    else
-        z3 $VCGEN_FILE  | \
-            awk 'function pr(string) {if (correct) {\
-printf("%s\n", string);\
-} else {\
-printf ("%s%s%s\n", "\033[1;31m", string, "\033[0m ");\
-}} NR==1 { if(match($0,/^sat/)){correct = 1;}} {pr($0);} END {if(correct) {exit 0;} else {exit 1;}}'
-    fi
-elif [[ "$VCGEN_TARGET" == "fp" ]]; then
-    cat $FQOUT_FILE
-fi
-
-last_err=$?
+cat $FQOUT_FILE
 
 echo
 echo '--------------------------------------------------------------------------------'
@@ -227,7 +181,6 @@ echo "IR : ${IR_FILE//$HOME/~}"
 echo "VC : ${VCGEN_FILE//$HOME/~}"
 echo '--------------------------------------------------------------------------------'
 
-exit $last_err
 # }}}
 
 
