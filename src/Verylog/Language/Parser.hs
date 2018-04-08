@@ -290,7 +290,7 @@ instance Exception IRParseError
 -----------------------------------------------------------------------------------
 makeState :: [ParseIR] -> St
 -----------------------------------------------------------------------------------
-makeState topIRs@(TopModule{..}:_) = trace (show (resultState^.sanitize)) resultState
+makeState topIRs@(TopModule{..}:_) = resultState -- trace (show (resultState^.sanitize)) resultState
   where
     resultState = evalState comp emptyParseSt
     comp = do sequence_ $ collectTaint <$> topIRs -- collect taint information
@@ -324,7 +324,7 @@ collectTaint (TopModule{..}) = do sequence_ $ sanitizeWire   <$> mPorts
                                   return ()
   where
     sanitizeWire :: ParsePort -> State ParseSt ()
-    sanitizeWire (PRegister _) = return ()
+    sanitizeWire (PRegister _) = return () -- parseSanitize %= S.insert s
     sanitizeWire (PWire s)     = parseSanitize %= S.insert s
 
     sanitizeModule :: ParseGate -> State ParseSt ()
