@@ -35,7 +35,7 @@ dependencies:
 library:
   source-dirs:           src
   ghc-options:
-  - -Wall 
+  - -Wall -Wno-missing-signatures
   exposed-modules:
   - Verylog.MainCommon
   - Verylog.FPGen

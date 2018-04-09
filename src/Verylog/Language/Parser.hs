@@ -27,7 +27,7 @@ import           Text.Printf
 import           Verylog.Language.Types
 import           Verylog.Language.Utils
 -- import           Verylog.Transform.Utils
-import Debug.Trace
+-- import Debug.Trace
 
 -----------------------------------------------------------------------------------
 -- | Verylog IR
@@ -49,7 +49,8 @@ data ParseUF = PUF String [String]
                deriving (Show)
 
 data ParseGate = PContAsgn String String
-               | PModuleInst { pmInstName      :: String            -- name of the module
+               | PModuleInst { pmModuleName    :: String
+                             , pmInstName      :: String            -- name of the module
                              , pmInstPortNames :: [String]          -- port list (i.e. formal parameters)
                              , pmInstArgs      :: [String]          -- instantiations (i.e. actual parameters)
                              , pmInstPorts     :: [ParsePort]       -- wires or registers used
@@ -59,15 +60,18 @@ data ParseGate = PContAsgn String String
                              }
                deriving (Show)
                          
-data ParseIR = TopModule { mPortNames :: [String]          -- port list (i.e. formal parameters)
-                         , mPorts     :: [ParsePort]       -- wires os registers used
-                         , mGates     :: [ParseGate]       -- assign or module instantiations
-                         , mBehaviors :: [ParseBehavior]   -- always blocks
-                         , mUFs       :: [ParseUF]         -- uninterpreted functions
-                         }
-             | PSource   String
-             | PSink     String
-             | PSanitize String
+data ParseIR = TopModule    { mPortNames :: [String]          -- port list (i.e. formal parameters)
+                            , mPorts     :: [ParsePort]       -- wires os registers used
+                            , mGates     :: [ParseGate]       -- assign or module instantiations
+                            , mBehaviors :: [ParseBehavior]   -- always blocks
+                            , mUFs       :: [ParseUF]         -- uninterpreted functions
+                            }
+             | PSource      String
+             | PSink        String
+             | PSanitize    String
+             | PSanitizeMod { sModuleName :: String
+                            , sVarName    :: String
+                            }
              deriving (Show)
              
 data ParseStmt = PBlock           [ParseStmt]
@@ -135,7 +139,8 @@ parseGate = rWord "asn" *> parens (PContAsgn <$> identifier <*> (comma *> identi
 parseModuleInst :: Parser ParseGate
 parseModuleInst = rWord "module"
                   *> parens (PModuleInst
-                              <$> identifier
+                              <$> identifier -- module name
+                              <*> identifier -- instantiation name
                               <*> (comma *> list identifier)
                               <*> (comma *> list identifier)
                               <*> (comma *> list parsePort)
@@ -159,6 +164,7 @@ parseTaint = spaceConsumer
              *> ( rWord "taint_source" *> parens (PSource <$> taintId)
                   <|> rWord "taint_sink" *> parens (PSink <$> taintId)
                   <|> rWord "sanitize" *> parens (PSanitize <$> taintId)
+                  <|> rWord "sanitize_mod" *> parens (PSanitizeMod <$> identifier <*> taintId)
                 )
              <* char '.' <* spaceConsumer
   where
@@ -331,8 +337,8 @@ collectTaint (TopModule{..}) = do sequence_ $ sanitizeWire   <$> mPorts
     sanitizeModule (PModuleInst{..}) = do sequence_ $ sanitizeWire   <$> pmInstPorts
                                           sequence_ $ sanitizeModule <$> pmInstGates
     sanitizeModule (PContAsgn _ _)   = return ()
-    
-    
+collectTaint(PSanitizeMod{..}) = return () -- TODO: sanitize variable of every instantiation
+
 -----------------------------------------------------------------------------------
 makeIntermediaryIR :: [ParsePort] -> [ParseGate] -> [ParseBehavior] -> [ParseUF] -> St
 -----------------------------------------------------------------------------------
@@ -403,7 +409,7 @@ collectUF (PUF v args) = st . ufs %= M.insert v args
 -----------------------------------------------------------------------------------
 updateTaintInfo :: St -> St
 -----------------------------------------------------------------------------------
-updateTaintInfo st = over irs mapIRs st
+updateTaintInfo st' = over irs mapIRs st'
   where
     mapIRs :: [IR] -> [IR]
     mapIRs = map mapIR
@@ -413,9 +419,9 @@ updateTaintInfo st = over irs mapIRs st
     mapIR ir@(ModuleInst{..}) = ir { modInstSt = fixSt modInstSt }
 
     fixSt :: St -> St 
-    fixSt = set sources  (st^.sources) .
-            set sinks    (st^.sinks) .
-            set sanitize (st^.sanitize) .
+    fixSt = set sources  (st'^.sources) .
+            set sinks    (st'^.sinks) .
+            set sanitize (st'^.sanitize) .
             over irs mapIRs
         
   
