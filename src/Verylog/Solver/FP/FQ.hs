@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Verylog.Solver.FP.FQ ( toFqFormat ) where
+module Verylog.Solver.FP.FQ ( toFqFormat
+                            ) where
 
 import Verylog.Solver.Common
 import Verylog.Solver.FP.Types
@@ -21,7 +22,7 @@ import           Language.Fixpoint.Types    hiding (Expr(..), KV)
 
 import qualified Text.PrettyPrint.HughesPJ as PP
 
-import Debug.Trace  
+-- import Debug.Trace  
 
 type Metadata = HornId
 

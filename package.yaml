@@ -45,6 +45,7 @@ library:
   - Verylog.Transform.TransitionRelation
   - Verylog.Transform.Utils
   - Verylog.Transform.VCGen
+  - Verylog.Solver.Common
   - Verylog.Solver.FP.Types
 
 executables:

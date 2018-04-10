@@ -13,5 +13,5 @@ pipeline f = parse f >>> modularize >>> sanityCheck >>> toFpSt
 fpgen f = do
   s <- readFile f
   let fpst = pipeline f s 
-  return $ toFqFormat fpst
+  return (fpst, toFqFormat fpst)
   

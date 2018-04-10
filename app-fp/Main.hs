@@ -1,17 +1,27 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
 import Verylog.FPGen
+import Verylog.Solver.FP.Types
+import Verylog.Solver.Common
+import Verylog.Language.Types
 
 import Language.Fixpoint.Solver
 import Language.Fixpoint.Types
 import Language.Fixpoint.Types.Config
 
-import System.Console.ANSI
-import System.Console.GetOpt
-import System.Environment (getArgs)
-import System.Exit
-import Text.PrettyPrint
+import qualified Data.Set        as S
+import qualified Data.Map.Strict as M
+import           Data.List
+import           Data.Maybe
+import           Control.Lens
+import           System.Console.ANSI
+import           System.Console.GetOpt
+import           System.Environment (getArgs)
+import           System.Exit
+import           Text.PrettyPrint
+import           Text.Printf
 
 data Flag = VCGen
           | PrintFInfo
@@ -43,7 +53,7 @@ main :: IO ()
 main  = do
   (fin, fout, skipSolve, prFInfo) <- parseOpts
 
-  finfo <- fpgen fin
+  (fpst, finfo) <- fpgen fin
   let cfg = defConfig{ eliminate = Some
                      , save      = True
                      , srcFile   = fin
@@ -61,7 +71,28 @@ main  = do
           let statStr = render . resultDoc . fmap fst
           let stat = resStatus res
           colorStrLn (getColor stat) (statStr stat)
-          exitWith (resultExit $ resStatus res)
+          printResult fpst res
+          exitWith (resultExit stat)
+
+printResult :: FPSt -> Result (Integer, HornId) -> IO ()
+printResult fpst (Result{..}) =
+  case resStatus of
+    Unsafe ids -> do
+      let m        = errMap ids
+          findAB i = fromJust $ find (\a -> (a^.aId) == i) (fpst ^. fpABs)
+      sequence_ $ (flip map) (M.assocs m) $ \(aid, cids) -> do
+        printf "Failed constraint ids: %s\n" (show $ S.toList cids)
+        print $ findAB aid
+    _          -> return ()
+  where
+    errMap ids = foldr (\(i,hid) m -> foldr (\a m' -> M.alter (altr i) a m') m (aIds hid)) M.empty ids
+
+    aIds (SingleBlock a)           = [a]
+    aIds (InterferenceBlock a2 a1) = [a2,a1]
+
+    altr i Nothing  = Just $ S.singleton i
+    altr i (Just s) = Just $ S.insert i s
+                     
 
 colorStrLn   :: Color -> String -> IO ()
 colorStrLn c = withColor c . putStrLn
