@@ -14,22 +14,27 @@ import           Verylog.Solver.FP.Types
 import           Verylog.Transform.Utils
 import           Verylog.Transform.VCGen
 
+-- import Debug.Trace
+
 toFpSt    :: [AlwaysBlock] -> FPSt
 toFpSt as = FPSt { _fpConstraints = cs
                  , _fpABs         = as
-                 , _fpBinds       = getBinds cs
+                 , _fpBinds       = bs -- trace (show $ M.keys bs) bs
                  , _fpUFs         = M.unions $ (M.map length) . (view (aSt . ufs)) <$> as
                  }
   where
     cs   = invs as
+    bs   = getBinds as cs
 
 
 type S = State (Int, BindMap)
 
-getBinds    :: [Inv] -> BindMap
-getBinds is = evalState comp (length constants + 1, m)
+getBinds       :: [AlwaysBlock] -> [Inv] -> BindMap
+getBinds as cs = evalState comp (length constants + 1, m)
   where
-    comp = do sequence_ (getBind <$> is)
+    comp = do sequence_ (getBind <$> cs)
+              let is = (makeInvArgs fmt <$> as) ++ (makeInvArgs fmt{primedVar=True} <$> as)
+              getBindsFromExps $ map Var $ concat is
               use _2
 
     m = foldr constBind M.empty (zip [1..] constants)
@@ -53,8 +58,8 @@ getBindsFromExp (KV{..})    = getBindsFromExps (Var <$> vs) >> getBindsFromExps 
   where
     (vs,es) = unzip kvSubs
 getBindsFromExp (Var v)     = do
-  has <- uses _2 (M.member v)
-  when (not has) $ do
+  bindingExists <- uses _2 (M.member v)
+  when (not bindingExists) $ do
     n' <- use _1; _1 += 1
     _2 %= M.insert v (FQBind { bindId   = n'
                              , bindName = v

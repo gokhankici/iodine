@@ -12,6 +12,7 @@ fi
 
 zparseopts -D -E -- \
            -ir=JUST_IR -vcgen=JUST_VCGEN \
+           -print-finfo=FINFO \
            -debug=VC_DEBUG \
            -qarmcOpts+:=QARMC_OPTS \
            -solver:=SOLVER \
@@ -29,6 +30,8 @@ verylog options:
       Just generate the file that will be fed to qarmc and print it
   --debug
       Run vcgen but do not print the resulting Horn Clauses
+  --print-finfo
+      Print finfo
   --emacs
       Opens the output (IR or VC) in emacs
   --qarmcOpts <option>
@@ -82,7 +85,7 @@ CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
 QARMC_DEFAULT_OPTS=-get-model
 
 function vcgen_fp() {
-    vcgen-fp $JUST_VCGEN $@[1]
+    vcgen-fp $FINFO $JUST_VCGEN $@
 }
 
 # }}}

@@ -10,7 +10,7 @@ import Verylog.Transform.Utils
 import           Control.Exception
 import           Control.Lens
 import           Control.Monad.Reader
-import qualified Data.List                  as L
+-- import qualified Data.List                  as L
 import qualified Data.Set                   as S
 import qualified Data.HashSet               as HS
 import qualified Data.HashMap.Strict        as M
@@ -19,7 +19,22 @@ import           Text.Printf
 import qualified Language.Fixpoint.Types    as FQT
 import           Language.Fixpoint.Types    hiding (Expr(..), KV)
 
-toFqFormat :: FPSt -> GInfo SubC ()
+import qualified Text.PrettyPrint.HughesPJ as PP
+
+import Debug.Trace  
+
+type Metadata = HornId
+
+instance Loc HornId where
+  srcSpan _ = dummySpan
+
+instance Fixpoint HornId where
+  toFix (SingleBlock n)           = PP.text "always block id:"
+                                    PP.<+> PP.int n
+  toFix (InterferenceBlock n1 n2) = PP.text "interference of always blocks: "
+                                    PP.<+> PP.parens (PP.int n1 PP.<> PP.comma PP.<+> PP.int n2)
+
+toFqFormat :: FPSt -> GInfo SubC Metadata
 toFqFormat fpst =
   let cns         = makeConstraints   fpst
       wfs         = makeWFConstraints fpst
@@ -51,32 +66,34 @@ toFqFormat fpst =
       dataDecls   = []
   in  fi cns wfs binders gConsts dConsts cuts qualifiers bindMds highOrBinds highOrQuals assrts axiomEnv dataDecls 
 
-makeConstraints :: FPSt -> [SubC ()]
-makeConstraints fpst = mc <$> (fpst ^. fpConstraints)
+makeConstraints :: FPSt -> [SubC Metadata]
+makeConstraints fpst = mc <$> zip [0..] (fpst ^. fpConstraints)
   where
-    mc (Horn{..})  = helper hBody hHead
+    mc (n, (Horn{..})) = helper hBody hHead n hId
     env es        = insertsIBindEnv (getBindIds fpst es) emptyIBindEnv
-    helper bdy hd = mkSubC
-                    (env [bdy,hd])
-                    (RR FInt (Reft (symbol "v", convertExpr bdy)))
-                    (RR FInt (Reft (symbol "v", convertExpr hd)))
-                    Nothing     -- id
-                    []          -- tags
-                    ()
+    helper bdy hd n hId =
+      let x = mkSubC
+              (env [bdy,hd])
+              (RR FInt (Reft (symbol "v", convertExpr bdy)))
+              (RR FInt (Reft (symbol "v", convertExpr hd)))
+              (Just n)          -- id
+              []                -- tags
+              hId               -- metadata
+      in x -- trace (show x) x
 
-makeWFConstraints :: FPSt -> [WfC ()]
+makeWFConstraints :: FPSt -> [WfC Metadata]
 makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
   where
     mwf a@(AB{..}) =
-      let allArgs = makeInvArgs fmt a
-                    ++ makeInvArgs fmt{primedVar=True} a
-          ids = getBindIds fpst (Var <$> allArgs)
+      let allAs = makeInvArgs fmt a
+                  ++ makeInvArgs fmt{primedVar=True} a
+          ids = getBindIds fpst (Var <$> allAs)
       in wfC
          (insertsIBindEnv ids emptyIBindEnv)
          (RR FInt (Reft ( symbol "v"
                         , FQT.PKVar (FQT.KV $ symbol (makeInvPred a)) (mkSubst [])
                         )))
-         ()
+         (SingleBlock $ a ^. aId)
 
 makeBinders   :: M.HashMap Id FQBind -> FQT.BindEnv
 makeBinders m = bindEnvFromList l
@@ -132,19 +149,19 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
     idSet = foldr (\e s -> s `S.union` getIds e ) S.empty es
 
     getBindId   :: Id -> Reader FPSt Int
-    getBindId v = views fpBinds (bindId . (M.lookupDefault (err v) v))
+    getBindId v = views fpBinds (bindId . (M.lookupDefault (errMsg v) v))
 
-    err v = throw $ PassError $ printf "cannot find %s in binders" v
+    errMsg v = throw $ PassError $ printf "cannot find %s in binders" v
 
-    helper []     = S.empty
-    helper (e:es) = foldr (\e s -> getIds e `S.union` s) (getIds e) es
+    helper []      = S.empty
+    helper (e:es') = foldr (\e' s -> getIds e' `S.union` s) (getIds e) es'
 
     getIds :: Expr -> S.Set Id
     getIds (BinOp{..})      = helper [expL, expR]
-    getIds (Ands es)        = helper es
+    getIds (Ands es')       = helper es'
     getIds (Ite{..})        = helper [cnd, expThen, expElse]
-    getIds (KV{..})         = let (vs,es) = unzip kvSubs
-                              in S.fromList vs `S.union` helper es
+    getIds (KV{..})         = let (vs,es') = unzip kvSubs
+                              in S.fromList vs `S.union` helper es'
     getIds (Var v)          = S.singleton v
     getIds (UFCheck{..})    = 
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs

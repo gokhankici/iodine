@@ -85,18 +85,20 @@ data ParseStmt = PBlock           [ParseStmt]
                | PSkip
                deriving (Show)
 
-data ParseSt = ParseSt { _parseSources :: S.HashSet Id
-                       , _parseSinks   :: S.HashSet Id
-                       , _parsePorts   :: S.HashSet Id
-                       , _parseSanitize :: S.HashSet Id
-                       , _st           :: St
+data ParseSt = ParseSt { _parseSources     :: S.HashSet Id
+                       , _parseSinks       :: S.HashSet Id
+                       , _parsePorts       :: S.HashSet Id
+                       , _parseSanitize    :: S.HashSet Id
+                       , _parseModSanitize :: M.HashMap Id (S.HashSet Id)
+                       , _st               :: St
                        }
 
-emptyParseSt = ParseSt { _parseSources = S.empty
-                       , _parseSinks   = S.empty
-                       , _parsePorts   = S.empty
-                       , _parseSanitize = S.empty
-                       , _st           = emptySt
+emptyParseSt = ParseSt { _parseSources     = S.empty
+                       , _parseSinks       = S.empty
+                       , _parsePorts       = S.empty
+                       , _parseSanitize    = S.empty
+                       , _parseModSanitize = M.empty
+                       , _st               = emptySt
                        }
 
 makeLenses ''ParseSt
@@ -139,8 +141,8 @@ parseGate = rWord "asn" *> parens (PContAsgn <$> identifier <*> (comma *> identi
 parseModuleInst :: Parser ParseGate
 parseModuleInst = rWord "module"
                   *> parens (PModuleInst
-                              <$> identifier -- module name
-                              <*> identifier -- instantiation name
+                              <$> identifier            -- module name
+                              <*> (comma *> identifier) -- instantiation name
                               <*> (comma *> list identifier)
                               <*> (comma *> list identifier)
                               <*> (comma *> list parsePort)
@@ -163,8 +165,8 @@ parseTaint :: Parser ParseIR
 parseTaint = spaceConsumer
              *> ( rWord "taint_source" *> parens (PSource <$> taintId)
                   <|> rWord "taint_sink" *> parens (PSink <$> taintId)
+                  <|> rWord "sanitize_mod" *> parens (PSanitizeMod <$> identifier <*> (comma *> taintId))
                   <|> rWord "sanitize" *> parens (PSanitize <$> taintId)
-                  <|> rWord "sanitize_mod" *> parens (PSanitizeMod <$> identifier <*> taintId)
                 )
              <* char '.' <* spaceConsumer
   where
@@ -227,6 +229,7 @@ keywords :: [String]
 keywords =
   [ "register", "wire", "always", "link", "asn", "taint_source", "taint_sink"
   , "block", "b_asn", "nb_asn", "ite", "skip", "module", "topmodule"
+  , "sanitize", "sanitize_mod"
   ]
 
 -- | `identifier` parses identifiers: lower-case alphabets followed by alphas or digits
@@ -310,6 +313,8 @@ makeState topIRs@(TopModule{..}:_) = resultState -- trace (show (resultState^.sa
               -- and copy it to the instantiated modules
               st %= updateTaintInfo 
 
+              sanitizeInsts mGates
+
               -- make sure we have at least one source and a sink
               let f = (== 0) . length
               noTaint <- liftM2 (||) (uses (st.sinks) f) (uses (st.sources) f)
@@ -330,14 +335,38 @@ collectTaint (TopModule{..}) = do sequence_ $ sanitizeWire   <$> mPorts
                                   return ()
   where
     sanitizeWire :: ParsePort -> State ParseSt ()
-    sanitizeWire (PRegister _) = return () -- parseSanitize %= S.insert s
+    sanitizeWire (PRegister _) = return ()
     sanitizeWire (PWire s)     = parseSanitize %= S.insert s
 
     sanitizeModule :: ParseGate -> State ParseSt ()
     sanitizeModule (PModuleInst{..}) = do sequence_ $ sanitizeWire   <$> pmInstPorts
                                           sequence_ $ sanitizeModule <$> pmInstGates
     sanitizeModule (PContAsgn _ _)   = return ()
-collectTaint(PSanitizeMod{..}) = return () -- TODO: sanitize variable of every instantiation
+collectTaint(PSanitizeMod{..}) = parseModSanitize %= M.alter altr sModuleName 
+  where
+    altr Nothing  = Just $ S.singleton sVarName
+    altr (Just s) = Just $ S.insert sVarName s
+
+-----------------------------------------------------------------------------------
+sanitizeInsts :: [ParseGate] -> State ParseSt ()
+-----------------------------------------------------------------------------------
+sanitizeInsts gates = sequence_ $ sanitizeInst <$> gates
+  where
+    sanitizeInst                   :: ParseGate -> State ParseSt ()
+    sanitizeInst (PContAsgn _ _)   = return ()
+    sanitizeInst (PModuleInst{..}) = do
+      vars <- uses parseModSanitize (M.lookup pmModuleName)
+      case vars of
+        Nothing -> return ()
+        Just vs -> sequence_ $
+                   (\v -> parseSanitize %= S.insert (mk_mod_var pmInstName v))
+                   <$> S.toList vs
+      sanitizeInsts pmInstGates
+        where
+          mk_mod_var m v =
+            case Li.elemIndex v pmInstPortNames of
+              Just i  -> pmInstArgs !! i
+              Nothing -> printf "%s_%s" m v
 
 -----------------------------------------------------------------------------------
 makeIntermediaryIR :: [ParsePort] -> [ParseGate] -> [ParseBehavior] -> [ParseUF] -> St

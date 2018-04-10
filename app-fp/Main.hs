@@ -23,16 +23,16 @@ options =
   , Option [] ["print-finfo"] (NoArg PrintFInfo) "Just vcgen, do not solve"
   ]
 
-parseOpts :: IO (String, Bool, Bool)
+parseOpts :: IO (FilePath, FilePath, Bool, Bool)
 parseOpts = do
   args <- getArgs
   return $
     case getOpt Permute options args of
       (opts,rest,[]) ->
-        let [fin]   = rest
-            skip    = VCGen `elem` opts
-            prfinfo = PrintFInfo`elem` opts
-        in  (fin, skip, prfinfo)
+        let [fin, fout] = rest
+            skip        = VCGen `elem` opts
+            prfinfo     = PrintFInfo`elem` opts
+        in  (fin, fout, skip, prfinfo)
       (_,_,errs) ->
         error (concat errs ++ usageInfo header options)
         where
@@ -41,19 +41,21 @@ parseOpts = do
 
 main :: IO ()
 main  = do
-  (fin, skipSolve, prFInfo) <- parseOpts
+  (fin, fout, skipSolve, prFInfo) <- parseOpts
 
   finfo <- fpgen fin
   let cfg = defConfig{ eliminate = Some
                      , save      = True
                      , srcFile   = fin
+                     , metadata  = True
                      } 
 
   case () of
     _ | skipSolve -> saveQuery cfg finfo >> exitSuccess
       | prFInfo   -> do
-          fInfo <- parseFInfo [fin] :: IO (FInfo ())
+          fInfo <- parseFInfo [fout] :: IO (FInfo ())
           putStrLn $ show fInfo
+          exitSuccess
       | otherwise -> do
           res <- solve cfg finfo
           let statStr = render . resultDoc . fmap fst

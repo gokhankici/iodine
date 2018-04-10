@@ -22,6 +22,7 @@ data VarFormat = VarFormat { taggedVar   :: Bool
                            }
                  deriving (Show)
 
+fmt :: VarFormat
 fmt = VarFormat { taggedVar   = False
                 , primedVar   = False
                 , leftVar     = False
@@ -33,13 +34,14 @@ fmt = VarFormat { taggedVar   = False
 
 -- set this variable to True if you want to "simplify" the variables
 -- inside the HSF file
+debugSimple :: Bool
 debugSimple = False
 
 makeVar :: VarFormat -> Id -> Expr
-makeVar fmt v = Var (makeVarName fmt v)
+makeVar f v = Var (makeVarName f v)
 
 makeVarName :: VarFormat -> Id -> Id
-makeVarName fmt@(VarFormat{..}) v =
+makeVarName f@(VarFormat{..}) v =
   if   debugSimple
   then let v' = if isPrefixOf "v_" v
                 then case drop 2 v of
@@ -68,7 +70,7 @@ makeVarName fmt@(VarFormat{..}) v =
 
     vid   = maybe "" show varId
 
-    pos   | (leftVar && rightVar) = throw (PassError $ "Both left & right requested from makeVarName for " ++ v ++ " " ++ show fmt)
+    pos   | (leftVar && rightVar) = throw (PassError $ "Both left & right requested from makeVarName for " ++ v ++ " " ++ show f)
           | debugSimple && leftVar   = "l"
           | debugSimple && rightVar  = "r"
           | leftVar   = "L"
@@ -76,17 +78,14 @@ makeVarName fmt@(VarFormat{..}) v =
           | otherwise = ""
 
 allArgs        :: VarFormat -> St -> [Id]
-allArgs fmt st = let ps = st^.ports
-                 in (makeVarName fmt                    <$> ps)
-                    ++ (makeVarName fmt{taggedVar=True} <$> ps)
-
-
+allArgs f st = let ps = st^.ports
+                 in (makeVarName f <$> ps) ++ (makeVarName f{taggedVar=True} <$> ps)
           
 nextArgs        :: VarFormat -> St -> [Id]
-nextArgs fmt st = allArgs fmt st ++ allArgs fmt{primedVar=True} st
+nextArgs f st = allArgs f st ++ allArgs f{primedVar=True} st
 
 makeInvArgs        :: VarFormat -> AlwaysBlock -> [Id]
-makeInvArgs fmt a = allArgs fmt{leftVar=True} st ++ allArgs fmt{rightVar=True} st
+makeInvArgs f a = allArgs f{leftVar=True} st ++ allArgs f{rightVar=True} st
   where
     st = a^.aSt
 

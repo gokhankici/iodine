@@ -31,11 +31,12 @@ dependencies:
 - unordered-containers
 - ansi-terminal
 - liquid-fixpoint
+- deepseq
 
 library:
   source-dirs:           src
   ghc-options:
-  - -Wall -Wno-missing-signatures
+  - -Wall -Wno-missing-signatures -Wno-orphans
   exposed-modules:
   - Verylog.MainCommon
   - Verylog.FPGen

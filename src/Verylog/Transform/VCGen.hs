@@ -35,10 +35,11 @@ modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-initial_inv a = Horn { hBody = Boolean True
+initial_inv a = Horn { hBody = Boolean True --prevKV a
                      , hHead = KV { kvId   = a ^. aId
                                   , kvSubs = sub1 ++ sub2
                                   }
+                     , hId   = SingleBlock (a ^. aId)
                      }
   where
     st   = a ^. aSt
@@ -57,6 +58,7 @@ tag_reset_inv a = Horn { hBody = prevKV a
                        , hHead = KV { kvId   = a^.aId
                                     , kvSubs = hsubs
                                     }
+                       , hId   = SingleBlock (a ^. aId)
                        }
   where
     st    = a^.aSt
@@ -83,6 +85,7 @@ next_step_inv a = Horn { hBody = body
                        , hHead = KV { kvId   = a^.aId
                                     , kvSubs = ul ++ ur
                                     }
+                       , hId   = SingleBlock (a ^. aId)
                        }
   where
     (nl,ul) = next fmt{leftVar=True}  a
@@ -98,7 +101,7 @@ non_interference_checks as = non_int_chk as [] []
     notDistinct s1 s2 = not . null $ S.intersection s1 s2  
 
     non_int_chk []     _checked cs = cs
-    non_int_chk (a1:as) checked cs =
+    non_int_chk (a1:a1s) checked cs =
       let f (rw2, a2) cs_prev = if   interfere rw1 rw2
                                 then (non_interference_inv a1 a2)
                                      : (non_interference_inv a2 a1)
@@ -106,7 +109,7 @@ non_interference_checks as = non_int_chk as [] []
                                 else cs_prev
           cs'                 = foldr f cs checked
           rw1                 = readWriteSet a1
-      in non_int_chk as ((rw1, a1):checked) cs'
+      in non_int_chk a1s ((rw1, a1):checked) cs'
 
 type RWSet = (S.HashSet Id, S.HashSet Id)
 
@@ -137,6 +140,7 @@ non_interference_inv a1 a2 = Horn { hBody = body
                                   , hHead = KV { kvId   = a2 ^. aId
                                                , kvSubs = updates2_1 ++ updates2_2
                                                }
+                                  , hId   = InterferenceBlock (a2 ^. aId) (a1 ^. aId)
                                   }
   where
     (nl1,ul1) = next fmt{leftVar=True}  a1
@@ -175,6 +179,7 @@ provedProperty a =
                              }
                         , BinOp GE (ltvar s) (Number 1)
                         ]
+         , hId   = SingleBlock (a ^. aId)
          }
   | s <- a^.aSt^.sinks
   ]
@@ -182,21 +187,23 @@ provedProperty a =
 -------------------------------------------------------------------------------- 
 -- Helper functions
 -------------------------------------------------------------------------------- 
+lvar, rvar, ltvar, rtvar, rvar' :: Id -> Expr
 lvar  = makeVar fmt{leftVar=True}
 rvar  = makeVar fmt{rightVar=True}
 ltvar = makeVar fmt{taggedVar=True, leftVar=True}
 rtvar = makeVar fmt{taggedVar=True, rightVar=True}
 
-lvar'  = makeVar fmt{primedVar=True, leftVar=True}
 rvar'  = makeVar fmt{primedVar=True, rightVar=True}
-ltvar' = makeVar fmt{primedVar=True, taggedVar=True, leftVar=True}
-rtvar' = makeVar fmt{primedVar=True, taggedVar=True, rightVar=True}
+-- lvar'  = makeVar fmt{primedVar=True, leftVar=True}
+-- ltvar' = makeVar fmt{primedVar=True, taggedVar=True, leftVar=True}
+-- rtvar' = makeVar fmt{primedVar=True, taggedVar=True, rightVar=True}
 
-n_lvar   = makeVarName fmt{leftVar=True}
-n_rvar   = makeVarName fmt{rightVar=True}
-n_ltvar  = makeVarName fmt{taggedVar=True, leftVar=True}
-n_rtvar  = makeVarName fmt{taggedVar=True, rightVar=True}
+-- n_lvar   = makeVarName fmt{leftVar=True}
+-- n_rvar   = makeVarName fmt{rightVar=True}
+-- n_ltvar  = makeVarName fmt{taggedVar=True, leftVar=True}
+-- n_rtvar  = makeVarName fmt{taggedVar=True, rightVar=True}
 
+n_lvar', n_rvar', n_ltvar', n_rtvar' :: Id -> Id
 n_lvar'  = makeVarName fmt{primedVar=True, leftVar=True}
 n_rvar'  = makeVarName fmt{primedVar=True, rightVar=True}
 n_ltvar' = makeVarName fmt{primedVar=True, taggedVar=True, leftVar=True}
