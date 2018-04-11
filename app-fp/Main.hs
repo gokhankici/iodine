@@ -81,18 +81,21 @@ printResult fpst (Result{..}) =
       let m        = errMap ids
           findAB i = fromJust $ find (\a -> (a^.aId) == i) (fpst ^. fpABs)
       sequence_ $ (flip map) (M.assocs m) $ \(aid, cids) -> do
-        printf "Failed constraint ids: %s\n" (show $ S.toList cids)
+        withColor Blue $ printf "Failed constraint ids: %s\n" (show $ S.toList cids)
         print $ findAB aid
     _          -> return ()
   where
-    errMap ids = foldr (\(i,hid) m -> foldr (\a m' -> M.alter (altr i) a m') m (aIds hid)) M.empty ids
+    errMap cids = foldr (\(cid,hid) m ->
+                           foldr (\(a_id, inv_type) m' ->
+                                     M.alter (altr cid inv_type) a_id m'
+                                 ) m (aIds hid)
+                        ) M.empty cids
 
-    aIds (SingleBlock a)           = [a]
-    aIds (InterferenceBlock a2 a1) = [a2,a1]
+    aIds (HornId a2 t@(InvInter a1)) = [(a1, InvInter a2), (a2, t)]
+    aIds (HornId a t)                = [(a,t)]
 
-    altr i Nothing  = Just $ S.singleton i
-    altr i (Just s) = Just $ S.insert i s
-                     
+    altr cid t Nothing  = Just $ S.singleton (cid, t)
+    altr cid t (Just s) = Just $ S.insert (cid, t) s
 
 colorStrLn   :: Color -> String -> IO ()
 colorStrLn c = withColor c . putStrLn

@@ -303,7 +303,8 @@ makeState topIRs@(TopModule{..}:_) = resultState -- trace (show (resultState^.sa
   where
     resultState = evalState comp emptyParseSt
     comp = do sequence_ $ collectTaint <$> topIRs -- collect taint information
-              st .= makeIntermediaryIR mPorts mGates mBehaviors mUFs -- create intermediary IR from parse IR
+              let loc = ("TOPLEVEL", "TOPLEVEL")
+              st .= makeIntermediaryIR loc mPorts mGates mBehaviors mUFs -- create intermediary IR from parse IR
   
               -- update IR state's taint info from parse IR 
               st . sources  <~ uses parseSources  S.toList
@@ -368,14 +369,15 @@ sanitizeInsts gates = sequence_ $ sanitizeInst <$> gates
               Just i  -> pmInstArgs !! i
               Nothing -> printf "%s_%s" m v
 
+type Loc = (String, String)
 -----------------------------------------------------------------------------------
-makeIntermediaryIR :: [ParsePort] -> [ParseGate] -> [ParseBehavior] -> [ParseUF] -> St
+makeIntermediaryIR :: Loc -> [ParsePort] -> [ParseGate] -> [ParseBehavior] -> [ParseUF] -> St
 -----------------------------------------------------------------------------------
-makeIntermediaryIR prts gates bhvs us = evalState comp emptyParseSt
+makeIntermediaryIR loc prts gates bhvs us = evalState comp emptyParseSt
   where
     comp = do sequence_ (collectPort <$> prts)
-              sequence_ (collectGate <$> reverse gates)
-              sequence_ (collectBhv  <$> reverse bhvs)
+              sequence_ (collectGate loc <$> reverse gates)
+              sequence_ (collectBhv  loc <$> reverse bhvs)
               sequence_ (collectUF   <$> reverse us)
               st . ports <~ uses parsePorts S.toList
               st . ufs   %= flattenUFs
@@ -398,21 +400,22 @@ collectPort :: ParsePort -> State ParseSt ()
 collectPort p = parsePorts %= S.insert (parsePortName p)
 
 -----------------------------------------------------------------------------------
-collectGate :: ParseGate -> State ParseSt ()
+collectGate :: Loc -> ParseGate -> State ParseSt ()
 -----------------------------------------------------------------------------------
-collectGate (PContAsgn l r)   = st . irs %= (:) (Always Star (BlockingAsgn l r))
-collectGate (PModuleInst{..}) =
+collectGate loc  (PContAsgn l r)   = st . irs %= (:) (Always Star (BlockingAsgn l r) loc)
+collectGate _loc (PModuleInst{..}) =
   st . irs %= (:) ModuleInst{ modInstName = pmInstName
                             , modInstArgs = zip pmInstPortNames pmInstArgs
                             , modInstSt   = st'
                             }
   where
-    st' = makeIntermediaryIR pmInstPorts pmInstGates pmInstBehaviors pmInstUFs
+    loc' = (pmModuleName, pmInstName)
+    st'  = makeIntermediaryIR loc' pmInstPorts pmInstGates pmInstBehaviors pmInstUFs
 
 -----------------------------------------------------------------------------------
-collectBhv :: ParseBehavior -> State ParseSt ()
+collectBhv :: Loc -> ParseBehavior -> State ParseSt ()
 -----------------------------------------------------------------------------------
-collectBhv (PAlways ev stmt) = st . irs %= (:) (Always (makeEvent ev) (makeStmt stmt))
+collectBhv loc (PAlways ev stmt) = st . irs %= (:) (Always (makeEvent ev) (makeStmt stmt) loc)
 
 -----------------------------------------------------------------------------------
 makeEvent :: ParseEvent -> Event

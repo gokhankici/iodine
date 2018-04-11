@@ -20,20 +20,9 @@ import           Text.Printf
 import qualified Language.Fixpoint.Types    as FQT
 import           Language.Fixpoint.Types    hiding (Expr(..), KV)
 
-import qualified Text.PrettyPrint.HughesPJ as PP
-
 -- import Debug.Trace  
 
 type Metadata = HornId
-
-instance Loc HornId where
-  srcSpan _ = dummySpan
-
-instance Fixpoint HornId where
-  toFix (SingleBlock n)           = PP.text "always block id:"
-                                    PP.<+> PP.int n
-  toFix (InterferenceBlock n1 n2) = PP.text "interference of always blocks: "
-                                    PP.<+> PP.parens (PP.int n1 PP.<> PP.comma PP.<+> PP.int n2)
 
 toFqFormat :: FPSt -> GInfo SubC Metadata
 toFqFormat fpst =
@@ -94,7 +83,7 @@ makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
          (RR FInt (Reft ( symbol "v"
                         , FQT.PKVar (FQT.KV $ symbol (makeInvPred a)) (mkSubst [])
                         )))
-         (SingleBlock $ a ^. aId)
+         (HornId (a ^. aId) InvWF)
 
 makeBinders   :: M.HashMap Id FQBind -> FQT.BindEnv
 makeBinders m = bindEnvFromList l

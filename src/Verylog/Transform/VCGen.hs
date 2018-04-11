@@ -39,7 +39,7 @@ initial_inv a = Horn { hBody = Boolean True --prevKV a
                      , hHead = KV { kvId   = a ^. aId
                                   , kvSubs = sub1 ++ sub2
                                   }
-                     , hId   = SingleBlock (a ^. aId)
+                     , hId   = HornId (a ^. aId) InvInit
                      }
   where
     st   = a ^. aSt
@@ -58,7 +58,7 @@ tag_reset_inv a = Horn { hBody = prevKV a
                        , hHead = KV { kvId   = a^.aId
                                     , kvSubs = hsubs
                                     }
-                       , hId   = SingleBlock (a ^. aId)
+                       , hId   = HornId (a ^. aId) InvReTag
                        }
   where
     st    = a^.aSt
@@ -85,7 +85,7 @@ next_step_inv a = Horn { hBody = body
                        , hHead = KV { kvId   = a^.aId
                                     , kvSubs = ul ++ ur
                                     }
-                       , hId   = SingleBlock (a ^. aId)
+                       , hId   = HornId (a ^. aId) InvNext
                        }
   where
     (nl,ul) = next fmt{leftVar=True}  a
@@ -140,7 +140,7 @@ non_interference_inv a1 a2 = Horn { hBody = body
                                   , hHead = KV { kvId   = a2 ^. aId
                                                , kvSubs = updates2_1 ++ updates2_2
                                                }
-                                  , hId   = InterferenceBlock (a2 ^. aId) (a1 ^. aId)
+                                  , hId   = HornId (a2 ^. aId) (InvInter (a1 ^. aId))
                                   }
   where
     (nl1,ul1) = next fmt{leftVar=True}  a1
@@ -179,7 +179,7 @@ provedProperty a =
                              }
                         , BinOp GE (ltvar s) (Number 1)
                         ]
-         , hId   = SingleBlock (a ^. aId)
+         , hId   = HornId (a ^. aId) InvTagEq
          }
   | s <- a^.aSt^.sinks
   ]

@@ -105,7 +105,7 @@ incr     :: Id -> M.HashMap Id Int -> M.HashMap Id Int
 incr v m = M.alter f v m
   where 
     f Nothing = Just 1
-    f m       = (+1) <$> m
+    f n       = (+1) <$> n
 
 addError :: String -> S ()
 addError s = errors %= (:) (PassError s)

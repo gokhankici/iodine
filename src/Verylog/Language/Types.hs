@@ -20,6 +20,7 @@ data AlwaysBlock = AB { _aEvent   :: Event
                       , _aStmt    :: Stmt
                       , _aId      :: Int
                       , _aSt      :: St
+                      , _aLoc     :: (String, String) -- Module & instance name
                       }
 
 --------------------------------------------------------------------------------
@@ -30,6 +31,7 @@ type Id = String
 
 data IR = Always     { event      :: Event
                      , alwaysStmt :: Stmt
+                     , alwaysLoc  :: (String, String) -- Module & instance name
                      }
         | ModuleInst { modInstName :: String
                      , modInstArgs :: [(String,String)] -- formal & actual parameters
@@ -151,12 +153,14 @@ instance PPrint St where
                    ]
 
 instance PPrint AlwaysBlock where
-  toDoc a = text "always(" <> vcat [ comment "ports   " <+> printList (a^.aSt^.ports) <> comma
-                                   , comment "ufs     " <+> printMap  (a^.aSt^.ufs) <> comma
-                                   , comment "sources " <+> printList (a^.aSt^.sources) <> comma
-                                   , comment "sinks   " <+> printList (a^.aSt^.sinks) <> comma
-                                   , comment "sanitize" <+> printList (a^.aSt^.sanitize) <> comma
-                                   , comment "id      " <+> int (a^.aId) <> comma
+  toDoc a = text "always(" <> vcat [ comment "ports    " <+> printList (a^.aSt^.ports) <> comma
+                                   , comment "ufs      " <+> printMap  (a^.aSt^.ufs) <> comma
+                                   , comment "sources  " <+> printList (a^.aSt^.sources) <> comma
+                                   , comment "sinks    " <+> printList (a^.aSt^.sinks) <> comma
+                                   , comment "sanitize " <+> printList (a^.aSt^.sanitize) <> comma
+                                   , comment "id       " <+> int (a^.aId) <> comma
+                                   , comment "mod name " <+> text (a^.aLoc^._1) <> comma
+                                   , comment "inst name" <+> text (a^.aLoc^._2) <> comma
                                    , toDoc (a^.aEvent) <> comma
                                    , toDoc (a^.aStmt)
                                    ] <> text ")."

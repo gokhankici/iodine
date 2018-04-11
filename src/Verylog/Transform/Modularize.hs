@@ -25,7 +25,7 @@ inlineVariables :: St -> St
 inlineVariables st = st & irs .~ map (mapIR M.empty) (st ^. irs)
   where
     mapIR :: Args -> IR -> IR
-    mapIR args (Always{..})        = Always e' (inline args alwaysStmt)
+    mapIR args (Always{..})        = Always e' (inline args alwaysStmt) alwaysLoc
       where
         e' = case event of
                Star      -> Star
@@ -78,7 +78,7 @@ m_flattenToAlways st = sequence ((f st) <$> st^.irs) >>= return . concat
     f                     :: St -> IR -> S [AlwaysBlock]
     f st (Always{..})     =  do id <- get
                                 put (id+1)
-                                return [AB event alwaysStmt id (filterSt alwaysStmt st)]
+                                return [AB event alwaysStmt id (filterSt alwaysStmt st) alwaysLoc]
     f _  (ModuleInst{..}) =  m_flattenToAlways modInstSt
 
     filterList :: [Id] -> [Id] -> [Id]
@@ -111,5 +111,5 @@ instance FoldVariables Stmt where
   foldVariables _ Skip                  = []
 
 instance FoldVariables IR where
-  foldVariables f (Always _ s) = foldVariables f s
-  foldVariables _ _            = throw (PassError "foldVariables called on non-always block")
+  foldVariables f (Always _ s _) = foldVariables f s
+  foldVariables _ _              = throw (PassError "foldVariables called on non-always block")
