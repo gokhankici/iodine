@@ -45,7 +45,7 @@ data UFConst = UFConst { ufConstName  :: Id
                        }
  
 type BindMap = M.HashMap Id FQBind
-type UFMap   = M.HashMap Id Int
+type UFMap   = M.HashMap Id [Id]
 
 data FPSt = FPSt { _fpConstraints :: [Inv]
                  , _fpABs         :: [AlwaysBlock]
@@ -59,14 +59,3 @@ idFromExp :: Expr -> Id
 idFromExp (Var v) = v
 idFromExp _       = throw $ PassError "given expr is not a variable"
 
--- argVars :: InvFun -> [(Id,Int)]
--- argVars (InvFun{..}) = 
---   let name n1 = printf "arg_%s_%d" invFunName n1
---       ns      = [1..invFunArity]
---   in zip (name <$> ns) ns
-
--- argVars' :: Id -> [Id] -> [(Id,Int)]
--- argVars' f as = argVars InvFun{ invFunName   = f
---                               , invFunArity  = length as
---                               , invFunParams = as
---                               }

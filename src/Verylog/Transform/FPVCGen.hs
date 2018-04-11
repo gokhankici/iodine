@@ -20,7 +20,7 @@ toFpSt    :: [AlwaysBlock] -> FPSt
 toFpSt as = FPSt { _fpConstraints = cs
                  , _fpABs         = as
                  , _fpBinds       = bs -- trace (show $ M.keys bs) bs
-                 , _fpUFs         = M.unions $ (M.map length) . (view (aSt . ufs)) <$> as
+                 , _fpUFs         = M.unions $ (view (aSt . ufs)) <$> as
                  }
   where
     cs   = invs as

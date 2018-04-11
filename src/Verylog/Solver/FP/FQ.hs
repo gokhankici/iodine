@@ -164,11 +164,12 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
 getUFGlobals :: FPSt -> SEnv Sort
 getUFGlobals fpst = fromListSEnv $ snd $ M.foldrWithKey mkGlobF (0, []) (fpst^.fpUFs)
   where
-    mkGlobF f arity (n,l) =
-      let s = if   arity > 0
-              then mkFFunc n (replicate (arity+1) FInt)
-              else FInt
-          g = (symbol f, s)
+    mkGlobF f args (n,l) =
+      let arity = length args
+          s     = if   arity > 0
+                  then mkFFunc n (replicate (arity+1) FInt)
+                  else FInt
+          g     = (symbol f, s)
       in (n+1, g:l)
     
 

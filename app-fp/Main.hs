@@ -6,6 +6,7 @@ import Verylog.FPGen
 import Verylog.Solver.FP.Types
 import Verylog.Solver.Common
 import Verylog.Language.Types
+import Verylog.Transform.Visualize
 
 import Language.Fixpoint.Solver
 import Language.Fixpoint.Types
@@ -25,24 +26,36 @@ import           Text.Printf
 
 data Flag = VCGen
           | PrintFInfo
+          | Visualize
           deriving (Show, Eq, Ord)
 
 options :: [OptDescr Flag]
 options =
-  [ Option [] ["vcgen"] (NoArg VCGen) "Just vcgen, do not solve"
+  [ Option [] ["vcgen"]       (NoArg VCGen)      "Just vcgen, do not solve"
   , Option [] ["print-finfo"] (NoArg PrintFInfo) "Just vcgen, do not solve"
+  , Option [] ["visualize"]   (NoArg Visualize)  "Visualize assignments"
   ]
 
-parseOpts :: IO (FilePath, FilePath, Bool, Bool)
+data Options = Options { optInputFile  :: FilePath
+                       , optOutputFile :: FilePath
+                       , optVCGen      :: Bool
+                       , optPrintFInfo :: Bool
+                       , optVisualize  :: Bool
+                       }
+
+parseOpts :: IO Options
 parseOpts = do
   args <- getArgs
   return $
     case getOpt Permute options args of
       (opts,rest,[]) ->
         let [fin, fout] = rest
-            skip        = VCGen `elem` opts
-            prfinfo     = PrintFInfo`elem` opts
-        in  (fin, fout, skip, prfinfo)
+        in Options { optInputFile = fin
+                   , optOutputFile = fout
+                   , optVCGen = VCGen `elem` opts
+                   , optPrintFInfo = PrintFInfo`elem` opts
+                   , optVisualize = Visualize `elem` opts
+                   }
       (_,_,errs) ->
         error (concat errs ++ usageInfo header options)
         where
@@ -51,22 +64,25 @@ parseOpts = do
 
 main :: IO ()
 main  = do
-  (fin, fout, skipSolve, prFInfo) <- parseOpts
+  Options{..} <- parseOpts
 
-  (fpst, finfo) <- fpgen fin
+  (fpst, finfo) <- fpgen optInputFile
   let cfg = defConfig{ eliminate = Some
                      , save      = True
-                     , srcFile   = fin
+                     , srcFile   = optInputFile
                      , metadata  = True
                      } 
 
   case () of
-    _ | skipSolve -> saveQuery cfg finfo >> exitSuccess
-      | prFInfo   -> do
-          fInfo <- parseFInfo [fout] :: IO (FInfo ())
+    _ | optVCGen      -> saveQuery cfg finfo >> exitSuccess
+      | optPrintFInfo -> do
+          fInfo <- parseFInfo [optOutputFile] :: IO (FInfo ())
           putStrLn $ show fInfo
           exitSuccess
-      | otherwise -> do
+      | optVisualize  -> do
+          putStrLn $ visualize fpst
+          exitSuccess
+      | otherwise     -> do
           res <- solve cfg finfo
           let statStr = render . resultDoc . fmap fst
           let stat = resStatus res
