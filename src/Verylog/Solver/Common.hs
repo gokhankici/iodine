@@ -14,7 +14,7 @@ import qualified Text.PrettyPrint.HughesPJ as PP
 
 data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
 
-data InvType = InvInit | InvReTag | InvNext | InvTagEq | InvWF | InvInter Int
+data InvType = InvInit | InvReTag | InvNext | InvTagEq | InvWF | InvInter Int | InvOther String
             deriving (Generic, Eq, Ord)
 
 instance Fixpoint InvType where
@@ -24,6 +24,7 @@ instance Fixpoint InvType where
   toFix InvTagEq     = PP.text "tag eq"
   toFix InvWF        = PP.text "wf"
   toFix (InvInter n) = PP.text "interference w/" PP.<+> PP.int n
+  toFix (InvOther s) = PP.text s
 
 instance Show InvType where
   show = showFix

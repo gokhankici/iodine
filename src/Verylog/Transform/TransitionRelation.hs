@@ -145,7 +145,7 @@ nextStmt (IfStmt{..})          = do
       el  = Ands $ elseClauses ++ phiNodes fmt elAs elDiff
       ite = Ite condTrue th el
 
-  return $ ite : condUFCheck
+  return $ condUFCheck ++ [ite]
 
   where
     -- returns the variables changed in one branch but not in other
@@ -292,5 +292,6 @@ incrBA v = do trAs  <~ uses trAs  (M.alter updateInd v)
 incrNBA :: Id -> S ()
 incrNBA v = trAs  <~ uses trAs  (M.alter updateInd v)
 
+updateInd         :: Maybe Int -> Maybe Int
 updateInd Nothing = Just 1
 updateInd m       = (+ 1) <$> m

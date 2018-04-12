@@ -9,13 +9,11 @@ import           Control.Monad.State.Lazy
 import           Data.List
 import qualified Data.HashSet               as S
 import qualified Data.HashMap.Strict      as M
--- import           Text.Printf
 
 import           Verylog.Transform.TransitionRelation
 import           Verylog.Transform.Utils as U
 import           Verylog.Language.Types
 
--- import           Verylog.Solver.HSF.Types
 import           Verylog.Solver.Common
 
 --------------------------------------------------------------------------------
@@ -35,21 +33,21 @@ modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-initial_inv a = Horn { hBody = Boolean True --prevKV a
-                     , hHead = KV { kvId   = a ^. aId
-                                  , kvSubs = sub1 ++ sub2
-                                  }
+initial_inv a = Horn { hBody = Boolean True
+                     , hHead = Ands [ KV { kvId   = a ^. aId
+                                         , kvSubs = sub1 ++ sub2
+                                         }
+                                    ]
                      , hId   = HornId (a ^. aId) InvInit
                      }
   where
     st   = a ^. aSt
     sub1 = [ (n_lvar' sntz, rvar' sntz)
-           | sntz <- st ^. sanitize
+           | sntz <- S.toList . S.fromList $ st ^. sanitize ++ st ^. sources ++ st ^. sinks
            ]
     sub2 = [ (tv, Number 0)
            | s <- st^.ports, tv <- [n_ltvar', n_rtvar'] <*> [s]
            ]
-    
 
 --------------------------------------------------------------------------------
 tag_reset_inv :: AlwaysBlock -> Inv
@@ -182,28 +180,46 @@ provedProperty a =
          , hId   = HornId (a ^. aId) InvTagEq
          }
   | s <- a^.aSt^.sinks
-  ]
+  ] -- ++ others
+  where
+    others = [ Horn { hHead = Ands [ BinOp GE (rtvar s) (Number 1)
+                                   , BinOp EQU (lvar s) (rvar s)
+                                   ]
+                    , hBody = Ands [ KV { kvId   = a ^. aId
+                                        , kvSubs = [ (n_rtvar' s, rtvar s)
+                                                   , (n_ltvar' s, ltvar s)
+                                                   , (n_lvar' s, lvar s)
+                                                   , (n_rvar' s, rvar s)
+                                                   ]
+                                        }
+                                   , BinOp GE (ltvar s) (Number 1)
+                                   ]
+                    , hId   = HornId (a ^. aId) (InvOther "l_sink=r_sink")
+                    }
+             | s <- a^.aSt^.sinks
+             ]
 
 -------------------------------------------------------------------------------- 
 -- Helper functions
 -------------------------------------------------------------------------------- 
-lvar, rvar, ltvar, rtvar, rvar' :: Id -> Expr
+lvar, rvar, ltvar, rtvar, rvar', lvar', ltvar', rtvar' :: Id -> Expr
 lvar  = makeVar fmt{leftVar=True}
 rvar  = makeVar fmt{rightVar=True}
 ltvar = makeVar fmt{taggedVar=True, leftVar=True}
 rtvar = makeVar fmt{taggedVar=True, rightVar=True}
 
 rvar'  = makeVar fmt{primedVar=True, rightVar=True}
--- lvar'  = makeVar fmt{primedVar=True, leftVar=True}
--- ltvar' = makeVar fmt{primedVar=True, taggedVar=True, leftVar=True}
--- rtvar' = makeVar fmt{primedVar=True, taggedVar=True, rightVar=True}
+lvar'  = makeVar fmt{primedVar=True, leftVar=True}
+ltvar' = makeVar fmt{primedVar=True, taggedVar=True, leftVar=True}
+rtvar' = makeVar fmt{primedVar=True, taggedVar=True, rightVar=True}
 
--- n_lvar   = makeVarName fmt{leftVar=True}
--- n_rvar   = makeVarName fmt{rightVar=True}
--- n_ltvar  = makeVarName fmt{taggedVar=True, leftVar=True}
--- n_rtvar  = makeVarName fmt{taggedVar=True, rightVar=True}
+n_lvar, n_rvar, n_ltvar, n_rtvar, n_lvar', n_rvar', n_ltvar', n_rtvar' :: Id -> Id
 
-n_lvar', n_rvar', n_ltvar', n_rtvar' :: Id -> Id
+n_lvar   = makeVarName fmt{leftVar=True}
+n_rvar   = makeVarName fmt{rightVar=True}
+n_ltvar  = makeVarName fmt{taggedVar=True, leftVar=True}
+n_rtvar  = makeVarName fmt{taggedVar=True, rightVar=True}
+
 n_lvar'  = makeVarName fmt{primedVar=True, leftVar=True}
 n_rvar'  = makeVarName fmt{primedVar=True, rightVar=True}
 n_ltvar' = makeVarName fmt{primedVar=True, taggedVar=True, leftVar=True}
@@ -229,3 +245,4 @@ primes v = [ makeVarName f v
            ]
   where
     f' = fmt{primedVar=True}
+
