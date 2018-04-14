@@ -15,7 +15,7 @@ import           Verylog.Transform.Utils as U
 import           Verylog.Language.Types
 
 import           Verylog.Solver.Common
-
+-- import           Text.Printf
 --------------------------------------------------------------------------------
 invs :: [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
@@ -28,7 +28,7 @@ modular_inv :: AlwaysBlock -> [Inv]
 --------------------------------------------------------------------------------
 modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
   where
-    a' = a --trc (printf "\nalways block #%d:\n" (a^.aId)) a a
+    a' = a -- trc (printf "\nalways block #%d:\n" (a^.aId)) a a
 
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> Inv
@@ -86,10 +86,27 @@ next_step_inv a = Horn { hBody = body
                        , hId   = HornId (a ^. aId) InvNext
                        }
   where
-    (nl,ul) = next fmt{leftVar=True}  a
-    (nr,ur) = next fmt{rightVar=True} a
-    body    = Ands [prevKV a, nl, nr]
+    (nl,ul)  = next fmt{leftVar=True}  a
+    (nr,ur)  = next fmt{rightVar=True} a
+    body     = Ands [ prevKV a
+                    , sanGlobs a, taintEqs a
+                    , nl, nr
+                    ]
 
+-- sanitize globs are always the same
+sanGlobs   :: AlwaysBlock -> Expr
+sanGlobs a = Ands [ BinOp EQU
+                    (makeVar fmt{leftVar=True} v)
+                    (makeVar fmt{rightVar=True} v)
+                  | v <- (a ^. aSt ^. ports) `intersect` (a ^. aSt ^. sanitizeGlob)
+                  ]
+
+taintEqs   :: AlwaysBlock -> Expr
+taintEqs a = Ands [ BinOp EQU
+                    (makeVar fmt{taggedVar=True, leftVar=True} v)
+                    (makeVar fmt{taggedVar=True, rightVar=True} v)
+                  | v <- a ^. aSt ^. taintEq
+                  ]
 --------------------------------------------------------------------------------
 non_interference_checks :: [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
@@ -162,6 +179,8 @@ non_interference_inv a1 a2 = Horn { hBody = body
     
     body   = Ands [ prevKV a1
                   , prevKV a2
+                  , sanGlobs a1, taintEqs a1
+                  , sanGlobs a2, taintEqs a2
                   , nl1
                   , nr1
                   ]
@@ -202,28 +221,31 @@ provedProperty a =
 -------------------------------------------------------------------------------- 
 -- Helper functions
 -------------------------------------------------------------------------------- 
-lvar, rvar, ltvar, rtvar, rvar', lvar', ltvar', rtvar' :: Id -> Expr
+lvar, rvar, ltvar, rtvar, rvar' :: Id -> Expr
 lvar  = makeVar fmt{leftVar=True}
 rvar  = makeVar fmt{rightVar=True}
 ltvar = makeVar fmt{taggedVar=True, leftVar=True}
 rtvar = makeVar fmt{taggedVar=True, rightVar=True}
 
 rvar'  = makeVar fmt{primedVar=True, rightVar=True}
-lvar'  = makeVar fmt{primedVar=True, leftVar=True}
-ltvar' = makeVar fmt{primedVar=True, taggedVar=True, leftVar=True}
-rtvar' = makeVar fmt{primedVar=True, taggedVar=True, rightVar=True}
 
-n_lvar, n_rvar, n_ltvar, n_rtvar, n_lvar', n_rvar', n_ltvar', n_rtvar' :: Id -> Id
+-- lvar', ltvar', rtvar' :: Id -> Expr
+-- lvar'  = makeVar fmt{primedVar=True, leftVar=True}
+-- ltvar' = makeVar fmt{primedVar=True, taggedVar=True, leftVar=True}
+-- rtvar' = makeVar fmt{primedVar=True, taggedVar=True, rightVar=True}
 
-n_lvar   = makeVarName fmt{leftVar=True}
-n_rvar   = makeVarName fmt{rightVar=True}
-n_ltvar  = makeVarName fmt{taggedVar=True, leftVar=True}
-n_rtvar  = makeVarName fmt{taggedVar=True, rightVar=True}
-
+n_lvar', n_rvar', n_ltvar', n_rtvar' :: Id -> Id
 n_lvar'  = makeVarName fmt{primedVar=True, leftVar=True}
 n_rvar'  = makeVarName fmt{primedVar=True, rightVar=True}
 n_ltvar' = makeVarName fmt{primedVar=True, taggedVar=True, leftVar=True}
 n_rtvar' = makeVarName fmt{primedVar=True, taggedVar=True, rightVar=True}
+
+-- n_lvar, n_rvar, n_ltvar, n_rtvar :: Id -> Id
+-- n_lvar   = makeVarName fmt{leftVar=True}
+-- n_rvar   = makeVarName fmt{rightVar=True}
+-- n_ltvar  = makeVarName fmt{taggedVar=True, leftVar=True}
+-- n_rtvar  = makeVarName fmt{taggedVar=True, rightVar=True}
+
 
 -- kv[x' := x][y' := y][...]
 prevKV   :: AlwaysBlock -> Expr

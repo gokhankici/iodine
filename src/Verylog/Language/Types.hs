@@ -55,20 +55,25 @@ data Stmt = Block           { blockStmts :: [Stmt] }
                             }
           | Skip
 
-data St = St { _ports     :: [Id]
-             , _ufs       :: M.HashMap Id [Id]
-             , _sources   :: [Id]
-             , _sinks     :: [Id]
-             , _sanitize  :: [Id]
-             , _irs       :: [IR]
+data St = St { _ports        :: [Id]
+             , _ufs          :: M.HashMap Id [Id]
+             , _sources      :: [Id]
+             , _sinks        :: [Id]
+             , _taintEq      :: [Id]
+             , _sanitize     :: [Id]
+             , _sanitizeGlob :: [Id]
+             , _irs          :: [IR]
              }
 
-emptySt = St { _ports      = []
-             , _ufs        = M.empty
-             , _sources    = []
-             , _sinks      = []
-             , _sanitize   = []
-             , _irs        = []
+emptySt :: St
+emptySt = St { _ports        = []
+             , _ufs          = M.empty
+             , _sources      = []
+             , _sinks        = []
+             , _taintEq      = []
+             , _sanitize     = []
+             , _sanitizeGlob = []
+             , _irs          = []
              }
 
 makeLenses ''St 
@@ -153,27 +158,32 @@ instance PPrint St where
                    ]
 
 instance PPrint AlwaysBlock where
-  toDoc a = text "always(" <> vcat [ comment "ports    " <+> printList (a^.aSt^.ports) <> comma
-                                   , comment "ufs      " <+> printMap  (a^.aSt^.ufs) <> comma
-                                   , comment "sources  " <+> printList (a^.aSt^.sources) <> comma
-                                   , comment "sinks    " <+> printList (a^.aSt^.sinks) <> comma
-                                   , comment "sanitize " <+> printList (a^.aSt^.sanitize) <> comma
-                                   , comment "id       " <+> int (a^.aId) <> comma
-                                   , comment "mod name " <+> text (a^.aLoc^._1) <> comma
-                                   , comment "inst name" <+> text (a^.aLoc^._2) <> comma
-                                   , toDoc (a^.aEvent) <> comma
+  toDoc a = text "always(" <> vcat [ comment "ports    " <+> printList (a^.aSt^.ports)        <> comma
+                                   , comment "ufs      " <+> printMap  (a^.aSt^.ufs)          <> comma
+                                   , comment "sources  " <+> printList (a^.aSt^.sources)      <> comma
+                                   , comment "sinks    " <+> printList (a^.aSt^.sinks)        <> comma
+                                   , comment "sanitize " <+> printList (a^.aSt^.sanitize)     <> comma
+                                   , comment "san. glob" <+> printList (a^.aSt^.sanitizeGlob) <> comma
+                                   , comment "id       " <+> int (a^.aId)                     <> comma
+                                   , comment "mod name " <+> text (a^.aLoc^._1)               <> comma
+                                   , comment "inst name" <+> text (a^.aLoc^._2)               <> comma
+                                   , toDoc (a^.aEvent)                                        <> comma
                                    , toDoc (a^.aStmt)
                                    ] <> text ")."
     where
       comment t = text "/*" <+> text t <+> text "*/"
 
+printList :: [String] -> Doc
 printList   = brackets . text . (intercalate ", ")
-mapKV (k,l) = "(" ++ k ++ ", [" ++ (intercalate ", " l) ++ "])"
-printMap    = brackets
-              . text
-              . (intercalate ", ")
-              . (map mapKV)
-              . M.toList
+
+printMap :: M.HashMap String [String] -> Doc
+printMap = brackets
+           . text
+           . (intercalate ", ")
+           . (map mapKV)
+           . M.toList
+  where
+    mapKV (k,l) = "(" ++ k ++ ", [" ++ (intercalate ", " l) ++ "])"
 
 instance Show IR where
   show = pprint

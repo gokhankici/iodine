@@ -32,22 +32,32 @@ toFqFormat fpst =
       gConsts     = getUFGlobals fpst
       dConsts     = emptySEnv
       cuts        = KS HS.empty
-      -- qualifiers  = traceFix "qualifiers" qualifiers'
-      qualifiers  = [ mkQual
-                      (symbol (printf "Eq%d" (n::Int) :: String))
-                      [ QP (symbol "v") PatNone FInt
-                      , QP (symbol "x") (PatPrefix (symbol pre_x) 1) FInt
-                      , QP (symbol "y") (PatPrefix (symbol pre_y) 1) FInt
-                      ] 
-                      (FQT.PAtom Eq (eVar "x") (eVar "y"))
-                      (dummyPos "")
-                    | (n,(pre_x,pre_y)) <- zip [1..]
-                                           [ ("VL_"   , "VR_")
-                                           , ("VLP_"  , "VRP_")
-                                           , ("VLT_"  , "VRT_")
-                                           , ("VLTP_" , "VRTP_")
-                                           ]
-                    ]
+      qualifiers  = qualifiersWithPath -- ++ qualifiersNoPat
+      -- qualifiersNoPat = [ mkQual
+      --                     (symbol "printf")
+      --                     [ QP (symbol "v") PatNone FInt
+      --                     , QP (symbol "x") PatNone FInt
+      --                     , QP (symbol "y") PatNone FInt
+      --                     ] 
+      --                     (FQT.PAtom Eq (eVar "x") (eVar "y"))
+      --                     (dummyPos "")
+      --                   ]
+      qualifiersWithPath  = [ mkQual
+                              (symbol (printf "Eq%d" (n::Int) :: String))
+                              [ QP (symbol "v") PatNone FInt
+                              , QP (symbol "x") (PatPrefix (symbol pre_x) 1) FInt
+                              , QP (symbol "y") (PatPrefix (symbol pre_y) 2) FInt
+                              ] 
+                              (FQT.PAtom Eq (eVar "x") (eVar "y"))
+                              (dummyPos "")
+                            | (n,(pre_x,pre_y)) <-
+                              zip [1..]
+                              [ ("VL_"   , "VR_")
+                              , ("VLP_"  , "VRP_")
+                              , ("VLT_"  , "VRT_")
+                              , ("VLTP_" , "VRTP_")
+                              ]
+                            ]
       bindMds     = M.empty
       highOrBinds = False
       highOrQuals = False

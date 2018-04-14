@@ -27,6 +27,7 @@ import           Text.Printf
 import           Verylog.Language.Types
 import           Verylog.Language.Utils
 -- import           Verylog.Transform.Utils
+-- import           Verylog.Transform.Utils
 -- import Debug.Trace
 
 -----------------------------------------------------------------------------------
@@ -69,11 +70,16 @@ data ParseIR = TopModule    { mPortNames :: [String]          -- port list (i.e.
              | PSource      String
              | PSink        String
              | PSanitize    String
+             | PNotSanitize { nsPortName   :: String
+                            , nsModuleName :: Maybe String
+                            }
              | PSanitizeMod { sModuleName :: String
                             , sVarName    :: String
                             }
+             | PSanitizeGlob String
+             | PTaintEq      String
              deriving (Show)
-             
+
 data ParseStmt = PBlock           [ParseStmt]
                | PBlockingAsgn    String
                                   String
@@ -85,20 +91,27 @@ data ParseStmt = PBlock           [ParseStmt]
                | PSkip
                deriving (Show)
 
-data ParseSt = ParseSt { _parseSources     :: S.HashSet Id
-                       , _parseSinks       :: S.HashSet Id
-                       , _parsePorts       :: S.HashSet Id
-                       , _parseSanitize    :: S.HashSet Id
-                       , _parseModSanitize :: M.HashMap Id (S.HashSet Id)
-                       , _st               :: St
+data ParseSt = ParseSt { _parseSources      :: S.HashSet Id
+                       , _parseSinks        :: S.HashSet Id
+                       , _parsePorts        :: S.HashSet Id
+                       , _parseSanitize     :: S.HashSet Id
+                       , _parseNotSanitize  :: M.HashMap Id (S.HashSet Id)
+                       , _parseSanitizeGlob :: S.HashSet Id
+                       , _parseTaintEq      :: S.HashSet Id
+                       , _parseModSanitize  :: M.HashMap Id (S.HashSet Id)
+                       , _st                :: St
                        }
 
-emptyParseSt = ParseSt { _parseSources     = S.empty
-                       , _parseSinks       = S.empty
-                       , _parsePorts       = S.empty
-                       , _parseSanitize    = S.empty
-                       , _parseModSanitize = M.empty
-                       , _st               = emptySt
+emptyParseSt :: ParseSt
+emptyParseSt = ParseSt { _parseSources      = S.empty
+                       , _parseSinks        = S.empty
+                       , _parsePorts        = S.empty
+                       , _parseSanitize     = S.empty
+                       , _parseNotSanitize  = M.empty
+                       , _parseSanitizeGlob = S.empty
+                       , _parseTaintEq      = S.empty
+                       , _parseModSanitize  = M.empty
+                       , _st                = emptySt
                        }
 
 makeLenses ''ParseSt
@@ -163,17 +176,18 @@ parseTopModule = spaceConsumer
 
 parseTaint :: Parser ParseIR  
 parseTaint = spaceConsumer
-             *> ( rWord "taint_source" *> parens (PSource <$> taintId)
-                  <|> rWord "taint_sink" *> parens (PSink <$> taintId)
-                  <|> rWord "sanitize_mod" *> parens (PSanitizeMod <$> identifier <*> (comma *> taintId))
-                  <|> rWord "sanitize" *> parens (PSanitize <$> taintId)
+             *> (     rWord "taint_source"  *> parens (PSource <$> identifier)
+                  <|> rWord "taint_sink"    *> parens (PSink <$> identifier)
+                  <|> rWord "taint_eq"      *> parens (PTaintEq <$> identifier)
+                  <|> rWord "sanitize_mod"  *> parens (PSanitizeMod <$> identifier <*> (comma *> identifier))
+                  <|> rWord "sanitize_glob" *> parens (PSanitizeGlob <$> identifier)
+                  <|> rWord "not_sanitize"  *> parens (PNotSanitize <$> identifier <*> optionMaybe (comma *> identifier))
+                  <|> rWord "sanitize"      *> parens (PSanitize <$> identifier)
                 )
              <* char '.' <* spaceConsumer
-  where
-    taintId = identifier -- ("v_" ++) <$> identifier
 
 parseStmt :: Parser ParseStmt  
-parseStmt = rWord "block"      *> parens (PBlock           <$> list parseStmt)
+parseStmt =     rWord "block"  *> parens (PBlock           <$> list parseStmt)
             <|> rWord "b_asn"  *> parens (PBlockingAsgn    <$> identifier <*> (comma *> identifier))
             <|> rWord "nb_asn" *> parens (PNonBlockingAsgn <$> identifier <*> (comma *> identifier))
             <|> rWord "ite"    *> parens (PIfStmt          <$> identifier <*> (comma *> parseStmt) <*> (comma *> parseStmt))
@@ -212,6 +226,8 @@ list p = betweenS "[" "]" lp
   where
     lp = (:) <$> p <*> many (comma *> p)
          <|> return []
+
+-- parseSep :: Parser a -> 
 
 betweenS :: String -> String -> Parser a -> Parser a
 betweenS l r = between (symbol l) (symbol r)
@@ -296,20 +312,32 @@ instance Exception IRParseError
 -- | ParseIR -> St
 -----------------------------------------------------------------------------------
 
+sanitizeAll :: Bool
+sanitizeAll = True
+
 -----------------------------------------------------------------------------------
 makeState :: [ParseIR] -> St
 -----------------------------------------------------------------------------------
-makeState topIRs@(TopModule{..}:_) = resultState -- trace (show (resultState^.sanitize)) resultState
+makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultState^.sanitize)) resultState
   where
     resultState = evalState comp emptyParseSt
-    comp = do sequence_ $ collectTaint <$> topIRs -- collect taint information
+    comp = do sequence_ $ collectTaint <$> (annots ++ [topIR]) -- collect taint information
               let loc = ("TOPLEVEL", "TOPLEVEL")
               st .= makeIntermediaryIR loc mPorts mGates mBehaviors mUFs -- create intermediary IR from parse IR
   
               -- update IR state's taint info from parse IR 
-              st . sources  <~ uses parseSources  S.toList
-              st . sinks    <~ uses parseSinks    S.toList
-              st . sanitize <~ uses parseSanitize S.toList
+              st . sources      <~ uses parseSources      S.toList
+              st . sinks        <~ uses parseSinks        S.toList
+
+              sanitizes     <- use parseSanitize
+              maybeNegVars  <- uses parseNotSanitize (M.lookup "")
+              let negVars   = case maybeNegVars of
+                                Nothing -> S.empty
+                                Just s  -> s
+              st . sanitize .= S.toList (sanitizes `S.difference` negVars)
+
+              st . sanitizeGlob <~ uses parseSanitizeGlob S.toList
+              st . taintEq      <~ uses parseTaintEq      S.toList
 
               -- and copy it to the instantiated modules
               st %= updateTaintInfo 
@@ -328,25 +356,46 @@ makeState _ = throw (PassError "First ir is not a toplevel module !")
 -----------------------------------------------------------------------------------
 collectTaint :: ParseIR -> State ParseSt ()
 -----------------------------------------------------------------------------------
-collectTaint (PSource s)     = parseSources  %= S.insert s
-collectTaint (PSink s)       = parseSinks    %= S.insert s
-collectTaint (PSanitize s)   = parseSanitize %= S.insert s
-collectTaint (TopModule{..}) = do sequence_ $ sanitizeWire   <$> mPorts
-                                  sequence_ $ sanitizeModule <$> mGates
-                                  return ()
+collectTaint (PSource s)        = parseSources      %= S.insert s
+collectTaint (PSink s)          = parseSinks        %= S.insert s
+collectTaint (PTaintEq s)       = parseTaintEq      %= S.insert s
+collectTaint (PSanitize s)      = parseSanitize     %= S.insert s
+collectTaint (PNotSanitize{..}) = case nsModuleName of
+                                    Nothing -> parseNotSanitize %= mapOfSetInsert "" nsPortName
+                                    Just m  -> parseNotSanitize %= mapOfSetInsert m  nsPortName
+collectTaint (PSanitizeGlob s)  = do parseSanitizeGlob %= S.insert s
+                                     parseSanitize     %= S.insert s
+collectTaint (PSanitizeMod{..}) = parseModSanitize %= mapOfSetInsert sModuleName sVarName
+collectTaint (TopModule{..})    = do sequence_ $ sanitizeWire Nothing <$> mPorts
+                                     sequence_ $ sanitizeModule       <$> mGates
+                                     return ()
   where
-    sanitizeWire :: ParsePort -> State ParseSt ()
-    sanitizeWire (PRegister _) = return ()
-    sanitizeWire (PWire s)     = parseSanitize %= S.insert s
+    sanitizeWire :: Maybe (String, String) -> ParsePort -> State ParseSt ()
+    sanitizeWire m (PRegister s) =
+      if   sanitizeAll
+      then do maybeNegVars <- uses parseNotSanitize (M.lookup modName)
+              let inNeg = case maybeNegVars of
+                            Nothing  -> False
+                            Just nvs -> S.foldl' (\b v -> b || mkv v == s) False nvs
+              when (not inNeg) $
+                parseSanitize %= S.insert s
+      else return ()
+      where modName = case m of
+                        Nothing      -> ""
+                        Just (mn, _) -> mn
+            mkv = case m of
+                    Nothing      -> id
+                    Just (_, "") -> id
+                    Just (_, i)  -> printf "%s_%s" i
+    sanitizeWire _ (PWire s) = parseSanitize %= S.insert s
 
     sanitizeModule :: ParseGate -> State ParseSt ()
-    sanitizeModule (PModuleInst{..}) = do sequence_ $ sanitizeWire   <$> pmInstPorts
+    sanitizeModule (PModuleInst{..}) = do sequence_ $
+                                            sanitizeWire (Just (pmModuleName , pmInstName))
+                                            <$> pmInstPorts
                                           sequence_ $ sanitizeModule <$> pmInstGates
     sanitizeModule (PContAsgn _ _)   = return ()
-collectTaint(PSanitizeMod{..}) = parseModSanitize %= M.alter altr sModuleName 
-  where
-    altr Nothing  = Just $ S.singleton sVarName
-    altr (Just s) = Just $ S.insert sVarName s
+
 
 -----------------------------------------------------------------------------------
 sanitizeInsts :: [ParseGate] -> State ParseSt ()
@@ -356,12 +405,16 @@ sanitizeInsts gates = sequence_ $ sanitizeInst <$> gates
     sanitizeInst                   :: ParseGate -> State ParseSt ()
     sanitizeInst (PContAsgn _ _)   = return ()
     sanitizeInst (PModuleInst{..}) = do
-      vars <- uses parseModSanitize (M.lookup pmModuleName)
+      vars    <- uses parseModSanitize (M.lookup pmModuleName)
+      maybeNegVars <- uses parseNotSanitize (M.lookup pmModuleName)
+      let negVars = case maybeNegVars of
+                      Nothing -> S.empty
+                      Just s  -> s
       case vars of
         Nothing -> return ()
         Just vs -> sequence_ $
                    (\v -> parseSanitize %= S.insert (mk_mod_var pmInstName v))
-                   <$> S.toList vs
+                   <$> S.toList (vs `S.difference` negVars)
       sanitizeInsts pmInstGates
         where
           mk_mod_var m v =
@@ -375,10 +428,10 @@ makeIntermediaryIR :: Loc -> [ParsePort] -> [ParseGate] -> [ParseBehavior] -> [P
 -----------------------------------------------------------------------------------
 makeIntermediaryIR loc prts gates bhvs us = evalState comp emptyParseSt
   where
-    comp = do sequence_ (collectPort <$> prts)
+    comp = do sequence_ (collectPort     <$> prts)
               sequence_ (collectGate loc <$> reverse gates)
               sequence_ (collectBhv  loc <$> reverse bhvs)
-              sequence_ (collectUF   <$> reverse us)
+              sequence_ (collectUF       <$> reverse us)
               st . ports <~ uses parsePorts S.toList
               st . ufs   %= flattenUFs
               use st
@@ -451,10 +504,14 @@ updateTaintInfo st' = over irs mapIRs st'
     mapIR ir@(ModuleInst{..}) = ir { modInstSt = fixSt modInstSt }
 
     fixSt :: St -> St 
-    fixSt = set sources  (st'^.sources) .
-            set sinks    (st'^.sinks) .
-            set sanitize (st'^.sanitize) .
+    fixSt = set sources      (st'^.sources) .
+            set sinks        (st'^.sinks) .
+            set sanitize     (st'^.sanitize) .
+            set sanitizeGlob (st'^.sanitizeGlob) .
+            set taintEq      (st'^.taintEq) .
             over irs mapIRs
         
   
 
+optionMaybe   :: Parser a -> Parser (Maybe a)
+optionMaybe p = Just <$> p <|> return Nothing
