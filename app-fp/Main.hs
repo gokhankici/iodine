@@ -6,7 +6,7 @@ import Verylog.FPGen
 import Verylog.Solver.FP.Types
 import Verylog.Solver.Common
 import Verylog.Language.Types
-import Verylog.Transform.Visualize
+-- import Verylog.Transform.Visualize
 
 import Language.Fixpoint.Solver
 import Language.Fixpoint.Types
@@ -27,6 +27,7 @@ import           Text.Printf
 data Flag = VCGen
           | PrintFInfo
           | Visualize
+          | Minimize
           deriving (Show, Eq, Ord)
 
 options :: [OptDescr Flag]
@@ -34,6 +35,7 @@ options =
   [ Option [] ["vcgen"]       (NoArg VCGen)      "Just vcgen, do not solve"
   , Option [] ["print-finfo"] (NoArg PrintFInfo) "Just vcgen, do not solve"
   , Option [] ["visualize"]   (NoArg Visualize)  "Visualize assignments"
+  , Option [] ["minimize"]    (NoArg Minimize)   "print minimal failing constraint set"
   ]
 
 data Options = Options { optInputFile  :: FilePath
@@ -41,6 +43,7 @@ data Options = Options { optInputFile  :: FilePath
                        , optVCGen      :: Bool
                        , optPrintFInfo :: Bool
                        , optVisualize  :: Bool
+                       , optMinimize   :: Bool
                        }
 
 parseOpts :: IO Options
@@ -50,11 +53,12 @@ parseOpts = do
     case getOpt Permute options args of
       (opts,rest,[]) ->
         let [fin, fout] = rest
-        in Options { optInputFile = fin
+        in Options { optInputFile  = fin
                    , optOutputFile = fout
-                   , optVCGen = VCGen `elem` opts
+                   , optVCGen      = VCGen `elem` opts
                    , optPrintFInfo = PrintFInfo`elem` opts
-                   , optVisualize = Visualize `elem` opts
+                   , optVisualize  = Visualize `elem` opts
+                   , optMinimize   = Minimize `elem` opts
                    }
       (_,_,errs) ->
         error (concat errs ++ usageInfo header options)
@@ -71,6 +75,7 @@ main  = do
                      , save      = True
                      , srcFile   = optInputFile
                      , metadata  = True
+                     , minimize  = optMinimize
                      } 
 
   case () of
@@ -79,9 +84,9 @@ main  = do
           fInfo <- parseFInfo [optOutputFile] :: IO (FInfo ())
           putStrLn $ show fInfo
           exitSuccess
-      | optVisualize  -> do
-          putStrLn $ visualize fpst
-          exitSuccess
+      -- | optVisualize  -> do
+      --     putStrLn $ visualize fpst
+      --     exitSuccess
       | otherwise     -> do
           res <- solve cfg finfo
           let statStr = render . resultDoc . fmap fst

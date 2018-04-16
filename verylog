@@ -16,6 +16,7 @@ zparseopts -D -E -- \
            -debug=VC_DEBUG \
            -qarmcOpts+:=QARMC_OPTS \
            -solver:=SOLVER \
+           -minimize=MINIMIZE \
            M:=TOPLEVEL_MODULE \
            -emacs=EMACS \
            h=HELP -help=HELP
@@ -34,6 +35,8 @@ verylog options:
       Print finfo
   --emacs
       Opens the output (IR or VC) in emacs
+  --minimize
+      Run fixpoint w/ minimize
   --qarmcOpts <option>
       The argument of this option is passed to qarmc
   --solver ( hsf | smt | fp )
@@ -85,7 +88,7 @@ CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
 QARMC_DEFAULT_OPTS=-get-model
 
 function vcgen_fp() {
-    vcgen-fp $FINFO $JUST_VCGEN $@
+    vcgen-fp $FINFO $JUST_VCGEN $MINIMIZE $@
 }
 
 # }}}
