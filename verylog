@@ -1,6 +1,10 @@
 #!/usr/bin/env zsh
 # vim: set foldmethod=marker:
 
+function blue()  { print -P "%F{blue}%B$1%b%f" }
+function green() { print -P "%F{green}%B$1%b%f" }
+function red()   { print -P "%F{red}%B$1%b%f" }
+
 # Some sanity checks {{{
 if [[ "$(uname)" != "Darwin" &&  "$(expr substr $(uname -s) 1 5)" != "Linux"  ]]; then
     echo "${0:t} is not supported in your platform" 1>&2
@@ -162,7 +166,9 @@ last_err=$?
 echo "\n"
 
 if [[ $last_err -ne 0 ]]; then
-    echo "[VCGEN ERROR]" 1>&2
+    cat $FQOUT_FILE
+    echo "\n"
+    red "UNSAFE"
     exit $last_err
 fi
 
@@ -178,14 +184,17 @@ fi
 
 # Stage 3 : Check Verification Conditions {{{
 cat $FQOUT_FILE
+echo "\n"
+green "SAFE"
 
-echo
-echo '--------------------------------------------------------------------------------'
-echo '--- Temporary Files ------------------------------------------------------------'
-echo '--------------------------------------------------------------------------------'
-echo "IR : ${IR_FILE//$HOME/~}"
-echo "VC : ${VCGEN_FILE//$HOME/~}"
-echo '--------------------------------------------------------------------------------'
+# echo
+# echo '--------------------------------------------------------------------------------'
+# echo '--- Temporary Files ------------------------------------------------------------'
+# echo '--------------------------------------------------------------------------------'
+# echo "IR : ${IR_FILE//$HOME/~}"
+# echo "VC : ${VCGEN_FILE//$HOME/~}"
+# echo '--------------------------------------------------------------------------------'
+
 
 # }}}
 

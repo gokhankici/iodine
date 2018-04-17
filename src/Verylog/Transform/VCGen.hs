@@ -15,20 +15,30 @@ import           Verylog.Transform.Utils as U
 import           Verylog.Language.Types
 
 import           Verylog.Solver.Common
--- import           Text.Printf
+import           Text.Printf
+
+data PropertyOptions = PropertyOptions { checkTagEq :: Bool
+                                       , checkValEq :: Bool
+                                       }
+
+defaultPropertyOptions :: PropertyOptions
+defaultPropertyOptions = PropertyOptions { checkTagEq = True
+                                         , checkValEq = False
+                                         }
+
 --------------------------------------------------------------------------------
 invs :: [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
 invs as = concatMap modular_inv as
           ++ non_interference_checks as
-          ++ concatMap provedProperty as
+          ++ concatMap (provedProperty defaultPropertyOptions) as
 
 --------------------------------------------------------------------------------
 modular_inv :: AlwaysBlock -> [Inv]  
 --------------------------------------------------------------------------------
 modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
   where
-    a' = a -- trc (printf "\nalways block #%d:\n" (a^.aId)) a a
+    a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
 
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> Inv
@@ -95,11 +105,15 @@ next_step_inv a = Horn { hBody = body
 
 -- sanitize globs are always the same
 sanGlobs   :: AlwaysBlock -> Expr
-sanGlobs a = Ands [ BinOp EQU
-                    (makeVar fmt{leftVar=True} v)
-                    (makeVar fmt{rightVar=True} v)
-                  | v <- (a ^. aSt ^. ports) `intersect` (a ^. aSt ^. sanitizeGlob)
-                  ]
+sanGlobs a = Ands $ concat [ [ BinOp EQU
+                              (makeVar fmt{leftVar=True} v)
+                              (makeVar fmt{rightVar=True} v)
+                              , BinOp EQU
+                              (makeVar fmt{taggedVar=True, leftVar=True} v)
+                              (makeVar fmt{taggedVar=True, rightVar=True} v)
+                             ]
+                           | v <- (a ^. aSt ^. ports) `intersect` (a ^. aSt ^. sanitizeGlob)
+                           ]
 
 taintEqs   :: AlwaysBlock -> Expr
 taintEqs a = Ands [ BinOp EQU
@@ -185,38 +199,34 @@ non_interference_inv a1 a2 = Horn { hBody = body
                   , nr1
                   ]
 
-                     
-provedProperty :: AlwaysBlock -> [Inv]
-provedProperty a =
-  [ Horn { hHead = BinOp GE (rtvar s) (Number 1)
-         , hBody = Ands [ KV { kvId   = a ^. aId
-                             , kvSubs = [ (n_rtvar' s, rtvar s)
-                                        , (n_ltvar' s, ltvar s)
-                                        ]
-                             }
-                        , BinOp GE (ltvar s) (Number 1)
-                        ]
-         , hId   = HornId (a ^. aId) InvTagEq
-         }
-  | s <- a^.aSt^.sinks
-  ] -- ++ others
+provedProperty :: PropertyOptions -> AlwaysBlock -> [Inv]
+provedProperty (PropertyOptions{..}) a = 
+  if checkTagEq then tagEq else [] ++
+  if checkValEq then valEq else []
   where
-    others = [ Horn { hHead = Ands [ BinOp GE (rtvar s) (Number 1)
-                                   , BinOp EQU (lvar s) (rvar s)
-                                   ]
-                    , hBody = Ands [ KV { kvId   = a ^. aId
-                                        , kvSubs = [ (n_rtvar' s, rtvar s)
-                                                   , (n_ltvar' s, ltvar s)
-                                                   , (n_lvar' s, lvar s)
-                                                   , (n_rvar' s, rvar s)
-                                                   ]
-                                        }
-                                   , BinOp GE (ltvar s) (Number 1)
-                                   ]
-                    , hId   = HornId (a ^. aId) (InvOther "l_sink=r_sink")
-                    }
-             | s <- a^.aSt^.sinks
-             ]
+    tagEq = [ Horn { hHead = BinOp GE (rtvar s) (Number 1)
+                   , hBody = Ands [ KV { kvId   = a ^. aId
+                                       , kvSubs = [ (n_rtvar' s, rtvar s)
+                                                  , (n_ltvar' s, ltvar s)
+                                                  ]
+                                       }
+                                  , BinOp GE (ltvar s) (Number 1)
+                                  ]
+                   , hId   = HornId (a ^. aId) InvTagEq
+                   }
+            | s <- a^.aSt^.sinks
+            ]
+    valEq = [ Horn { hHead =  BinOp EQU (lvar s) (rvar s)
+                   , hBody = Ands [ KV { kvId   = a ^. aId
+                                       , kvSubs = [ (n_lvar' s, lvar s)
+                                                  , (n_rvar' s, rvar s)
+                                                  ]
+                                       }
+                                  ]
+                   , hId   = HornId (a ^. aId) (InvOther "l_sink=r_sink")
+                   }
+            | s <- a^.aSt^.sinks
+            ]
 
 -------------------------------------------------------------------------------- 
 -- Helper functions
