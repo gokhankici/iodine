@@ -92,7 +92,6 @@ nextStmt (IfStmt{..})          = do
   -- ---------------------------------------------------------------------------
   fmt <- use trFmt
   let condTrue  = BinOp GE n (Number 1)
-      -- condFalse = BinOp LE n (Number 0)
       n = Var $ makeVarName fmt ifCond
 
   -- if condition is the value of an uninterpreted function,
@@ -116,7 +115,7 @@ nextStmt (IfStmt{..})          = do
   -- set back the old state
   setSt oldSt
   
-  -- run the then branch,
+  -- run the else branch,
   elseClauses   <- nextStmt elseStmt
   (elAs, elBAs) <- getSt
 
@@ -129,18 +128,7 @@ nextStmt (IfStmt{..})          = do
 
   let thDiff = branchDif thAs elAs
       elDiff = branchDif elAs thAs
-      -- thDiff  = trc "thDiff" (thAs,elAs,thDiff') thDiff'
-      -- elDiff  = trc "elDiff" (elAs,thAs,elDiff') elDiff'
 
-  -- let th  = Ands [ Ands (condTrue  : thenClauses)
-  --                , Boolean True
-  --                , Ands $ phiNodes fmt thAs thDiff
-  --                ]
-  --     el  = Ands [ Ands (condFalse : elseClauses)
-  --                , Boolean True
-  --                , Ands $ phiNodes fmt elAs elDiff
-  --                ]
-  --     ite = BinOp OR th el
   let th  = Ands $ thenClauses ++ phiNodes fmt thAs thDiff
       el  = Ands $ elseClauses ++ phiNodes fmt elAs elDiff
       ite = Ite condTrue th el
@@ -220,7 +208,7 @@ nextAsgn a l r = do es1 <- uf_eq r
     ufTagRhs = do fmt <- uses trFmt mkTagged
                   vars <- ufAtomsRHS fmt r
                   case vars of
-                    []   -> return $ makeVar fmt l -- rhs is constant, no tag propagation needed
+                    []   -> return $ Number 0 -- rhs is constant, no tag propagation needed
                     v:vs -> return $ foldr (BinOp PLUS) v vs
 
     mkTagged fmt = fmt{taggedVar=True}

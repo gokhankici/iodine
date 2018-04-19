@@ -46,7 +46,7 @@ toFqFormat fpst =
                               (symbol (printf "Eq%d" (n::Int) :: String))
                               [ QP (symbol "v") PatNone FInt
                               , QP (symbol "x") (PatPrefix (symbol pre_x) 1) FInt
-                              , QP (symbol "y") (PatPrefix (symbol pre_y) 2) FInt
+                              , QP (symbol "y") (PatPrefix (symbol pre_y) 1) FInt
                               ] 
                               (FQT.PAtom Eq (eVar "x") (eVar "y"))
                               (dummyPos "")
@@ -57,6 +57,17 @@ toFqFormat fpst =
                               , ("VLT_"  , "VRT_")
                               , ("VLTP_" , "VRTP_")
                               ]
+                            ] ++
+                            [mkQual
+                              (symbol (printf "Zero%d" (n::Int) :: String))
+                              [ QP (symbol "v") PatNone FInt
+                              , QP (symbol "x") (PatPrefix (symbol pre_x) 1) FInt
+                              ] 
+                              (FQT.PAtom Eq (eVar "x") (FQT.ECon (FQT.I 0)))
+                              (dummyPos "")
+                            | (n,pre_x) <-
+                              zip [1..]
+                              [ "VLT_"  , "VRT_" , "VLTP_" , "VRTP_"]
                             ]
       bindMds     = M.empty
       highOrBinds = False
