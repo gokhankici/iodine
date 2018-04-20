@@ -160,7 +160,7 @@ instance PPrint Event where
   toDoc (NegEdge clk) = text "event2(negedge," <> text clk <> rparen
 
 instance PPrint a => PPrint [a] where
-  toDoc = cat . (map toDoc)
+  toDoc as = brackets $ hsep $ punctuate comma (map toDoc as)
 
 instance PPrint Var where
   toDoc (Register r) = text "register" <> parens (text r)

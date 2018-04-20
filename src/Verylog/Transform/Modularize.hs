@@ -10,8 +10,11 @@ import           Control.Lens hiding (mapping)
 import           Control.Monad.State.Lazy
 import qualified Data.List                  as Li
 import qualified Data.HashMap.Strict        as M
+import qualified Data.HashSet               as S
 
 import           Verylog.Language.Types
+import Text.Printf
+import Debug.Trace
 
 modularize :: St -> [AlwaysBlock]
 modularize = inlineVariables >>> flattenToAlways
@@ -27,8 +30,10 @@ type NameMapping     = M.HashMap Id Id
 --------------------------------------------------------------------------------
 inlineVariables :: St -> St
 --------------------------------------------------------------------------------
-inlineVariables st =
-  st & irs .~ map (renameIR M.empty []) (st ^. irs)
+inlineVariables st' =
+  st & irs .~ map (renameIR M.empty (st ^. ports)) (st ^. irs)
+  where
+    st = trace (show st') st'
 
 --------------------------------------------------------------------------------
 renameIR :: NameMapping -> CurrentVars -> IR -> IR
@@ -65,7 +70,7 @@ createMapping mapping (parentVars, childVars) args = foldr (\(p,a) m -> helper p
                         , alwaysStmt = BlockingAsgn { lhs = w
                                                     , rhs = r
                                                     }
-                        , alwaysLoc  = ("-", "-")
+                        , alwaysLoc  = ("auto generated", "auto generated")
                         }
     helper p a (m,l) = 
       case (findVar parentVars a, findVar childVars (portName p)) of
@@ -74,6 +79,18 @@ createMapping mapping (parentVars, childVars) args = foldr (\(p,a) m -> helper p
         (Wire parentVar     , Register childVar) -> (m, (mkAsgn parentVar childVar) : l)
         (Register parentVar , Register childVar) ->
           throw (PassError $ parentVar ++ " -> " ++ childVar ++ " and both are registers")
+
+    findVar vars name =
+      case Li.find ((== name) . varName) vars of
+        Nothing ->
+          let msg = printf ( "in createMapping\n  mapping: %s\n  parentVars: %s\n  childVars: %s\n args: %s\n" ++
+                             "%s not in %s\n"
+                           )
+                    (show mapping) (show parentVars) (show childVars) (show args)
+                    name (show vars)
+          in error msg
+        Just v  -> v
+
 
 --------------------------------------------------------------------------------
 inlineStmt :: NameMapping -> Stmt -> Stmt
@@ -92,9 +109,9 @@ inlineStmt mapping s =
 inlineModInst :: NameMapping -> St -> St
 inlineModInst mapping st =
   over irs          (map (renameIR mapping newPorts)) .
-  over sanitizeGlob rIdsM .
-  over sanitize     rIdsM .
-  over taintEq      rIdsM .
+  over sanitizeGlob rIdsMSet .
+  over sanitize     rIdsMSet .
+  over taintEq      rIdsMSet .
   over sinks        rIdsM .
   over sources      rIdsM .
   over ufs          (replaceUFArgs mapping) .
@@ -103,6 +120,7 @@ inlineModInst mapping st =
   where
     newPorts = (replacePorts mapping) <$> st ^. ports
     rIdsM    = replaceIds mapping
+    rIdsMSet = S.toList . S.fromList . (replaceIds mapping)
 
 replaceIds  :: NameMapping -> [Id] -> [Id]
 replaceIds mapping = map (replaceId mapping)
@@ -115,12 +133,6 @@ replacePorts mapping v = v { varName = replaceId mapping (varName v) }
 
 replaceId :: NameMapping -> Id -> Id
 replaceId mapping v = M.lookupDefault v v mapping
-
-findVar :: [Var] -> Id -> Var
-findVar vars name =
-  case Li.find ((== name) . varName) vars of
-    Nothing -> throw (PassError $ name ++ " is not in " ++ (show vars))
-    Just v  -> v
 
 -----------------------------------------------------------------------------------
 -- | St -> [AlwaysBlock] :::: Flatten the module hierarchy after inlining
