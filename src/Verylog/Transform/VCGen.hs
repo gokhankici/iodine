@@ -38,7 +38,7 @@ modular_inv :: AlwaysBlock -> [Inv]
 --------------------------------------------------------------------------------
 modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
   where
-    a' = a --trc (printf "\nalways block #%d:\n" (a^.aId)) a a
+    a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
 
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> Inv
@@ -56,7 +56,7 @@ initial_inv a = Horn { hBody = Boolean True
            | sntz <- S.toList . S.fromList $ st ^. sanitize ++ st ^. sources ++ st ^. sinks
            ]
     sub2 = [ (tv, Number 0)
-           | s <- st^.ports, tv <- [n_ltvar', n_rtvar'] <*> [s]
+           | s <- varName <$> st^.ports, tv <- [n_ltvar', n_rtvar'] <*> [s]
            ]
 
 --------------------------------------------------------------------------------
@@ -75,14 +75,14 @@ tag_reset_inv a = Horn { hBody = prevKV a
     hsubs1 = concat [ [ (n_lvar' p, lvar p)
                       , (n_rvar' p, rvar p)
                       ]
-                    | p <- st^.ports
+                    | p <- varName <$> st^.ports
                     ]
     hsubs2 = [ (tv, Number 1)
              | s <- st^.sources
              , tv <- [n_ltvar', n_rtvar'] <*> [s]
              ]
     hsubs3 = [ (tv, Number 0)
-             | v <- (st^.ports) \\ (st^.sources)
+             | v <- (varName <$> st^.ports) \\ (st^.sources)
              , tv <- [n_ltvar', n_rtvar'] <*> [v]
              ]
 
@@ -112,7 +112,7 @@ sanGlobs a = Ands $ concat [ [ BinOp EQU
                               (makeVar fmt{taggedVar=True, leftVar=True} v)
                               (makeVar fmt{taggedVar=True, rightVar=True} v)
                              ]
-                           | v <- (a ^. aSt ^. ports) `intersect` (a ^. aSt ^. sanitizeGlob)
+                           | v <- (varName <$> a ^. aSt ^. ports) `intersect` (a ^. aSt ^. sanitizeGlob)
                            ]
 
 taintEqs   :: AlwaysBlock -> Expr
@@ -184,10 +184,10 @@ non_interference_inv a1 a2 = Horn { hBody = body
                            , (n_rtvar' v, rtvar v) -- rt' = rt
                            ]
                          -- variables not updated by a1 stay the same
-                         | v <- (a2^.aSt^.ports) \\ (a1^.aSt^.ports) 
+                         | v <- (varName <$> a2^.aSt^.ports) \\ (varName <$> a1^.aSt^.ports) 
                          ]
     updates2_2 = [ lukap v
-                 | p <- (a2^.aSt^.ports) `intersect` (a1^.aSt^.ports) 
+                 | p <- (varName <$> a2^.aSt^.ports) `intersect` (varName <$> a1^.aSt^.ports) 
                  , v <- primes p
                  ]
     

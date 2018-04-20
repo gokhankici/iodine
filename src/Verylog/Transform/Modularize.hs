@@ -6,62 +6,121 @@ module Verylog.Transform.Modularize (modularize) where
 
 import           Control.Arrow
 import           Control.Exception
-import           Control.Lens
+import           Control.Lens hiding (mapping)
 import           Control.Monad.State.Lazy
 import qualified Data.List                  as Li
 import qualified Data.HashMap.Strict        as M
 
 import           Verylog.Language.Types
 
+modularize :: St -> [AlwaysBlock]
 modularize = inlineVariables >>> flattenToAlways
 
 -----------------------------------------------------------------------------------
 -- | St -> St :::: inline module instantiation arguments
 -----------------------------------------------------------------------------------
 
-type Args = M.HashMap Id Id
+type CurrentVars     = [Var]  
+type ParentChildVars = ([Var], [Var])
+type NameMapping     = M.HashMap Id Id
 
+--------------------------------------------------------------------------------
 inlineVariables :: St -> St
-inlineVariables st = st & irs .~ map (mapIR M.empty) (st ^. irs)
+--------------------------------------------------------------------------------
+inlineVariables st =
+  st & irs .~ map (renameIR M.empty []) (st ^. irs)
+
+--------------------------------------------------------------------------------
+renameIR :: NameMapping -> CurrentVars -> IR -> IR
+-- takes a mapping & variables of the current module,
+-- and renames the variables in the IR
+--------------------------------------------------------------------------------
+renameIR mapping _ (Always{..}) = Always e' (inlineStmt mapping alwaysStmt) alwaysLoc
   where
-    mapIR :: Args -> IR -> IR
-    mapIR args (Always{..})        = Always e' (inline args alwaysStmt) alwaysLoc
-      where
-        e' = case event of
-               Star      -> Star
-               PosEdge v -> PosEdge $ replaceIfFound args v
-               NegEdge v -> NegEdge $ replaceIfFound args v
+    e' = case event of
+           Star      -> Star
+           PosEdge v -> PosEdge $ replaceId mapping v
+           NegEdge v -> NegEdge $ replaceId mapping v
 
-    mapIR args ir@(ModuleInst{..}) = ir { modInstSt = st' }
-      where args' = M.union (M.fromList modInstArgs) args
-            st'   = evalState (comp args') modInstSt
+renameIR mapping parentVars ir@(ModuleInst{..}) =
+  ir { modInstSt   = st''
+     , modInstArgs = modInstArgs'
+     }
+  where
+    childVars              = modInstSt ^. ports
+    -- replace the actual parameters first, since they might have changed
+    modInstArgs'           = (\a -> a & _2 %~ replaceId mapping) <$> modInstArgs
+    (mapping', newAssigns) = createMapping mapping (parentVars, childVars) modInstArgs'
+    st'                    = inlineModInst mapping' modInstSt
+    st''                   = st' & irs %~ (++) newAssigns
 
-    comp :: Args -> State St St
-    comp args = do irs      %= map (mapIR args)
-                   ports    %= replaceVars args
-                   ufs      %= replaceUFArgs args
-                   sanitize %= replaceVars args
-                   get
+--------------------------------------------------------------------------------
+createMapping :: NameMapping -> ParentChildVars -> [(Port, Id)] -> (NameMapping, [IR])
+-- takes a current mapping, both parent and child variables, and the module instantiation arguments
+-- then updates the mapping and creates `assign` blocks if needed for the input/output ports if needed
+--------------------------------------------------------------------------------
+createMapping mapping (parentVars, childVars) args = foldr (\(p,a) m -> helper p a m) (mapping, []) args
+  where
+    mkAsgn w r = Always { event      = Star
+                        , alwaysStmt = BlockingAsgn { lhs = w
+                                                    , rhs = r
+                                                    }
+                        , alwaysLoc  = ("-", "-")
+                        }
+    helper p a (m,l) = 
+      case (findVar parentVars a, findVar childVars (portName p)) of
+        (Wire parentVar     , Wire childVar)     -> (M.insert childVar parentVar m, l)
+        (Register parentVar , Wire childVar)     -> (m, (mkAsgn childVar parentVar) : l)
+        (Wire parentVar     , Register childVar) -> (m, (mkAsgn parentVar childVar) : l)
+        (Register parentVar , Register childVar) ->
+          throw (PassError $ parentVar ++ " -> " ++ childVar ++ " and both are registers")
 
-    inline :: Args -> Stmt -> Stmt
-    inline args s = case s of
-                      Block ss            -> Block (ia <$> ss)
-                      BlockingAsgn l r    -> BlockingAsgn (rif l) (rif r)
-                      NonBlockingAsgn l r -> NonBlockingAsgn (rif l) (rif r)
-                      IfStmt c t e        -> IfStmt (rif c) (ia t) (ia e)
-                      Skip                -> Skip
-      where
-        rif = replaceIfFound args
-        ia  = inline args
+--------------------------------------------------------------------------------
+inlineStmt :: NameMapping -> Stmt -> Stmt
+--------------------------------------------------------------------------------
+inlineStmt mapping s =
+  case s of
+    Block ss            -> Block (ia <$> ss)
+    BlockingAsgn l r    -> BlockingAsgn (rif l) (rif r)
+    NonBlockingAsgn l r -> NonBlockingAsgn (rif l) (rif r)
+    IfStmt c t e        -> IfStmt (rif c) (ia t) (ia e)
+    Skip                -> Skip
+  where
+    rif = replaceId mapping
+    ia  = inlineStmt mapping
 
-    replaceVars :: Args -> [Id] -> [Id]
-    replaceVars args = map (replaceIfFound args)
+inlineModInst :: NameMapping -> St -> St
+inlineModInst mapping st =
+  over irs          (map (renameIR mapping newPorts)) .
+  over sanitizeGlob rIdsM .
+  over sanitize     rIdsM .
+  over taintEq      rIdsM .
+  over sinks        rIdsM .
+  over sources      rIdsM .
+  over ufs          (replaceUFArgs mapping) .
+  set  ports        newPorts
+  $ st
+  where
+    newPorts = (replacePorts mapping) <$> st ^. ports
+    rIdsM    = replaceIds mapping
 
-    replaceUFArgs          :: Args -> M.HashMap Id [Id] -> M.HashMap Id [Id]
-    replaceUFArgs args ufs = M.map (replaceVars args) ufs
+replaceIds  :: NameMapping -> [Id] -> [Id]
+replaceIds mapping = map (replaceId mapping)
 
-    replaceIfFound        :: Args -> Id -> Id
-    replaceIfFound args v = M.lookupDefault v v args
+replaceUFArgs :: NameMapping -> M.HashMap Id [Id] -> M.HashMap Id [Id]
+replaceUFArgs mapping uninFs = M.map (replaceIds mapping) uninFs
+
+replacePorts :: NameMapping -> Var -> Var 
+replacePorts mapping v = v { varName = replaceId mapping (varName v) }
+
+replaceId :: NameMapping -> Id -> Id
+replaceId mapping v = M.lookupDefault v v mapping
+
+findVar :: [Var] -> Id -> Var
+findVar vars name =
+  case Li.find ((== name) . varName) vars of
+    Nothing -> throw (PassError $ name ++ " is not in " ++ (show vars))
+    Just v  -> v
 
 -----------------------------------------------------------------------------------
 -- | St -> [AlwaysBlock] :::: Flatten the module hierarchy after inlining
@@ -76,10 +135,14 @@ m_flattenToAlways :: St -> S [AlwaysBlock]
 m_flattenToAlways st = sequence ((f st) <$> st^.irs) >>= return . concat
   where
     f                     :: St -> IR -> S [AlwaysBlock]
-    f st (Always{..})     =  do id <- get
-                                put (id+1)
-                                return [AB event alwaysStmt id (filterSt alwaysStmt st) alwaysLoc]
+    f stt (Always{..})    =  do i <- get
+                                put (i+1)
+                                return [AB event alwaysStmt i (filterSt alwaysStmt stt) alwaysLoc]
     f _  (ModuleInst{..}) =  m_flattenToAlways modInstSt
+
+    filterVars :: [Id] -> [Var] -> [Var]
+    filterVars toKeep = filter (\v -> Li.elem (varName v) toKeep)
+
 
     filterList :: [Id] -> [Id] -> [Id]
     filterList toKeep = filter (\x -> Li.elem x toKeep)
@@ -88,17 +151,17 @@ m_flattenToAlways st = sequence ((f st) <$> st^.irs) >>= return . concat
     filterMap toKeep = M.filterWithKey (\k _v -> Li.elem k toKeep)
 
     filterSt :: Stmt -> St -> St
-    filterSt s st = let vars  = foldVariables id s
-                        st'   = over ufs      (filterMap vars)  .
-                                set irs      [] $
-                                st
-                        vars' = vars ++ (concat $ M.elems (st'^.ufs))
-                        st''  = over ports    (filterList vars') .
-                                over sources  (filterList vars') .
-                                over sinks    (filterList vars') .
-                                over sanitize (filterList vars') $
-                                st'
-                    in st''
+    filterSt s stt = let vars  = foldVariables id s
+                         st'   = over ufs      (filterMap vars)  .
+                                 set irs      [] $
+                                 stt
+                         vars' = vars ++ (concat $ M.elems (st'^.ufs))
+                         st''  = over ports    (filterVars vars') .
+                                 over sources  (filterList vars') .
+                                 over sinks    (filterList vars') .
+                                 over sanitize (filterList vars') $
+                                 st'
+                     in st''
 
 class FoldVariables a where
   foldVariables :: (Id -> b) -> a -> [b]

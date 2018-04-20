@@ -11,6 +11,7 @@ import qualified Data.HashMap.Strict      as M
 import           Data.Typeable
 import           Text.PrettyPrint hiding (sep)
 import           Data.List
+import           Data.Hashable
 
 --------------------------------------------------------------------------------
 -- IR for the formalism
@@ -29,12 +30,28 @@ data AlwaysBlock = AB { _aEvent   :: Event
 
 type Id = String
 
+data Port = Input  { portName :: String }
+          | Output { portName :: String }
+          deriving (Eq, Show)
+
+instance Hashable Port where
+  hashWithSalt n (Input s)  = hashWithSalt n ("input", s)
+  hashWithSalt n (Output s) = hashWithSalt n ("output", s)
+
+data Var = Register { varName :: String }
+         | Wire     { varName :: String }
+         deriving (Eq, Show)
+
+instance Hashable Var where
+  hashWithSalt n (Register s) = hashWithSalt n ("register", s)
+  hashWithSalt n (Wire s)     = hashWithSalt n ("wire", s)
+
 data IR = Always     { event      :: Event
                      , alwaysStmt :: Stmt
                      , alwaysLoc  :: (String, String) -- Module & instance name
                      }
         | ModuleInst { modInstName :: String
-                     , modInstArgs :: [(String,String)] -- formal & actual parameters
+                     , modInstArgs :: [(Port,String)] -- formal & actual parameters
                      , modInstSt   :: St
                      }
 
@@ -55,7 +72,7 @@ data Stmt = Block           { blockStmts :: [Stmt] }
                             }
           | Skip
 
-data St = St { _ports        :: [Id]
+data St = St { _ports        :: [Var]
              , _ufs          :: M.HashMap Id [Id]
              , _sources      :: [Id]
              , _sinks        :: [Id]
@@ -119,7 +136,7 @@ instance PPrint IR where
                                                   , rparen
                                                   ] <> text "."
     where
-      pe (x,y) = parens (text x <> comma <+> text y)
+      pe (x,y) = parens (text (portName x) <> comma <+> text y)
       pl = brackets . hsep . (punctuate (text ", "))
                             
   
@@ -145,11 +162,15 @@ instance PPrint Event where
 instance PPrint a => PPrint [a] where
   toDoc = cat . (map toDoc)
 
+instance PPrint Var where
+  toDoc (Register r) = text "register" <> parens (text r)
+  toDoc (Wire w)     = text "wire" <> parens (text w)
+
 instance PPrint St where
   toDoc st = vcat $ stDoc : space : st^.irs.to (map toDoc)
     where
       stDoc = text "St" <+>
-              vcat [ lbrace <+> text "ports" <+> equals <+> st^.ports.to     printList
+              vcat [ lbrace <+> text "ports" <+> equals <+> st^.ports.to     toDoc
                    , comma  <+> text "ufs  " <+> equals <+> st^.ufs.to       printMap
                    , comma  <+> text "srcs " <+> equals <+> st^.sources.to   printList
                    , comma  <+> text "sinks" <+> equals <+> st^.sinks.to     printList
@@ -158,7 +179,7 @@ instance PPrint St where
                    ]
 
 instance PPrint AlwaysBlock where
-  toDoc a = text "always(" <> vcat [ comment "ports    " <+> printList (a^.aSt^.ports)        <> comma
+  toDoc a = text "always(" <> vcat [ comment "ports    " <+> toDoc (a^.aSt^.ports)            <> comma
                                    , comment "ufs      " <+> printMap  (a^.aSt^.ufs)          <> comma
                                    , comment "sources  " <+> printList (a^.aSt^.sources)      <> comma
                                    , comment "sinks    " <+> printList (a^.aSt^.sinks)        <> comma
@@ -174,7 +195,7 @@ instance PPrint AlwaysBlock where
       comment t = text "/*" <+> text t <+> text "*/"
 
 printList :: [String] -> Doc
-printList   = brackets . text . (intercalate ", ")
+printList = brackets . text . (intercalate ", ")
 
 printMap :: M.HashMap String [String] -> Doc
 printMap = brackets

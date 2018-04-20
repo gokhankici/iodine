@@ -14,6 +14,7 @@ import           Control.Lens
 import           Control.Monad (void)
 import           Control.Monad.State.Lazy
 import           Data.Char (isLetter, isDigit)
+import           Data.Hashable
 import qualified Data.HashMap.Strict        as M
 import qualified Data.HashSet               as S
 import qualified Data.List                  as Li
@@ -34,9 +35,17 @@ import           Verylog.Language.Utils
 -- | Verylog IR
 -----------------------------------------------------------------------------------
 
-data ParsePort = PRegister { parsePortName :: String }
-               | PWire     { parsePortName :: String }
-               deriving (Show)
+data ParsePort = PInput  String
+               | POutput String
+               deriving (Eq, Show)
+
+data ParseVar = PRegister String
+              | PWire     String
+              deriving (Eq, Show)
+
+instance Hashable ParseVar where
+  hashWithSalt n (PRegister s) = hashWithSalt n ("parse-register", s)
+  hashWithSalt n (PWire s)     = hashWithSalt n ("parse-wire", s)
 
 data ParseBehavior = PAlways ParseEvent ParseStmt
                    deriving (Show)
@@ -52,24 +61,24 @@ data ParseUF = PUF String [String]
 data ParseGate = PContAsgn String String
                | PModuleInst { pmModuleName    :: String
                              , pmInstName      :: String            -- name of the module
-                             , pmInstPortNames :: [String]          -- port list (i.e. formal parameters)
+                             , pmInstPorts     :: [ParsePort]       -- port list (i.e. formal parameters)
                              , pmInstArgs      :: [String]          -- instantiations (i.e. actual parameters)
-                             , pmInstPorts     :: [ParsePort]       -- wires or registers used
+                             , pmInstVars      :: [ParseVar]        -- wires or registers used
                              , pmInstGates     :: [ParseGate]       -- assign or module instantiations
                              , pmInstBehaviors :: [ParseBehavior]   -- always blocks
                              , pmInstUFs       :: [ParseUF]         -- uninterpreted functions
                              }
                deriving (Show)
                          
-data ParseIR = TopModule    { mPortNames :: [String]          -- port list (i.e. formal parameters)
-                            , mPorts     :: [ParsePort]       -- wires os registers used
+data ParseIR = TopModule    { mPortNames :: [ParsePort]       -- port list (i.e. formal parameters)
+                            , mPorts     :: [ParseVar]        -- wires os registers used
                             , mGates     :: [ParseGate]       -- assign or module instantiations
                             , mBehaviors :: [ParseBehavior]   -- always blocks
                             , mUFs       :: [ParseUF]         -- uninterpreted functions
                             }
              | PSource      String
              | PSink        String
-             | PSanitize    String
+             | PSanitize    [String]
              | PNotSanitize { nsPortName   :: String
                             , nsModuleName :: Maybe String
                             }
@@ -93,7 +102,7 @@ data ParseStmt = PBlock           [ParseStmt]
 
 data ParseSt = ParseSt { _parseSources      :: S.HashSet Id
                        , _parseSinks        :: S.HashSet Id
-                       , _parsePorts        :: S.HashSet Id
+                       , _parsePorts        :: S.HashSet ParseVar
                        , _parseSanitize     :: S.HashSet Id
                        , _parseNotSanitize  :: M.HashMap Id (S.HashSet Id)
                        , _parseSanitizeGlob :: S.HashSet Id
@@ -133,7 +142,11 @@ parseWith p f s = case runParser (whole p) f s of
 --------------------------------------------------------------------------------
 
 parsePort :: Parser ParsePort
-parsePort = rWord "register" *> parens (PRegister <$> identifier)
+parsePort =     rWord "input"  *> parens (PInput  <$> identifier)
+            <|> rWord "output" *> parens (POutput <$> identifier)
+
+parseVar :: Parser ParseVar
+parseVar = rWord "register" *> parens (PRegister <$> identifier)
             <|> rWord "wire" *> parens (PWire     <$> identifier)
 
 parseBehavior :: Parser ParseBehavior
@@ -156,9 +169,9 @@ parseModuleInst = rWord "module"
                   *> parens (PModuleInst
                               <$> identifier            -- module name
                               <*> (comma *> identifier) -- instantiation name
-                              <*> (comma *> list identifier)
-                              <*> (comma *> list identifier)
                               <*> (comma *> list parsePort)
+                              <*> (comma *> list identifier)
+                              <*> (comma *> list parseVar)
                               <*> (comma *> list parseGate)
                               <*> (comma *> list parseBehavior)
                               <*> (comma *> list parseUF))
@@ -167,8 +180,8 @@ parseTopModule :: Parser ParseIR
 parseTopModule = spaceConsumer
                  *> rWord "topmodule"
                  *> parens (TopModule
-                             <$> list identifier
-                             <*> (comma *> list parsePort)
+                             <$> list parsePort
+                             <*> (comma *> list parseVar)
                              <*> (comma *> list parseGate)
                              <*> (comma *> list parseBehavior)
                              <*> (comma *> list parseUF))
@@ -182,7 +195,7 @@ parseTaint = spaceConsumer
                   <|> rWord "sanitize_mod"  *> parens (PSanitizeMod <$> identifier <*> (comma *> identifier))
                   <|> rWord "sanitize_glob" *> parens (PSanitizeGlob <$> identifier)
                   <|> rWord "not_sanitize"  *> parens (PNotSanitize <$> identifier <*> optionMaybe (comma *> identifier))
-                  <|> rWord "sanitize"      *> parens (PSanitize <$> identifier)
+                  <|> rWord "sanitize"      *> parens (PSanitize <$> parseMany1 identifier comma)
                 )
              <* char '.' <* spaceConsumer
 
@@ -258,6 +271,10 @@ identifier = lexeme (p >>= check)
                    then fail $ "keyword " ++ show x ++ " cannot be an identifier"
                    else return x
 
+parseMany1 :: Parser a -> Parser b -> Parser [a]
+parseMany1 elemP sepP = 
+    (:) <$> elemP <*> many (sepP *> elemP)
+
 --------------------------------------------------------------------------------
 -- | Printing Error Messages
 --------------------------------------------------------------------------------
@@ -313,7 +330,7 @@ instance Exception IRParseError
 -----------------------------------------------------------------------------------
 
 sanitizeAll :: Bool
-sanitizeAll = True
+sanitizeAll = False
 
 -----------------------------------------------------------------------------------
 makeState :: [ParseIR] -> St
@@ -359,7 +376,7 @@ collectTaint :: ParseIR -> State ParseSt ()
 collectTaint (PSource s)        = parseSources      %= S.insert s
 collectTaint (PSink s)          = parseSinks        %= S.insert s
 collectTaint (PTaintEq s)       = parseTaintEq      %= S.insert s
-collectTaint (PSanitize s)      = parseSanitize     %= S.insert s
+collectTaint (PSanitize s)      = parseSanitize     %= S.union (S.fromList s)
 collectTaint (PNotSanitize{..}) = case nsModuleName of
                                     Nothing -> parseNotSanitize %= mapOfSetInsert "" nsPortName
                                     Just m  -> parseNotSanitize %= mapOfSetInsert m  nsPortName
@@ -370,7 +387,7 @@ collectTaint (TopModule{..})    = do sequence_ $ sanitizeWire Nothing <$> mPorts
                                      sequence_ $ sanitizeModule       <$> mGates
                                      return ()
   where
-    sanitizeWire :: Maybe (String, String) -> ParsePort -> State ParseSt ()
+    sanitizeWire :: Maybe (String, String) -> ParseVar -> State ParseSt ()
     sanitizeWire m (PRegister s) =
       if   sanitizeAll
       then do maybeNegVars <- uses parseNotSanitize (M.lookup modName)
@@ -392,7 +409,7 @@ collectTaint (TopModule{..})    = do sequence_ $ sanitizeWire Nothing <$> mPorts
     sanitizeModule :: ParseGate -> State ParseSt ()
     sanitizeModule (PModuleInst{..}) = do sequence_ $
                                             sanitizeWire (Just (pmModuleName , pmInstName))
-                                            <$> pmInstPorts
+                                            <$> pmInstVars
                                           sequence_ $ sanitizeModule <$> pmInstGates
     sanitizeModule (PContAsgn _ _)   = return ()
 
@@ -405,7 +422,7 @@ sanitizeInsts gates = sequence_ $ sanitizeInst <$> gates
     sanitizeInst                   :: ParseGate -> State ParseSt ()
     sanitizeInst (PContAsgn _ _)   = return ()
     sanitizeInst (PModuleInst{..}) = do
-      vars    <- uses parseModSanitize (M.lookup pmModuleName)
+      vars         <- uses parseModSanitize (M.lookup pmModuleName)
       maybeNegVars <- uses parseNotSanitize (M.lookup pmModuleName)
       let negVars = case maybeNegVars of
                       Nothing -> S.empty
@@ -417,14 +434,11 @@ sanitizeInsts gates = sequence_ $ sanitizeInst <$> gates
                    <$> S.toList (vs `S.difference` negVars)
       sanitizeInsts pmInstGates
         where
-          mk_mod_var m v =
-            case Li.elemIndex v pmInstPortNames of
-              Just i  -> pmInstArgs !! i
-              Nothing -> printf "%s_%s" m v
+          mk_mod_var m v = printf "%s_%s" m v
 
 type Loc = (String, String)
 -----------------------------------------------------------------------------------
-makeIntermediaryIR :: Loc -> [ParsePort] -> [ParseGate] -> [ParseBehavior] -> [ParseUF] -> St
+makeIntermediaryIR :: Loc -> [ParseVar] -> [ParseGate] -> [ParseBehavior] -> [ParseUF] -> St
 -----------------------------------------------------------------------------------
 makeIntermediaryIR loc prts gates bhvs us = evalState comp emptyParseSt
   where
@@ -432,7 +446,7 @@ makeIntermediaryIR loc prts gates bhvs us = evalState comp emptyParseSt
               sequence_ (collectGate loc <$> reverse gates)
               sequence_ (collectBhv  loc <$> reverse bhvs)
               sequence_ (collectUF       <$> reverse us)
-              st . ports <~ uses parsePorts S.toList
+              st . ports <~ uses parsePorts (S.toList . (S.map convertVar))
               st . ufs   %= flattenUFs
               use st
 
@@ -447,10 +461,15 @@ makeIntermediaryIR loc prts gates bhvs us = evalState comp emptyParseSt
                                      Just as -> concatMap varDeps as
                    in M.mapWithKey (\k _ -> varDeps k) m
 
+
+convertVar :: ParseVar -> Var
+convertVar (PRegister r) = Register r
+convertVar (PWire     w) = Wire     w
+
 -----------------------------------------------------------------------------------
-collectPort :: ParsePort -> State ParseSt ()
+collectPort :: ParseVar -> State ParseSt ()
 -----------------------------------------------------------------------------------
-collectPort p = parsePorts %= S.insert (parsePortName p)
+collectPort p = parsePorts %= S.insert p
 
 -----------------------------------------------------------------------------------
 collectGate :: Loc -> ParseGate -> State ParseSt ()
@@ -458,12 +477,14 @@ collectGate :: Loc -> ParseGate -> State ParseSt ()
 collectGate loc  (PContAsgn l r)   = st . irs %= (:) (Always Star (BlockingAsgn l r) loc)
 collectGate _loc (PModuleInst{..}) =
   st . irs %= (:) ModuleInst{ modInstName = pmInstName
-                            , modInstArgs = zip pmInstPortNames pmInstArgs
+                            , modInstArgs = zip (toPort <$> pmInstPorts) pmInstArgs
                             , modInstSt   = st'
                             }
   where
+    toPort (PInput x)  = Input x
+    toPort (POutput x) = Output x
     loc' = (pmModuleName, pmInstName)
-    st'  = makeIntermediaryIR loc' pmInstPorts pmInstGates pmInstBehaviors pmInstUFs
+    st'  = makeIntermediaryIR loc' pmInstVars pmInstGates pmInstBehaviors pmInstUFs
 
 -----------------------------------------------------------------------------------
 collectBhv :: Loc -> ParseBehavior -> State ParseSt ()

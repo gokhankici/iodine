@@ -166,7 +166,9 @@ last_err=$?
 echo "\n"
 
 if [[ $last_err -ne 0 ]]; then
-    cat $FQOUT_FILE
+    if [[ -z "$JUST_VCGEN" ]]; then
+        cat $FQOUT_FILE
+    fi
     echo "\n"
     red "UNSAFE"
     exit $last_err

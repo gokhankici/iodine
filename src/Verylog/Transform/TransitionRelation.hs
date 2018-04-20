@@ -48,7 +48,7 @@ next fmt a = evalState comp initSt
 
     comp = do es1 <- nextStmt (a^.aStmt)
 
-              ps  <- use (trSt . ports)
+              ps  <- uses (trSt . ports) (map varName)
               as  <- use trAs
 
               -- set the primed vars for the lhs of the assignments

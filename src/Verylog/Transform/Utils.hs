@@ -78,7 +78,7 @@ makeVarName f@(VarFormat{..}) v =
           | otherwise = ""
 
 allArgs        :: VarFormat -> St -> [Id]
-allArgs f st = let ps = st^.ports
+allArgs f st = let ps = varName <$> st^.ports
                  in (makeVarName f <$> ps) ++ (makeVarName f{taggedVar=True} <$> ps)
           
 nextArgs        :: VarFormat -> St -> [Id]
