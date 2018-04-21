@@ -8,7 +8,7 @@ source $CONF_FILE
 zparseopts -D -E -- \
 	u=UNIT -unit=UNIT \
 	-continue=CONTINUE \
-	-no-out=NO_OUT \
+	-no-output=NO_OUT \
 	-name:=NAME
 
 function blue()  { print -P "%F{blue}%B$1%b%f" }

@@ -72,7 +72,7 @@ main  = do
 
   (fpst, finfo) <- fpgen optInputFile
   let cfg = defConfig{ eliminate = Some
-                     , save      = True
+                     , save      = not optMinimize
                      , srcFile   = optInputFile
                      , metadata  = True
                      , minimize  = optMinimize
