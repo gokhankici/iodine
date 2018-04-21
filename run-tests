@@ -19,42 +19,47 @@ MIPS_DIR="$IVL_DIR/benchmarks/472-mips-pipelined"
 
 typeset -A SIMPLE_TESTS
 SIMPLE_TESTS=( \
-	"01 - 01 - tr-test-1" "-M test $THIS_DIR/test/verilog/pos/tr-test-1.v" \
-	"01 - 02 - tr-test-2" "-M test $THIS_DIR/test/verilog/pos/tr-test-2.v" \
-	"01 - 03 - tr-test-3" "-M test $THIS_DIR/test/verilog/pos/tr-test-3.v" \
-	"01 - 04 - tr-test-4" "-M test $THIS_DIR/test/verilog/pos/tr-test-4.v" \
-	"01 - 05 - tr-test-5" "-M test $THIS_DIR/test/verilog/pos/tr-test-5.v" \
-	"01 - 06 - tr-test-6" "-M test $THIS_DIR/test/verilog/pos/tr-test-6.v" \
-
-	"01 - 07 - stall hand" "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
+	"01 - 01 - tr-test-1"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-1.v" \
+	"01 - 02 - tr-test-2"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-2.v" \
+	"01 - 03 - tr-test-3"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-3.v" \
+	"01 - 04 - tr-test-4"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-4.v" \
+	"01 - 05 - tr-test-5"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-5.v" \
+	"01 - 06 - tr-test-6"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-6.v" \
+	"01 - 07 - stall hand"    "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
 	)
 
 typeset -A MIPS_STUB_TESTS
 MIPS_STUB_TESTS=( \
-	"02 - 01 - mips fragment"      "-M mips_pipeline $MIPS_DIR/472-mips-fragment.v"   \
-	"02 - 02 - mips fragment v2"   "-M mips_pipeline $MIPS_DIR/472-mips-fragment-2.v" \
-	"02 - 03 - mips fragment v3"   "-M mips_pipeline $MIPS_DIR/472-mips-fragment-3.v" \
-	"02 - 04 - mips fragment v4"   "-M mips_pipeline $MIPS_DIR/472-mips-fragment-4.v" \
+	"02 - 01 - mips fragment"       "-M mips_pipeline $MIPS_DIR/472-mips-fragment.v"   \
+	"02 - 02 - mips fragment v2"    "-M mips_pipeline $MIPS_DIR/472-mips-fragment-2.v" \
+	"02 - 03 - mips fragment v3"    "-M mips_pipeline $MIPS_DIR/472-mips-fragment-3.v" \
+	"02 - 04 - mips fragment v4"    "-M mips_pipeline $MIPS_DIR/472-mips-fragment-4.v" \
 	)
 
 typeset -A MIPS_MODULE_TESTS
 MIPS_MODULE_TESTS=( \
-	"03 - 01 - reg32"            "-M reg32            $MIPS_DIR/reg32.v" \
-	"03 - 02 - mux2"             "-M mux2             $MIPS_DIR/mux2.v" \
-	"03 - 03 - mux3"             "-M mux3             $MIPS_DIR/mux3.v" \
-	"03 - 04 - control_pipeline" "-M control_pipeline $MIPS_DIR/control_pipeline.v" \
-	"03 - 05 - mem32"            "-M mem32            $MIPS_DIR/mem32.v" \
-	"03 - 06 - alu"              "-M alu              $MIPS_DIR/alu.v" \
-	"03 - 07 - alu_ctl"          "-M alu_ctl          $MIPS_DIR/alu_ctl.v" \
-	"03 - 08 - add32"            "-M add32            $MIPS_DIR/add32.v" \
-	"03 - 09 - rom32"            "-M rom32            $MIPS_DIR/rom32.v" \
-	"03 - 10 - reg_file"         "-M reg_file         $MIPS_DIR/reg_file.v" \
+	"03 - 01 - reg32"               "-M reg32            $MIPS_DIR/reg32.v" \
+	"03 - 02 - mux2"                "-M mux2             $MIPS_DIR/mux2.v" \
+	"03 - 03 - mux3"                "-M mux3             $MIPS_DIR/mux3.v" \
+	"03 - 04 - control_pipeline"    "-M control_pipeline $MIPS_DIR/control_pipeline.v" \
+	"03 - 05 - mem32"               "-M mem32            $MIPS_DIR/mem32.v" \
+	"03 - 06 - alu"                 "-M alu              $MIPS_DIR/alu.v" \
+	"03 - 07 - alu_ctl"             "-M alu_ctl          $MIPS_DIR/alu_ctl.v" \
+	"03 - 08 - add32"               "-M add32            $MIPS_DIR/add32.v" \
+	"03 - 09 - rom32"               "-M rom32            $MIPS_DIR/rom32.v" \
+	"03 - 10 - reg_file"            "-M reg_file         $MIPS_DIR/reg_file.v" \
 	)
 
-typeset -A NEG_TESTS
-NEG_TESTS=( \
-	"04 - 01 - neg-test-1" "-M test $THIS_DIR/test/verilog/neg/neg-test-1.v" \
+typeset -A MAJOR_TESTS
+MAJOR_TESTS=( \
+	"10 - 01 - mips full"    "-M mips_pipeline $MIPS_DIR/mips_pipeline.v" \
 	)
+
+typeset -A NEG_TESTS_SIMPLE
+NEG_TESTS_SIMPLE=( \
+	"-01 - 01 - neg-test-1"    "-M test $THIS_DIR/test/verilog/neg/neg-test-1.v" \
+	)
+
 
 if   [[ "$NAME[2]" == "simple" ]]; then
 	typeset -A TESTS
@@ -68,13 +73,25 @@ elif [[ "$NAME[2]" == "mips-module" ]]; then
 	typeset -A TESTS
 	TESTS=( ${(kv)MIPS_MODULE_TESTS} )
 
+elif [[ "$NAME[2]" == "major" ]]; then
+	typeset -A TESTS
+	TESTS=( ${(kv)MAJOR_TESTS} )
+
+elif [[ "$NAME[2]" == "neg" ]]; then
+	typeset -A NEG_TESTS
+	NEG_TESTS=( ${(kv)NEG_TESTS_SIMPLE} )
+
 elif [[ -z "$NAME" ]]; then
 	typeset -A TESTS
 	TESTS=( \
 		${(kv)SIMPLE_TESTS} \
 		${(kv)MIPS_STUB_TESTS} \
 		${(kv)MIPS_MODULE_TESTS} \
+		${(kv)MAJOR_TESTS} \
 		)
+
+	typeset -A NEG_TESTS
+	NEG_TESTS=( ${(kv)NEG_TESTS_SIMPLE} )
 else
 	echo "unrecognized --name argument: $NAME[2]" >&2
 	exit 1
@@ -135,6 +152,41 @@ for test_name in ${(ok)TESTS}; do
 	else
 		green "================================================================================"
 		green "   TEST '$test_name' PASSED !" 1>&2
+		green "================================================================================"
+	fi
+done
+
+for test_name in ${(ok)NEG_TESTS}; do
+	if [[ -z "$NO_OUT" ]]; then
+		blue "================================================================================"
+		blue "   RUNNING NEG $test_name"
+		blue "================================================================================"
+	fi
+
+	test_input="${NEG_TESTS[$test_name]}"
+	local -a test_arr
+	test_arr=("${(@s/ /)test_input}")
+
+
+	if [[ -z "$NO_OUT" ]]; then
+		$THIS_DIR/verylog ${test_arr} $@
+	else
+		$THIS_DIR/verylog ${test_arr} $@ &>/dev/null
+	fi
+	
+	last_err=$?
+
+	if [[ $last_err -eq 0 ]]; then
+		red "================================================================================"
+		red "   NEG TEST '$test_name' FAILED !" 1>&2
+		red "================================================================================"
+
+		if [[ -z "$CONTINUE" ]]; then
+			exit 1
+		fi	
+	else
+		green "================================================================================"
+		green "   NEG TEST '$test_name' PASSED !" 1>&2
 		green "================================================================================"
 	fi
 done
