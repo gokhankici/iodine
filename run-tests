@@ -9,6 +9,7 @@ zparseopts -D -E -- \
 	u=UNIT -unit=UNIT \
 	-continue=CONTINUE \
 	-no-output=NO_OUT \
+	-time=TIME \
 	-name:=NAME
 
 function blue()  { print -P "%F{blue}%B$1%b%f" }
@@ -121,6 +122,22 @@ if [[ -n "$UNIT" ]]; then
 	run_unit_tests
 fi
 
+run_verylog() {
+	local cmd
+
+	if [[ -z "$TIME" ]]; then
+		cmd=$THIS_DIR/verylog
+	else
+		cmd="time -p $THIS_DIR/verylog"
+	fi
+
+	if [[ -z "$NO_OUT" ]]; then
+		${(@s/ /)cmd} $@
+	else
+		${(@s/ /)cmd} $@ >/dev/null
+	fi
+}
+
 for test_name in ${(ok)TESTS}; do
 	if [[ -z "$NO_OUT" ]]; then
 		blue "================================================================================"
@@ -132,13 +149,8 @@ for test_name in ${(ok)TESTS}; do
 	local -a test_arr
 	test_arr=("${(@s/ /)test_input}")
 
+	run_verylog ${test_arr} $@
 
-	if [[ -z "$NO_OUT" ]]; then
-		$THIS_DIR/verylog ${test_arr} $@
-	else
-		$THIS_DIR/verylog ${test_arr} $@ &>/dev/null
-	fi
-	
 	last_err=$?
 
 	if [[ $last_err -ne 0 ]]; then
@@ -168,11 +180,7 @@ for test_name in ${(ok)NEG_TESTS}; do
 	test_arr=("${(@s/ /)test_input}")
 
 
-	if [[ -z "$NO_OUT" ]]; then
-		$THIS_DIR/verylog ${test_arr} $@
-	else
-		$THIS_DIR/verylog ${test_arr} $@ &>/dev/null
-	fi
+	run_verylog ${test_arr} $@
 	
 	last_err=$?
 
