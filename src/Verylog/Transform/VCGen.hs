@@ -38,7 +38,7 @@ modular_inv :: AlwaysBlock -> [Inv]
 --------------------------------------------------------------------------------
 modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
   where
-    a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
+    a' = a -- trc (printf "\nalways block #%d:\n" (a^.aId)) a a
 
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> Inv
@@ -218,7 +218,7 @@ non_interference_inv :: AlwaysBlock -> AlwaysBlock -> Inv
 -- when a1 takes a step, a2 still holds
 non_interference_inv a1 a2 = Horn { hBody = body
                                   , hHead = KV { kvId   = a2 ^. aId
-                                               , kvSubs = updates2_1 ++ updates2_2
+                                               , kvSubs = updates2
                                                }
                                   , hId   = HornId (a2 ^. aId) (InvInter (a1 ^. aId))
                                   }
@@ -229,6 +229,7 @@ non_interference_inv a1 a2 = Horn { hBody = body
     lukap v   = case lookup v updates1 of
                   Nothing -> throw $ PassError "cannot find v in updates1"
                   Just e  -> (v,e)
+    updates2    = updates2_1 ++ updates2_2
     updates2_1  = concat [ [ (n_lvar v,  lvar v)  -- l' = l
                            , (n_rvar v,  rvar v)  -- r' = r
                            , (n_ltvar v, ltvar v) -- lt' = lt
@@ -245,7 +246,7 @@ non_interference_inv a1 a2 = Horn { hBody = body
     body   = Ands [ prevKV a1
                   , prevKV a2
                   , sanGlobs a1 updates1, taintEqs a1 updates1
-                  -- , sanGlobs a2, taintEqs a2
+                  , sanGlobs a2 updates2, taintEqs a2 updates2
                   , nl1
                   , nr1
                   ]

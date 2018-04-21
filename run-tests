@@ -31,9 +31,10 @@ SIMPLE_TESTS=( \
 
 typeset -A MIPS_STUB_TESTS
 MIPS_STUB_TESTS=( \
-	"02 - 01 - mips fragment stub" "-M mips_pipeline $MIPS_DIR/472-mips-fragment.v"   \
+	"02 - 01 - mips fragment"      "-M mips_pipeline $MIPS_DIR/472-mips-fragment.v"   \
 	"02 - 02 - mips fragment v2"   "-M mips_pipeline $MIPS_DIR/472-mips-fragment-2.v" \
 	"02 - 03 - mips fragment v3"   "-M mips_pipeline $MIPS_DIR/472-mips-fragment-3.v" \
+	"02 - 04 - mips fragment v4"   "-M mips_pipeline $MIPS_DIR/472-mips-fragment-4.v" \
 	)
 
 typeset -A MIPS_MODULE_TESTS

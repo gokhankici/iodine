@@ -329,9 +329,6 @@ instance Exception IRParseError
 -- | ParseIR -> St
 -----------------------------------------------------------------------------------
 
--- sanitizeAll :: Bool
--- sanitizeAll = False
-
 -----------------------------------------------------------------------------------
 makeState :: [ParseIR] -> St
 -----------------------------------------------------------------------------------
@@ -339,6 +336,8 @@ makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultSta
   where
     resultState = evalState comp emptyParseSt
     comp = do sequence_ $ collectTaint <$> (annots ++ [topIR]) -- collect taint information
+              sanitizeInsts mGates
+
               let loc = ("TOPLEVEL", "TOPLEVEL")
               st .= makeIntermediaryIR loc mPorts mGates mBehaviors mUFs -- create intermediary IR from parse IR
   
@@ -358,8 +357,6 @@ makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultSta
 
               -- and copy it to the instantiated modules
               st %= updateTaintInfo 
-
-              sanitizeInsts mGates
 
               -- make sure we have at least one source and a sink
               let f = (== 0) . length
@@ -389,22 +386,7 @@ collectTaint (TopModule{..})    = do sequence_ $ sanitizeWire Nothing <$> mPorts
   where
     sanitizeWire :: Maybe (String, String) -> ParseVar -> State ParseSt ()
     sanitizeWire _ (PRegister _) = return ()
-      -- if   sanitizeAll
-      -- then do maybeNegVars <- uses parseNotSanitize (M.lookup modName)
-      --         let inNeg = case maybeNegVars of
-      --                       Nothing  -> False
-      --                       Just nvs -> S.foldl' (\b v -> b || mkv v == s) False nvs
-      --         when (not inNeg) $
-      --           parseSanitize %= S.insert s
-      -- else return ()
-      -- where modName = case m of
-      --                   Nothing      -> ""
-      --                   Just (mn, _) -> mn
-      --       mkv = case m of
-      --               Nothing      -> id
-      --               Just (_, "") -> id
-      --               Just (_, i)  -> printf "%s_%s" i
-    sanitizeWire _ (PWire s) = parseSanitize %= S.insert s
+    sanitizeWire _ (PWire s)     = parseSanitize %= S.insert s
 
     sanitizeModule :: ParseGate -> State ParseSt ()
     sanitizeModule (PModuleInst{..}) = do sequence_ $
@@ -443,11 +425,11 @@ makeIntermediaryIR :: Loc -> [ParseVar] -> [ParseGate] -> [ParseBehavior] -> [Pa
 makeIntermediaryIR loc prts gates bhvs us = evalState comp emptyParseSt
   where
     comp = do sequence_ (collectPort     <$> prts)
-              sequence_ (collectGate loc <$> reverse gates)
               sequence_ (collectBhv  loc <$> reverse bhvs)
               sequence_ (collectUF       <$> reverse us)
               st . ports <~ uses parsePorts (S.toList . (S.map convertVar))
               st . ufs   %= flattenUFs
+              sequence_ (collectGate loc <$> reverse gates)
               use st
 
     ------------------------------------------------------
@@ -475,16 +457,17 @@ collectPort p = parsePorts %= S.insert p
 collectGate :: Loc -> ParseGate -> State ParseSt ()
 -----------------------------------------------------------------------------------
 collectGate loc  (PContAsgn l r)   = st . irs %= (:) (Always Star (BlockingAsgn l r) loc)
-collectGate _loc (PModuleInst{..}) =
-  st . irs %= (:) ModuleInst{ modInstName = pmInstName
-                            , modInstArgs = zip (toPort <$> pmInstPorts) pmInstArgs
-                            , modInstSt   = st'
-                            }
+collectGate _loc (PModuleInst{..}) = do
+  ufUnion <- uses (st . ufs) ((++ pmInstUFs) . ((\(n,as) -> PUF n as) <$>) . M.toList)
+  st . irs %=
+    (:) ModuleInst{ modInstName = pmInstName
+                  , modInstArgs = zip (toPort <$> pmInstPorts) pmInstArgs
+                  , modInstSt   = makeIntermediaryIR loc' pmInstVars pmInstGates pmInstBehaviors ufUnion
+                  }
   where
     toPort (PInput x)  = Input x
     toPort (POutput x) = Output x
     loc' = (pmModuleName, pmInstName)
-    st'  = makeIntermediaryIR loc' pmInstVars pmInstGates pmInstBehaviors pmInstUFs
 
 -----------------------------------------------------------------------------------
 collectBhv :: Loc -> ParseBehavior -> State ParseSt ()
