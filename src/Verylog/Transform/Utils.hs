@@ -13,7 +13,7 @@ import           Verylog.Language.Types
 import           Verylog.Solver.Common
 
 data VarFormat = VarFormat { taggedVar   :: Bool
-                           , primedVar   :: Bool
+                           -- , primedVar   :: Bool
                            , leftVar     :: Bool
                            , rightVar    :: Bool
                            , atomVar     :: Bool
@@ -24,7 +24,7 @@ data VarFormat = VarFormat { taggedVar   :: Bool
 
 fmt :: VarFormat
 fmt = VarFormat { taggedVar   = False
-                , primedVar   = False
+                -- , primedVar   = False
                 , leftVar     = False
                 , rightVar    = False
                 , atomVar     = False
@@ -42,16 +42,18 @@ makeVar f v = Var (makeVarName f v)
 
 makeVarName :: VarFormat -> Id -> Id
 makeVarName f@(VarFormat{..}) v =
-  if   debugSimple
-  then let v' = if isPrefixOf "v_" v
-                then case drop 2 v of
-                       []  -> throw (PassError $ printf "weird variable %s" v)
-                       h:t -> (toUpper h):t
-                else case v of
-                       []  -> throw (PassError "empty var")
-                       h:t -> (toUpper h):t
-       in printf "%s%s%s%s%s%s%s" par atom v' pos vid prime tag 
-  else printf "%s%sV%s%s%s%s_%s" par atom pos tag prime vid v
+  -- if   debugSimple
+  -- then let v' = if isPrefixOf "v_" v
+  --               then case drop 2 v of
+  --                      []  -> throw (PassError $ printf "weird variable %s" v)
+  --                      h:t -> (toUpper h):t
+  --               else case v of
+  --                      []  -> throw (PassError "empty var")
+  --                      h:t -> (toUpper h):t
+  --      in printf "%s%s%s%s%s%s%s" par atom v' pos vid prime tag 
+  -- else
+  -- printf "%s%sV%s%s%s%s_%s" par atom pos tag prime vid v
+  printf "%s%sV%s%s%s_%s" par atom pos tag vid v
 
   where
     atom | atomVar   = "v"
@@ -64,9 +66,9 @@ makeVarName f@(VarFormat{..}) v =
          | taggedVar = "T"
          | otherwise = ""
 
-    prime | debugSimple && primedVar = "p"
-          | primedVar = "P"
-          | otherwise = ""
+    -- prime | debugSimple && primedVar = "p"
+    --       | primedVar = "P"
+    --       | otherwise = ""
 
     vid   = maybe "" show varId
 
@@ -81,8 +83,8 @@ allArgs        :: VarFormat -> St -> [Id]
 allArgs f st = let ps = varName <$> st^.ports
                  in (makeVarName f <$> ps) ++ (makeVarName f{taggedVar=True} <$> ps)
           
-nextArgs        :: VarFormat -> St -> [Id]
-nextArgs f st = allArgs f st ++ allArgs f{primedVar=True} st
+-- nextArgs        :: VarFormat -> St -> [Id]
+-- nextArgs f st = allArgs f st ++ allArgs f{primedVar=True} st
 
 makeInvArgs        :: VarFormat -> AlwaysBlock -> [Id]
 makeInvArgs f a = allArgs f{leftVar=True} st ++ allArgs f{rightVar=True} st

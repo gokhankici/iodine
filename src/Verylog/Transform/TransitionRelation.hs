@@ -53,10 +53,10 @@ next fmt a = evalState comp initSt
 
               -- set the primed vars for the lhs of the assignments
               let up1 = concat [ [ (,)
-                                   (makeVarName fmt{taggedVar=True, primedVar=True} v)
+                                   (makeVarName fmt{taggedVar=True} v)
                                    (makeVar     fmt{taggedVar=True, varId=Just n} v)
                                  , (,)
-                                   (makeVarName fmt{primedVar=True} v)
+                                   (makeVarName fmt v)
                                    (makeVar     fmt{varId=Just n} v)
                                  ]
                                | (v,n) <- M.toList as -- blocking assignments
@@ -64,11 +64,11 @@ next fmt a = evalState comp initSt
 
               -- set the primed vars for the untouched variables
               let up2 = concat [ [ (,)
-                                   (makeVarName fmt{taggedVar=True, primedVar=True} v)
-                                   (makeVar     fmt{taggedVar=True} v) -- vt' = vt
+                                   (makeVarName fmt{taggedVar=True} v)
+                                   (makeVar     fmt{taggedVar=True} v) -- vt' = vt'
                                  , (,)
-                                   (makeVarName fmt{primedVar=True} v)
-                                   (makeVar     fmt v) -- v' = v
+                                   (makeVarName fmt v)
+                                   (makeVar     fmt v) -- v' = v'
                                  ]
                                | v <- ps \\ M.keys as -- not updated variables
                                ]

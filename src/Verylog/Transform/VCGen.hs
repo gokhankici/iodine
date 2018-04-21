@@ -52,11 +52,11 @@ initial_inv a = Horn { hBody = Boolean True
                      }
   where
     st   = a ^. aSt
-    sub1 = [ (n_lvar' sntz, rvar' sntz)
+    sub1 = [ (n_lvar sntz, rvar sntz)
            | sntz <- S.toList . S.fromList $ st ^. sanitize ++ st ^. sources ++ st ^. sinks
            ]
     sub2 = [ (tv, Number 0)
-           | s <- varName <$> st^.ports, tv <- [n_ltvar', n_rtvar'] <*> [s]
+           | s <- varName <$> st^.ports, tv <- [n_ltvar, n_rtvar] <*> [s]
            ]
 
 --------------------------------------------------------------------------------
@@ -72,18 +72,18 @@ tag_reset_inv a = Horn { hBody = prevKV a
     st    = a^.aSt
 
     hsubs  = hsubs1 ++ hsubs2 ++ hsubs3
-    hsubs1 = concat [ [ (n_lvar' p, lvar p)
-                      , (n_rvar' p, rvar p)
+    hsubs1 = concat [ [ (n_lvar p, lvar p)
+                      , (n_rvar p, rvar p)
                       ]
                     | p <- varName <$> st^.ports
                     ]
     hsubs2 = [ (tv, Number 1)
              | s <- st^.sources
-             , tv <- [n_ltvar', n_rtvar'] <*> [s]
+             , tv <- [n_ltvar, n_rtvar] <*> [s]
              ]
     hsubs3 = [ (tv, Number 0)
              | v <- (varName <$> st^.ports) \\ (st^.sources)
-             , tv <- [n_ltvar', n_rtvar'] <*> [v]
+             , tv <- [n_ltvar, n_rtvar] <*> [v]
              ]
 
 --------------------------------------------------------------------------------
@@ -168,7 +168,7 @@ alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
                                    printf "findLasts failed. \n  vl: %s\n  vr: %s\n  subs: %s\n"
                                    vl vr (show subs)
                                    
-      | f <- (\f -> f{primedVar=True}) <$> fmts
+      | f <- (\f -> f) <$> fmts
       ]
   
   
@@ -229,10 +229,10 @@ non_interference_inv a1 a2 = Horn { hBody = body
     lukap v   = case lookup v updates1 of
                   Nothing -> throw $ PassError "cannot find v in updates1"
                   Just e  -> (v,e)
-    updates2_1  = concat [ [ (n_lvar' v,  lvar v)  -- l' = l
-                           , (n_rvar' v,  rvar v)  -- r' = r
-                           , (n_ltvar' v, ltvar v) -- lt' = lt
-                           , (n_rtvar' v, rtvar v) -- rt' = rt
+    updates2_1  = concat [ [ (n_lvar v,  lvar v)  -- l' = l
+                           , (n_rvar v,  rvar v)  -- r' = r
+                           , (n_ltvar v, ltvar v) -- lt' = lt
+                           , (n_rtvar v, rtvar v) -- rt' = rt
                            ]
                          -- variables not updated by a1 stay the same
                          | v <- (varName <$> a2^.aSt^.ports) \\ (varName <$> a1^.aSt^.ports) 
@@ -257,8 +257,8 @@ provedProperty (PropertyOptions{..}) a =
   where
     tagEq = [ Horn { hHead = BinOp GE (rtvar s) (Number 1)
                    , hBody = Ands [ KV { kvId   = a ^. aId
-                                       , kvSubs = [ (n_rtvar' s, rtvar s)
-                                                  , (n_ltvar' s, ltvar s)
+                                       , kvSubs = [ (n_rtvar s, rtvar s)
+                                                  , (n_ltvar s, ltvar s)
                                                   ]
                                        }
                                   , BinOp GE (ltvar s) (Number 1)
@@ -269,8 +269,8 @@ provedProperty (PropertyOptions{..}) a =
             ]
     valEq = [ Horn { hHead =  BinOp EQU (lvar s) (rvar s)
                    , hBody = Ands [ KV { kvId   = a ^. aId
-                                       , kvSubs = [ (n_lvar' s, lvar s)
-                                                  , (n_rvar' s, rvar s)
+                                       , kvSubs = [ (n_lvar s, lvar s)
+                                                  , (n_rvar s, rvar s)
                                                   ]
                                        }
                                   ]
@@ -282,41 +282,39 @@ provedProperty (PropertyOptions{..}) a =
 -------------------------------------------------------------------------------- 
 -- Helper functions
 -------------------------------------------------------------------------------- 
-lvar, rvar, ltvar, rtvar, rvar' :: Id -> Expr
+lvar, rvar, ltvar, rtvar :: Id -> Expr
 lvar  = makeVar fmt{leftVar=True}
 rvar  = makeVar fmt{rightVar=True}
 ltvar = makeVar fmt{taggedVar=True, leftVar=True}
 rtvar = makeVar fmt{taggedVar=True, rightVar=True}
-
-rvar'  = makeVar fmt{primedVar=True, rightVar=True}
 
 -- lvar', ltvar', rtvar' :: Id -> Expr
 -- lvar'  = makeVar fmt{primedVar=True, leftVar=True}
 -- ltvar' = makeVar fmt{primedVar=True, taggedVar=True, leftVar=True}
 -- rtvar' = makeVar fmt{primedVar=True, taggedVar=True, rightVar=True}
 
-n_lvar', n_rvar', n_ltvar', n_rtvar' :: Id -> Id
-n_lvar'  = makeVarName fmt{primedVar=True, leftVar=True}
-n_rvar'  = makeVarName fmt{primedVar=True, rightVar=True}
-n_ltvar' = makeVarName fmt{primedVar=True, taggedVar=True, leftVar=True}
-n_rtvar' = makeVarName fmt{primedVar=True, taggedVar=True, rightVar=True}
+-- n_lvar', n_rvar', n_ltvar', n_rtvar' :: Id -> Id
+-- n_lvar'  = makeVarName fmt{primedVar=True, leftVar=True}
+-- n_rvar'  = makeVarName fmt{primedVar=True, rightVar=True}
+-- n_ltvar' = makeVarName fmt{primedVar=True, taggedVar=True, leftVar=True}
+-- n_rtvar' = makeVarName fmt{primedVar=True, taggedVar=True, rightVar=True}
 
--- n_lvar, n_rvar, n_ltvar, n_rtvar :: Id -> Id
--- n_lvar   = makeVarName fmt{leftVar=True}
--- n_rvar   = makeVarName fmt{rightVar=True}
--- n_ltvar  = makeVarName fmt{taggedVar=True, leftVar=True}
--- n_rtvar  = makeVarName fmt{taggedVar=True, rightVar=True}
+n_lvar, n_rvar, n_ltvar, n_rtvar :: Id -> Id
+n_lvar   = makeVarName fmt{leftVar=True}
+n_rvar   = makeVarName fmt{rightVar=True}
+n_ltvar  = makeVarName fmt{taggedVar=True, leftVar=True}
+n_rtvar  = makeVarName fmt{taggedVar=True, rightVar=True}
 
 
 -- kv[x' := x][y' := y][...]
 prevKV   :: AlwaysBlock -> Expr
 prevKV a = KV { kvId   = a^.aId
-              , kvSubs = subs
+              , kvSubs = [] -- subs
               } 
-  where
-    args  = makeInvArgs fmt a
-    args' = makeInvArgs fmt{primedVar=True} a
-    subs  = zipWith (\ v v' -> (v', Var v)) args args'
+  -- where
+  --   args  = makeInvArgs fmt a
+  --   args' = args --makeInvArgs fmt{primedVar=True} a
+  --   subs  = zipWith (\ v v' -> (v', Var v)) args args'
 
 primes :: Id -> [Id]
 primes v = [ makeVarName f v
@@ -327,5 +325,6 @@ primes v = [ makeVarName f v
                   ]
            ]
   where
-    f' = fmt{primedVar=True}
+    -- f' = fmt{primedVar=True}
+    f' = fmt
 

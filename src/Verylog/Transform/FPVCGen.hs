@@ -33,7 +33,7 @@ getBinds       :: [AlwaysBlock] -> [Inv] -> BindMap
 getBinds as cs = evalState comp (length constants + 1, m)
   where
     comp = do sequence_ (getBind <$> cs)
-              let is = (makeInvArgs fmt <$> as) ++ (makeInvArgs fmt{primedVar=True} <$> as)
+              let is = (makeInvArgs fmt <$> as) -- ++ (makeInvArgs fmt{primedVar=True} <$> as)
               getBindsFromExps $ map Var $ concat is
               use _2
 

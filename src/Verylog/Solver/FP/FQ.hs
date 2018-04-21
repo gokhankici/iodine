@@ -97,8 +97,7 @@ makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
   where
     mwf a@(AB{..}) =
       let allAs = makeInvArgs fmt a
-                  ++ makeInvArgs fmt{primedVar=True} a
-          ids = getBindIds fpst (Var <$> allAs)
+          ids   = getBindIds fpst (Var <$> allAs)
       in wfC
          (insertsIBindEnv ids emptyIBindEnv)
          (RR FInt (Reft ( symbol "v"
