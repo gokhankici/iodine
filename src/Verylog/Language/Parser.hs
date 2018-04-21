@@ -329,8 +329,8 @@ instance Exception IRParseError
 -- | ParseIR -> St
 -----------------------------------------------------------------------------------
 
-sanitizeAll :: Bool
-sanitizeAll = False
+-- sanitizeAll :: Bool
+-- sanitizeAll = False
 
 -----------------------------------------------------------------------------------
 makeState :: [ParseIR] -> St
@@ -343,8 +343,8 @@ makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultSta
               st .= makeIntermediaryIR loc mPorts mGates mBehaviors mUFs -- create intermediary IR from parse IR
   
               -- update IR state's taint info from parse IR 
-              st . sources      <~ uses parseSources      S.toList
-              st . sinks        <~ uses parseSinks        S.toList
+              st . sources  <~ uses parseSources      S.toList
+              st . sinks    <~ uses parseSinks        S.toList
 
               sanitizes     <- use parseSanitize
               maybeNegVars  <- uses parseNotSanitize (M.lookup "")
@@ -388,22 +388,22 @@ collectTaint (TopModule{..})    = do sequence_ $ sanitizeWire Nothing <$> mPorts
                                      return ()
   where
     sanitizeWire :: Maybe (String, String) -> ParseVar -> State ParseSt ()
-    sanitizeWire m (PRegister s) =
-      if   sanitizeAll
-      then do maybeNegVars <- uses parseNotSanitize (M.lookup modName)
-              let inNeg = case maybeNegVars of
-                            Nothing  -> False
-                            Just nvs -> S.foldl' (\b v -> b || mkv v == s) False nvs
-              when (not inNeg) $
-                parseSanitize %= S.insert s
-      else return ()
-      where modName = case m of
-                        Nothing      -> ""
-                        Just (mn, _) -> mn
-            mkv = case m of
-                    Nothing      -> id
-                    Just (_, "") -> id
-                    Just (_, i)  -> printf "%s_%s" i
+    sanitizeWire _ (PRegister _) = return ()
+      -- if   sanitizeAll
+      -- then do maybeNegVars <- uses parseNotSanitize (M.lookup modName)
+      --         let inNeg = case maybeNegVars of
+      --                       Nothing  -> False
+      --                       Just nvs -> S.foldl' (\b v -> b || mkv v == s) False nvs
+      --         when (not inNeg) $
+      --           parseSanitize %= S.insert s
+      -- else return ()
+      -- where modName = case m of
+      --                   Nothing      -> ""
+      --                   Just (mn, _) -> mn
+      --       mkv = case m of
+      --               Nothing      -> id
+      --               Just (_, "") -> id
+      --               Just (_, i)  -> printf "%s_%s" i
     sanitizeWire _ (PWire s) = parseSanitize %= S.insert s
 
     sanitizeModule :: ParseGate -> State ParseSt ()

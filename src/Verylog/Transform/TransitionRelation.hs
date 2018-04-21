@@ -73,8 +73,8 @@ next fmt a = evalState comp initSt
                                | v <- ps \\ M.keys as -- not updated variables
                                ]
 
-              es <- use errs
-              case es of
+              errors <- use errs
+              case errors of
                 []  -> return (Ands es1, up1 ++ up2)
                 e:_ -> throw e
 

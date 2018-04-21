@@ -13,6 +13,7 @@ import Language.Fixpoint.Types (Fixpoint(..), Loc(..), showFix, dummySpan)
 import qualified Text.PrettyPrint.HughesPJ as PP
 
 data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
+           deriving (Show)
 
 data InvType = InvInit | InvReTag | InvNext | InvTagEq | InvWF | InvInter Int | InvOther String
             deriving (Generic, Eq, Ord)
@@ -67,6 +68,7 @@ data Expr = BinOp     { bOp   :: BinOp
                       , ufNames :: (Expr,Expr)
                       , ufFunc  :: Id
                       }
+          deriving (Show)
 
 nextPred = "next"
 invPred  = "inv"

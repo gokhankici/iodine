@@ -13,8 +13,7 @@ import qualified Data.HashMap.Strict        as M
 import qualified Data.HashSet               as S
 
 import           Verylog.Language.Types
-import Text.Printf
-import Debug.Trace
+import           Debug.Trace
 
 modularize :: St -> [AlwaysBlock]
 modularize = inlineVariables >>> flattenToAlways
@@ -33,7 +32,7 @@ inlineVariables :: St -> St
 inlineVariables st' =
   st & irs .~ map (renameIR M.empty (st ^. ports)) (st ^. irs)
   where
-    st = trace (show st') st'
+    st = st' -- trace (show st') st'
 
 --------------------------------------------------------------------------------
 renameIR :: NameMapping -> CurrentVars -> IR -> IR
@@ -48,16 +47,19 @@ renameIR mapping _ (Always{..}) = Always e' (inlineStmt mapping alwaysStmt) alwa
            NegEdge v -> NegEdge $ replaceId mapping v
 
 renameIR mapping parentVars ir@(ModuleInst{..}) =
-  ir { modInstSt   = st''
+  ir { modInstSt   = st2
      , modInstArgs = modInstArgs'
      }
   where
-    childVars              = modInstSt ^. ports
+    childVars = modInstSt ^. ports
+
     -- replace the actual parameters first, since they might have changed
     modInstArgs'           = (\a -> a & _2 %~ replaceId mapping) <$> modInstArgs
     (mapping', newAssigns) = createMapping mapping (parentVars, childVars) modInstArgs'
-    st'                    = inlineModInst mapping' modInstSt
-    st''                   = st' & irs %~ (++) newAssigns
+
+    st0 = over ports (parentVars ++) modInstSt
+    st1 = inlineModInst mapping' st0
+    st2 = st1 & irs %~ (++) newAssigns
 
 --------------------------------------------------------------------------------
 createMapping :: NameMapping -> ParentChildVars -> [(Port, Id)] -> (NameMapping, [IR])
@@ -66,30 +68,24 @@ createMapping :: NameMapping -> ParentChildVars -> [(Port, Id)] -> (NameMapping,
 --------------------------------------------------------------------------------
 createMapping mapping (parentVars, childVars) args = foldr (\(p,a) m -> helper p a m) (mapping, []) args
   where
-    mkAsgn w r = Always { event      = Star
-                        , alwaysStmt = BlockingAsgn { lhs = w
-                                                    , rhs = r
-                                                    }
-                        , alwaysLoc  = ("auto generated", "auto generated")
-                        }
+    mkAsgn asgnFrom asgnTo =
+      Always { event      = Star
+             , alwaysStmt = BlockingAsgn { lhs = asgnTo
+                                         , rhs = asgnFrom
+                                         }
+             , alwaysLoc  = ("auto generated", "auto generated")
+             }
     helper p a (m,l) = 
       case (findVar parentVars a, findVar childVars (portName p)) of
-        (Wire parentVar     , Wire childVar)     -> (M.insert childVar parentVar m, l)
-        (Register parentVar , Wire childVar)     -> (m, (mkAsgn childVar parentVar) : l)
-        (Wire parentVar     , Register childVar) -> (m, (mkAsgn parentVar childVar) : l)
-        (Register parentVar , Register childVar) ->
+        (Just (Wire parentVar)     , Just (Wire childVar))     -> (M.insert childVar parentVar m, l)
+        (Just (Register parentVar) , Just (Register childVar)) ->
           throw (PassError $ parentVar ++ " -> " ++ childVar ++ " and both are registers")
+        _ ->
+          case p of
+            Input _   -> (m, (mkAsgn a (portName p)) : l) -- actual => formal
+            Output _  -> (m, (mkAsgn (portName p) a) : l) -- formal => actual
 
-    findVar vars name =
-      case Li.find ((== name) . varName) vars of
-        Nothing ->
-          let msg = printf ( "in createMapping\n  mapping: %s\n  parentVars: %s\n  childVars: %s\n args: %s\n" ++
-                             "%s not in %s\n"
-                           )
-                    (show mapping) (show parentVars) (show childVars) (show args)
-                    name (show vars)
-          in error msg
-        Just v  -> v
+    findVar vars name = Li.find ((== name) . varName) vars
 
 
 --------------------------------------------------------------------------------

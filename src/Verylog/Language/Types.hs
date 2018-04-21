@@ -32,7 +32,11 @@ type Id = String
 
 data Port = Input  { portName :: String }
           | Output { portName :: String }
-          deriving (Eq, Show)
+          deriving (Eq)
+
+instance Show Port where
+  show (Input  i) = "input("  ++ i ++ ")"
+  show (Output o) = "output(" ++ o ++ ")"
 
 instance Hashable Port where
   hashWithSalt n (Input s)  = hashWithSalt n ("input", s)
@@ -40,7 +44,12 @@ instance Hashable Port where
 
 data Var = Register { varName :: String }
          | Wire     { varName :: String }
-         deriving (Eq, Show)
+         deriving (Eq)
+
+instance Show Var where
+  show (Register r) = "register(" ++ r ++ ")"
+  show (Wire     w) = "wire("     ++ w ++ ")"
+
 
 instance Hashable Var where
   hashWithSalt n (Register s) = hashWithSalt n ("register", s)

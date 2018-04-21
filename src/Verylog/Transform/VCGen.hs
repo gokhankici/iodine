@@ -91,36 +91,87 @@ next_step_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
 next_step_inv a = Horn { hBody = body
                        , hHead = KV { kvId   = a^.aId
-                                    , kvSubs = ul ++ ur
+                                    , kvSubs = subs
                                     }
                        , hId   = HornId (a ^. aId) InvNext
                        }
   where
+    subs     = ul ++ ur
     (nl,ul)  = next fmt{leftVar=True}  a
     (nr,ur)  = next fmt{rightVar=True} a
     body     = Ands [ prevKV a
-                    , sanGlobs a, taintEqs a
+                    , sanGlobs a subs, taintEqs a subs
                     , nl, nr
                     ]
 
--- sanitize globs are always the same
-sanGlobs   :: AlwaysBlock -> Expr
-sanGlobs a = Ands $ concat [ [ BinOp EQU
-                              (makeVar fmt{leftVar=True} v)
-                              (makeVar fmt{rightVar=True} v)
-                              , BinOp EQU
-                              (makeVar fmt{taggedVar=True, leftVar=True} v)
-                              (makeVar fmt{taggedVar=True, rightVar=True} v)
-                             ]
-                           | v <- (varName <$> a ^. aSt ^. ports) `intersect` (a ^. aSt ^. sanitizeGlob)
-                           ]
+type Subs = [(Id,Expr)]
 
-taintEqs   :: AlwaysBlock -> Expr
-taintEqs a = Ands [ BinOp EQU
-                    (makeVar fmt{taggedVar=True, leftVar=True} v)
-                    (makeVar fmt{taggedVar=True, rightVar=True} v)
-                  | v <- a ^. aSt ^. taintEq
-                  ]
+-- sanitize globs are always the same
+sanGlobs        :: AlwaysBlock -> Subs -> Expr
+sanGlobs a subs = alwaysEqs conf vs subs
+  where
+    vs   = (varName <$> a ^. aSt ^. ports) `intersect` (a ^. aSt ^. sanitizeGlob)
+    conf = AEC { isInitEq  = True
+               , isPrimeEq = True
+               , isValEq   = True
+               , isTagEq   = True
+               }
+
+taintEqs        :: AlwaysBlock -> Subs -> Expr
+taintEqs a subs = alwaysEqs conf vs subs
+  where
+    vs   = (varName <$> a ^. aSt ^. ports) `intersect` (a ^. aSt ^. taintEq)
+    conf = AEC { isInitEq  = True
+               , isPrimeEq = True
+               , isValEq   = False
+               , isTagEq   = True
+               }
+
+data AlwaysEqConfig = AEC { isInitEq  :: Bool
+                          , isPrimeEq :: Bool
+                          , isValEq   :: Bool
+                          , isTagEq   :: Bool
+                          }
+
+alwaysEqs :: AlwaysEqConfig -> [Id] -> Subs -> Expr
+alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
+  where
+    fmts :: [VarFormat]
+    fmts = (if isValEq then [fmt]                 else []) ++
+           (if isTagEq then [fmt{taggedVar=True}] else [])
+             
+    initEq :: [Expr]
+    initEq  =
+      if   isInitEq
+      then [ BinOp EQU 
+             (makeVar f{leftVar=True} v)
+             (makeVar f{rightVar=True} v)
+           | v <- vs, f <- fmts
+           ]
+      else []
+
+    primeEq :: [Expr]
+    primeEq =
+      if   isPrimeEq
+      then [ BinOp EQU exprL exprR
+           | v <- vs, (exprL, exprR) <- findLasts v
+           ]
+      else []
+
+    findLasts :: Id -> [(Expr, Expr)]
+    findLasts v =
+      [ let vl = makeVarName f{leftVar=True} v
+            vr = makeVarName f{rightVar=True} v
+        in case (lookup vl subs, lookup vr subs) of
+             (Just el, Just er) -> (el, er)
+             _                  -> error $
+                                   printf "findLasts failed. \n  vl: %s\n  vr: %s\n  subs: %s\n"
+                                   vl vr (show subs)
+                                   
+      | f <- (\f -> f{primedVar=True}) <$> fmts
+      ]
+  
+  
 --------------------------------------------------------------------------------
 non_interference_checks :: [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
@@ -193,8 +244,8 @@ non_interference_inv a1 a2 = Horn { hBody = body
     
     body   = Ands [ prevKV a1
                   , prevKV a2
-                  , sanGlobs a1, taintEqs a1
-                  , sanGlobs a2, taintEqs a2
+                  , sanGlobs a1 updates1, taintEqs a1 updates1
+                  -- , sanGlobs a2, taintEqs a2
                   , nl1
                   , nr1
                   ]

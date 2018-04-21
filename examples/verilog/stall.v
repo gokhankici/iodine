@@ -7,10 +7,11 @@ module stalling_cpu(clk);
    // Definitions
    //=============
 
-   // @annot{sanitize(IF_instr)}
-   // @annot{sanitize(Stall)}
+   // @annot{sanitize_glob(IF_instr)}
+   // @annot{sanitize_glob(Stall)}
 
    reg [1:0]  Stall;
+   wire  Stallw;
    reg [31:0] IF_instr;         // @annot{taint_source(IF_instr)}
    reg [31:0] ID_instr;
    reg [1:0]  EX_ALUOp;
@@ -27,15 +28,23 @@ module stalling_cpu(clk);
      else
        ID_instr <= IF_instr;
 
-   // no definition for this; treat as wire.
-   decide_stall Dec(IF_instr, Stall);
+   // @annot{sanitize_mod(decide_stall, o)
+   decide_stall Dec(IF_instr, Stallw);
+
+   always @(posedge clk) 
+     Stall <= Stallw;
+   
 
    //=============
    // DEC stage
    //=============
    
    // no definition for this; treat as wire.
-   alu EX_ALU(ID_instr, EX_ALUOp);
+   wire       temp1;
+   // @annot{sanitize_mod(alu, o)
+   alu EX_ALU(ID_instr, temp1);
+   always @(posedge clk)
+     EX_ALUOp <= temp1;
 
    //=============
    // EXEC stage
@@ -60,7 +69,6 @@ endmodule
 module decide_stall(i, o);
    input i;
    output o;
-   reg    i;
    reg    o;
    
    always @ (*)
@@ -69,9 +77,8 @@ module decide_stall(i, o);
 endmodule
 
 module alu(i, o);
-   input i;
+   input  i;
    output o;
-   reg    i;
    reg    o;
 
    always @ (*)
