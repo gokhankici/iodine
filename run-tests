@@ -59,6 +59,7 @@ MAJOR_TESTS=( \
 typeset -A NEG_TESTS_SIMPLE
 NEG_TESTS_SIMPLE=( \
 	"-01 - 01 - neg-test-1"    "-M test $THIS_DIR/test/verilog/neg/neg-test-1.v" \
+	"-01 - 02 - neg-test-2"    "-M test $THIS_DIR/test/verilog/neg/neg-test-2.v" \
 	)
 
 

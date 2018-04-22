@@ -6,7 +6,6 @@ import           Control.Lens
 import           Control.Exception
 import           Text.Printf
 import           Debug.Trace
-import           Data.Char
 import           Data.List
 
 import           Verylog.Language.Types

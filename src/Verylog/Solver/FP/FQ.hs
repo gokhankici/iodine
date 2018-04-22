@@ -33,15 +33,6 @@ toFqFormat fpst =
       dConsts     = emptySEnv
       cuts        = KS HS.empty
       qualifiers  = qualifiersWithPath -- ++ qualifiersNoPat
-      -- qualifiersNoPat = [ mkQual
-      --                     (symbol "printf")
-      --                     [ QP (symbol "v") PatNone FInt
-      --                     , QP (symbol "x") PatNone FInt
-      --                     , QP (symbol "y") PatNone FInt
-      --                     ] 
-      --                     (FQT.PAtom Eq (eVar "x") (eVar "y"))
-      --                     (dummyPos "")
-      --                   ]
       qualifiersWithPath  = [ mkQual
                               (symbol (printf "Eq%d" (n::Int) :: String))
                               [ QP (symbol "v") PatNone FInt
