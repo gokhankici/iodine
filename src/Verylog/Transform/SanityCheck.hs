@@ -52,9 +52,10 @@ checkAssignments as = freshKeepErrs >> mapM_ (checkStmt . view aStmt) as
 
     checkStmt (NonBlockingAsgn{..}) = do
       nbas %= incr lhs
-      uses nbas ((> 1) . M.lookupDefault 0 lhs)
-        >>= flip when
-        (addError $ printf "multiple non-blocking assignments to %s" lhs)
+      -- FIXME
+      -- uses nbas ((> 1) . M.lookupDefault 0 lhs)
+      --   >>= flip when
+      --   (addError $ printf "multiple non-blocking assignments to %s" lhs)
 
     checkStmt (IfStmt{..}) = do
       oldBAs  <- use bas
@@ -78,11 +79,6 @@ checkAssignments as = freshKeepErrs >> mapM_ (checkStmt . view aStmt) as
       let newElBAs  = M.differenceWith keepNew elBAs oldBAs
       let newThNBAs = M.differenceWith keepNew thNBAs oldNBAs
       let newElNBAs = M.differenceWith keepNew elNBAs oldNBAs
-
-      -- let newThBAs  = trc "newThBAs: "  _newThBAs  _newThBAs
-      -- let newElBAs  = trc "newElBAs: "  _newElBAs  _newElBAs
-      -- let newThNBAs = trc "newThNBAs: " _newThNBAs _newThNBAs
-      -- let newElNBAs = trc "newElNBAs: " _newElNBAs _newElNBAs
 
       let d1 = M.intersection newThBAs  newElNBAs
       let d2 = M.intersection newThNBAs newElBAs

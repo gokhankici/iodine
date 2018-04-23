@@ -361,9 +361,21 @@ makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultSta
               -- make sure we have at least one source and a sink
               let f = (== 0) . length
               noTaint <- liftM2 (||) (uses (st.sinks) f) (uses (st.sources) f)
-              if noTaint
-                then throw (PassError "Source or sink taint information is missing")
-                else use st
+              when noTaint $
+                throw (PassError "Source or sink taint information is missing")
+
+              -- check if source and sink variables actually exist
+              varNames   <- uses (st . ports) (S.fromList . (map varName))
+              allSources <- use parseSources
+              allSinks   <- use parseSinks
+              let isTaintInvalid s = not $ S.null $ S.difference s varNames
+              
+              when (isTaintInvalid allSources || isTaintInvalid allSinks) $
+                error $
+                printf "Source or sink taint variable is invalid\n  vars: %s\n  sources: %s\n  sinks: %s\n"
+                (show varNames) (show allSources) (show allSinks)
+
+              use st
 
 makeState _ = throw (PassError "First ir is not a toplevel module !")
 
