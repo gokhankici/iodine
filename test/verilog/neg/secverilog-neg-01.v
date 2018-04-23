@@ -23,7 +23,7 @@ module test(clk);
 		   tmp <= in;
 		   out <= tmp; 
 	   end 
-       else 
+	   else 
 		   out <= in;
    end
 
