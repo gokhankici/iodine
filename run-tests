@@ -10,7 +10,7 @@ zparseopts -D -E -- \
 	-continue=CONTINUE \
 	-no-output=NO_OUT \
 	-time=TIME \
-	-name:=NAME
+	n:=NAME -name:=NAME
 
 function blue()  { print -P "%F{blue}%B$1%b%f" }
 function green() { print -P "%F{green}%B$1%b%f" }
@@ -27,6 +27,7 @@ SIMPLE_TESTS=( \
 	"01 - 05 - tr-test-5"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-5.v" \
 	"01 - 06 - tr-test-6"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-6.v" \
 	"01 - 07 - stall hand"    "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
+	"01 - 08 - secverilog-01" "-M test          $THIS_DIR/test/verilog/pos/secverilog-01.v" \
 	)
 
 typeset -A MIPS_STUB_TESTS
@@ -60,6 +61,7 @@ typeset -A NEG_TESTS_SIMPLE
 NEG_TESTS_SIMPLE=( \
 	"-01 - 01 - neg-test-1"    "-M test $THIS_DIR/test/verilog/neg/neg-test-1.v" \
 	"-01 - 02 - neg-test-2"    "-M test $THIS_DIR/test/verilog/neg/neg-test-2.v" \
+	"-01 - 03 - secver-neg-01" "-M test $THIS_DIR/test/verilog/neg/secverilog-neg-01.v" \
 	)
 
 
