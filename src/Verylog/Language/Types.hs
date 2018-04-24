@@ -17,11 +17,11 @@ import           Data.Hashable
 -- IR for the formalism
 --------------------------------------------------------------------------------
 
-data AlwaysBlock = AB { _aEvent   :: Event
-                      , _aStmt    :: Stmt
-                      , _aId      :: Int
-                      , _aSt      :: St
-                      , _aLoc     :: (String, String) -- Module & instance name
+data AlwaysBlock = AB { _aEvent   :: ! Event
+                      , _aStmt    :: ! Stmt
+                      , _aId      :: ! Int
+                      , _aSt      :: ! St
+                      , _aLoc     :: ! (String, String) -- Module & instance name
                       }
 
 --------------------------------------------------------------------------------
@@ -30,8 +30,8 @@ data AlwaysBlock = AB { _aEvent   :: Event
 
 type Id = String
 
-data Port = Input  { portName :: String }
-          | Output { portName :: String }
+data Port = Input  { portName :: ! String }
+          | Output { portName :: ! String }
           deriving (Eq)
 
 instance Show Port where
@@ -42,8 +42,8 @@ instance Hashable Port where
   hashWithSalt n (Input s)  = hashWithSalt n ("input", s)
   hashWithSalt n (Output s) = hashWithSalt n ("output", s)
 
-data Var = Register { varName :: String }
-         | Wire     { varName :: String }
+data Var = Register { varName :: ! String }
+         | Wire     { varName :: ! String }
          deriving (Eq)
 
 instance Show Var where
@@ -55,40 +55,40 @@ instance Hashable Var where
   hashWithSalt n (Register s) = hashWithSalt n ("register", s)
   hashWithSalt n (Wire s)     = hashWithSalt n ("wire", s)
 
-data IR = Always     { event      :: Event
-                     , alwaysStmt :: Stmt
-                     , alwaysLoc  :: (String, String) -- Module & instance name
+data IR = Always     { event      :: ! Event
+                     , alwaysStmt :: ! Stmt
+                     , alwaysLoc  :: ! (String, String) -- Module & instance name
                      }
-        | ModuleInst { modInstName :: String
-                     , modInstArgs :: [(Port,String)] -- formal & actual parameters
-                     , modInstSt   :: St
+        | ModuleInst { modInstName :: ! String
+                     , modInstArgs :: ! [(Port,String)] -- formal & actual parameters
+                     , modInstSt   :: ! St
                      }
 
 data Event = Star
            | PosEdge Id
            | NegEdge Id
 
-data Stmt = Block           { blockStmts :: [Stmt] }
-          | BlockingAsgn    { lhs        :: Id
-                            , rhs        :: Id
+data Stmt = Block           { blockStmts :: ! [Stmt] }
+          | BlockingAsgn    { lhs        :: ! Id
+                            , rhs        :: ! Id
                             }
-          | NonBlockingAsgn { lhs        :: Id
-                            , rhs        :: Id
+          | NonBlockingAsgn { lhs        :: ! Id
+                            , rhs        :: ! Id
                             }
-          | IfStmt          { ifCond     :: Id
-                            , thenStmt   :: Stmt
-                            , elseStmt   :: Stmt
+          | IfStmt          { ifCond     :: ! Id
+                            , thenStmt   :: ! Stmt
+                            , elseStmt   :: ! Stmt
                             }
           | Skip
 
-data St = St { _ports        :: [Var]
+data St = St { _ports        :: ! [Var]
              , _ufs          :: M.HashMap Id [Id]
-             , _sources      :: [Id]
-             , _sinks        :: [Id]
-             , _taintEq      :: [Id]
-             , _sanitize     :: [Id]
-             , _sanitizeGlob :: [Id]
-             , _irs          :: [IR]
+             , _sources      :: ! [Id]
+             , _sinks        :: ! [Id]
+             , _taintEq      :: ! [Id]
+             , _sanitize     :: ! [Id]
+             , _sanitizeGlob :: ! [Id]
+             , _irs          :: ! [IR]
              }
 
 emptySt :: St

@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Verylog.Solver.FP.FQ ( toFqFormat
+                            , Metadata
                             ) where
 
 import Verylog.Solver.Common

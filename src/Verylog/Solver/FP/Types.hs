@@ -47,13 +47,16 @@ data UFConst = UFConst { ufConstName  :: Id
 type BindMap = M.HashMap Id FQBind
 type UFMap   = M.HashMap Id [Id]
 
-data FPSt = FPSt { _fpConstraints :: [Inv]
-                 , _fpABs         :: [AlwaysBlock]
-                 , _fpBinds       :: BindMap
-                 , _fpUFs         :: UFMap
+data FPSt = FPSt { _fpConstraints :: ! [Inv]
+                 , _fpABs         :: ! [AlwaysBlock]
+                 , _fpBinds       :: ! BindMap
+                 , _fpUFs         :: ! UFMap
                  }
 
 makeLenses ''FPSt
+
+instance Show FPSt where
+  show fpst = show (fpst ^. fpABs)
 
 idFromExp :: Expr -> Id
 idFromExp (Var v) = v

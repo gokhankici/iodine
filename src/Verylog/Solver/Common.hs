@@ -48,6 +48,7 @@ data Inv = Horn { hBody :: Expr -- body of the horn clause
                 , hHead :: Expr -- head of the horn clause
                 , hId   :: HornId
                 }
+           deriving (Show)
 
 data Expr = BinOp     { bOp   :: BinOp
                       , expL  :: Expr

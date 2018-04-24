@@ -4,6 +4,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Verylog.Language.Parser ( parse
+                               , parseWithoutConversion
                                , renderError
                                , IRParseError (..)
                                ) where
@@ -108,7 +109,7 @@ data ParseSt = ParseSt { _parseSources      :: S.HashSet Id
                        , _parseSanitizeGlob :: S.HashSet Id
                        , _parseTaintEq      :: S.HashSet Id
                        , _parseModSanitize  :: M.HashMap Id (S.HashSet Id)
-                       , _st                :: St
+                       , _st                :: ! St
                        }
 
 emptyParseSt :: ParseSt
@@ -127,10 +128,16 @@ makeLenses ''ParseSt
 
 type Parser = Parsec SourcePos String
 
+
+-- --------------------------------------------------------------------------------
+parseWithoutConversion :: FilePath -> String -> [ParseIR]
+-- --------------------------------------------------------------------------------
+parseWithoutConversion f = parseWith parseIR f
+
 -- --------------------------------------------------------------------------------
 parse :: FilePath -> String -> St
 -- --------------------------------------------------------------------------------
-parse f = parseWith parseIR f >>> makeState
+parse f = parseWithoutConversion f >>> makeState
 
 parseWith  :: Parser a -> FilePath -> String -> a
 parseWith p f s = case runParser (whole p) f s of

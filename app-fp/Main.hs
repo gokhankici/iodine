@@ -6,7 +6,6 @@ import Verylog.FPGen
 import Verylog.Solver.FP.Types
 import Verylog.Solver.Common
 import Verylog.Language.Types
--- import Verylog.Transform.Visualize
 
 import Language.Fixpoint.Solver
 import Language.Fixpoint.Types
@@ -23,6 +22,11 @@ import           System.Environment (getArgs)
 import           System.Exit
 import           Text.PrettyPrint
 import           Text.Printf
+
+import           Control.Monad
+import           System.IO
+import Verylog.Language.Parser
+import Verylog.Transform.Modularize
 
 data Flag = VCGen
           | PrintFInfo
@@ -71,6 +75,22 @@ main  = do
   Options{..} <- parseOpts
 
   (fpst, finfo) <- fpgen optInputFile
+
+  -- when optVCGen $ do
+  --   s <- readFile optInputFile
+  --   let st' = parse optInputFile s
+  --   let countModInsts st =
+  --         foldr (\i n -> case i of
+  --                          Always{..}     -> n
+  --                          ModuleInst{..} -> n + 1 + (countModInsts modInstSt)
+  --               )
+  --         (0::Int) (st ^. irs)
+  --   printf "# module instantiations: %d\n" (countModInsts st')
+  --   let blocks = modularize st'
+  --   printf "# blocks: %d\n" (length blocks)
+  --   -- withFile optOutputFile WriteMode (\f -> hPutStrLn f (show blocks))
+  --   exitSuccess
+
   let cfg = defConfig{ eliminate = Some
                      , save      = not optMinimize
                      , srcFile   = optInputFile
@@ -84,9 +104,6 @@ main  = do
           fInfo <- parseFInfo [optOutputFile] :: IO (FInfo ())
           putStrLn $ show fInfo
           exitSuccess
-      -- | optVisualize  -> do
-      --     putStrLn $ visualize fpst
-      --     exitSuccess
       | otherwise     -> do
           res <- solve cfg finfo
           let statStr = render . resultDoc . fmap fst

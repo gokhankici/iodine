@@ -37,7 +37,7 @@ dependencies:
 library:
   source-dirs:           src
   ghc-options:
-  - -Wall -Wno-missing-signatures -Wno-orphans -Wno-name-shadowing
+  - -Wall -Wno-missing-signatures -Wno-orphans -Wno-name-shadowing -O2
   exposed-modules:
   - Verylog.MainCommon
   - Verylog.FPGen
@@ -46,7 +46,7 @@ library:
   - Verylog.Transform.TransitionRelation
   - Verylog.Transform.Utils
   - Verylog.Transform.VCGen
-  - Verylog.Transform.Visualize
+  - Verylog.Transform.Modularize
   - Verylog.Solver.Common
   - Verylog.Solver.FP.Types
 
@@ -59,6 +59,7 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     - -Wall 
+    - -O2
     dependencies:
     - verylog-hs
 
@@ -71,5 +72,6 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     - -Wall 
+    - -O2
     dependencies:
     - verylog-hs
