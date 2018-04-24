@@ -70,7 +70,10 @@ data Expr = BinOp     { bOp   :: BinOp
                       }
           deriving (Show)
 
+nextPred :: [Char]
 nextPred = "next"
+
+invPred :: [Char]
 invPred  = "inv"
 
 makeInvPred   :: AlwaysBlock -> String

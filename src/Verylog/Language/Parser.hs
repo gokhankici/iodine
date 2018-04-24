@@ -335,47 +335,66 @@ makeState :: [ParseIR] -> St
 makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultState^.sanitize)) resultState
   where
     resultState = evalState comp emptyParseSt
-    comp = do sequence_ $ collectTaint <$> (annots ++ [topIR]) -- collect taint information
-              sanitizeInsts mGates
+    loc = ("TOPLEVEL", "TOPLEVEL")
+    comp = do
+      ----------------------------------------------------------------------------
+      -- collect taint information
+      ----------------------------------------------------------------------------
+      sequence_ $ collectTaint <$> (annots ++ [topIR])
+      sanitizeInsts mGates
+      ----------------------------------------------------------------------------
 
-              let loc = ("TOPLEVEL", "TOPLEVEL")
-              st .= makeIntermediaryIR loc mPorts mGates mBehaviors mUFs -- create intermediary IR from parse IR
+      ----------------------------------------------------------------------------
+      -- create intermediary IR from parse IR
+      ----------------------------------------------------------------------------
+      st .= makeIntermediaryIR loc mPorts mGates mBehaviors mUFs 
+      ----------------------------------------------------------------------------
   
-              -- update IR state's taint info from parse IR 
-              st . sources  <~ uses parseSources      S.toList
-              st . sinks    <~ uses parseSinks        S.toList
+      ----------------------------------------------------------------------------
+      -- update IR state's taint info from parse IR 
+      -- and copy it to the instantiated modules
+      ----------------------------------------------------------------------------
+      st . sources  <~ uses parseSources      S.toList
+      st . sinks    <~ uses parseSinks        S.toList
 
-              sanitizes     <- use parseSanitize
-              maybeNegVars  <- uses parseNotSanitize (M.lookup "")
-              let negVars   = case maybeNegVars of
-                                Nothing -> S.empty
-                                Just s  -> s
-              st . sanitize .= S.toList (sanitizes `S.difference` negVars)
+      sanitizes     <- use parseSanitize
+      maybeNegVars  <- uses parseNotSanitize (M.lookup "")
+      let negVars   = case maybeNegVars of
+                        Nothing -> S.empty
+                        Just s  -> s
+      st . sanitize .= S.toList (sanitizes `S.difference` negVars)
 
-              st . sanitizeGlob <~ uses parseSanitizeGlob S.toList
-              st . taintEq      <~ uses parseTaintEq      S.toList
+      st . sanitizeGlob <~ uses parseSanitizeGlob S.toList
+      st . taintEq      <~ uses parseTaintEq      S.toList
 
-              -- and copy it to the instantiated modules
-              st %= updateTaintInfo 
+      st %= updateTaintInfo 
+      ----------------------------------------------------------------------------
 
-              -- make sure we have at least one source and a sink
-              let f = (== 0) . length
-              noTaint <- liftM2 (||) (uses (st.sinks) f) (uses (st.sources) f)
-              when noTaint $
-                throw (PassError "Source or sink taint information is missing")
+      ----------------------------------------------------------------------------
+      -- make sure we have at least one source and a sink
+      ----------------------------------------------------------------------------
+      let f = (== 0) . length
+      noTaint <- liftM2 (||) (uses (st.sinks) f) (uses (st.sources) f)
+      when noTaint $
+        throw (PassError "Source or sink taint information is missing")
+      ----------------------------------------------------------------------------
 
-              -- check if source and sink variables actually exist
-              varNames   <- uses (st . ports) (S.fromList . (map varName))
-              allSources <- use parseSources
-              allSinks   <- use parseSinks
-              let isTaintInvalid s = not $ S.null $ S.difference s varNames
-              
-              when (isTaintInvalid allSources || isTaintInvalid allSinks) $
-                error $
-                printf "Source or sink taint variable is invalid\n  vars: %s\n  sources: %s\n  sinks: %s\n"
-                (show varNames) (show allSources) (show allSinks)
+      ----------------------------------------------------------------------------
+      -- check if source and sink variables actually exist
+      ----------------------------------------------------------------------------
+      varNames   <- uses (st . ports) (S.fromList . (map varName))
+      allSources <- use parseSources
+      allSinks   <- use parseSinks
 
-              use st
+      let isTaintInvalid s = not $ S.null $ S.difference s varNames
+
+      when (isTaintInvalid allSources || isTaintInvalid allSinks) $
+        error $
+        printf "Source or sink taint variable is invalid\n  vars: %s\n  sources: %s\n  sinks: %s\n"
+        (show varNames) (show allSources) (show allSinks)
+      ----------------------------------------------------------------------------
+
+      use st
 
 makeState _ = throw (PassError "First ir is not a toplevel module !")
 
@@ -456,9 +475,11 @@ makeIntermediaryIR loc prts gates bhvs us = evalState comp emptyParseSt
                    in M.mapWithKey (\k _ -> varDeps k) m
 
 
-convertVar :: ParseVar -> Var
-convertVar (PRegister r) = Register r
-convertVar (PWire     w) = Wire     w
+    ------------------------------------------------------
+    convertVar :: ParseVar -> Var
+    ------------------------------------------------------
+    convertVar (PRegister r) = Register r
+    convertVar (PWire     w) = Wire     w
 
 -----------------------------------------------------------------------------------
 collectPort :: ParseVar -> State ParseSt ()
