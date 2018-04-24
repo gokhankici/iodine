@@ -44,7 +44,7 @@ MIPS_MODULE_TESTS=( \
 	"03 - 02 - mux2"                "-M mux2             $MIPS_DIR/mux2.v" \
 	"03 - 03 - mux3"                "-M mux3             $MIPS_DIR/mux3.v" \
 	"03 - 04 - control_pipeline"    "-M control_pipeline $MIPS_DIR/control_pipeline.v" \
-	"03 - 05 - mem32"               "-M mem32            $MIPS_DIR/mem32.v" \
+	"03 - 05 - mem32-stub"          "-M mem32            $MIPS_DIR/mem32-stub.v" \
 	"03 - 06 - alu"                 "-M alu              $MIPS_DIR/alu.v" \
 	"03 - 07 - alu_ctl"             "-M alu_ctl          $MIPS_DIR/alu_ctl.v" \
 	"03 - 08 - add32"               "-M add32            $MIPS_DIR/add32.v" \

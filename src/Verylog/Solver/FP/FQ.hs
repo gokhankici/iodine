@@ -48,7 +48,8 @@ toFqFormat fpst =
                               , ("VLT_"  , "VRT_")
                               , ("VLTP_" , "VRTP_")
                               ]
-                            ] ++
+                            ]
+                            ++
                             [mkQual
                               (symbol (printf "Zero%d" (n::Int) :: String))
                               [ QP (symbol "v") PatNone FInt
@@ -60,6 +61,30 @@ toFqFormat fpst =
                               zip [1..]
                               [ "VLT_"  , "VRT_" , "VLTP_" , "VRTP_"]
                             ]
+                            -- ++
+                            -- [mkQual
+                            --   (symbol (printf "GTE0%d" (n::Int) :: String))
+                            --   [ QP (symbol "v") PatNone FInt
+                            --   , QP (symbol "x") (PatPrefix (symbol pre_x) 1) FInt
+                            --   ] 
+                            --   (FQT.PAtom Ge (eVar "x") (FQT.ECon (FQT.I 0)))
+                            --   (dummyPos "")
+                            -- | (n,pre_x) <-
+                            --   zip [1..]
+                            --   [ "VLT_"  , "VRT_" , "VLTP_" , "VRTP_"]
+                            -- ]
+                            -- ++
+                            -- [mkQual
+                            --   (symbol (printf "GTE1%d" (n::Int) :: String))
+                            --   [ QP (symbol "v") PatNone FInt
+                            --   , QP (symbol "x") (PatPrefix (symbol pre_x) 1) FInt
+                            --   ] 
+                            --   (FQT.PAtom Ge (eVar "x") (FQT.ECon (FQT.I 1)))
+                            --   (dummyPos "")
+                            -- | (n,pre_x) <-
+                            --   zip [1..]
+                            --   [ "VLT_"  , "VRT_" , "VLTP_" , "VRTP_"]
+                            -- ]
       bindMds     = M.empty
       highOrBinds = False
       highOrQuals = False
