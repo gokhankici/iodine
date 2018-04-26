@@ -60,7 +60,7 @@ data IR = Always     { event      :: ! Event
                      , alwaysLoc  :: ! (String, String) -- Module & instance name
                      }
         | ModuleInst { modInstName :: ! String
-                     , modInstArgs :: ! [(Port,String)] -- formal & actual parameters
+                     , modParams   :: ! [Port] -- formal parameters
                      , modInstSt   :: ! St
                      }
 
@@ -140,12 +140,11 @@ class PPrint a where
 instance PPrint IR where
   toDoc (Always{..})      = text "always(" <> vcat [toDoc event <> comma, toDoc alwaysStmt] <> text ")."
   toDoc (ModuleInst{..})  = text "module" <> vcat [ lparen <+> text modInstName
-                                                  , comma  <+> pl (pe <$> modInstArgs)
+                                                  , comma  <+> pl ((text . portName) <$> modParams)
                                                   , comma  <+> toDoc modInstSt
                                                   , rparen
                                                   ] <> text "."
     where
-      pe (x,y) = parens (text (portName x) <> comma <+> text y)
       pl = brackets . hsep . (punctuate (text ", "))
                             
   

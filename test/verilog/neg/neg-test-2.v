@@ -15,7 +15,7 @@ module test(clk);
       if (Stall) 
         y <= y;
       else
-        y <= x;
+        y <= x + 1;
    end
 
    wire Stall_wire;

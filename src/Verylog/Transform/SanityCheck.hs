@@ -4,9 +4,11 @@
 module Verylog.Transform.SanityCheck ( sanityCheck
                                      ) where
 
+import           Control.Arrow
 import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Lazy
+import           Data.List
 import qualified Data.HashMap.Strict        as M
 import           Text.Printf
 
@@ -25,8 +27,15 @@ type S = State PassSt
 freshKeepErrs :: S ()
 freshKeepErrs = bas .= M.empty >> nbas .= M.empty
 
-sanityCheck    :: [AlwaysBlock] -> [AlwaysBlock]
-sanityCheck as = evalState comp (PassSt { _bas    = M.empty
+--------------------------------------------------------------------------------
+sanityCheck :: [AlwaysBlock] -> [AlwaysBlock]  
+--------------------------------------------------------------------------------
+sanityCheck = check1 >>> checkLHSIsVar
+
+--------------------------------------------------------------------------------
+check1    :: [AlwaysBlock] -> [AlwaysBlock]
+--------------------------------------------------------------------------------
+check1 as = evalState comp (PassSt { _bas    = M.empty
                                         , _nbas   = M.empty
                                         , _errors = []
                                         })
@@ -93,6 +102,27 @@ checkAssignments as = freshKeepErrs >> mapM_ (checkStmt . view aStmt) as
 
       bas  .= M.unionWith max thBAs  elBAs
       nbas .= M.unionWith max thNBAs elNBAs
+
+--------------------------------------------------------------------------------
+checkLHSIsVar :: [AlwaysBlock] -> [AlwaysBlock]
+--------------------------------------------------------------------------------
+checkLHSIsVar as = case foldl' (\es a -> check (a ^. aStmt) (a ^. aSt ^. ufs) es) [] as of
+                     []  -> as
+                     e:_ -> throw e
+  where
+    ------------------------------------------------------------
+    check :: Stmt -> (M.HashMap Id [Id]) -> [PassError] -> [PassError]
+    ------------------------------------------------------------
+    check      (Block ss) u es            = foldl' (\es' s -> check s u es') es ss 
+    check stmt@(BlockingAsgn l _) u es    = helper stmt l u es
+    check stmt@(NonBlockingAsgn l _) u es = helper stmt l u es
+    check      (IfStmt _ th el) u es      = foldl' (\es' s -> check s u es') es [th,el]
+    check      Skip _ es                  = es
+
+    helper stmt v m es =
+      case M.lookup v m of
+        Nothing -> es
+        Just _  -> (PassError $ printf "lhs of %s is not a var" (show stmt)) : es
 
 --------------------------------------------------------------------------------
 -- Helper functions

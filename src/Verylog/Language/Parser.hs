@@ -63,7 +63,6 @@ data ParseGate = PContAsgn String String
                | PModuleInst { pmModuleName    :: String
                              , pmInstName      :: String            -- name of the module
                              , pmInstPorts     :: [ParsePort]       -- port list (i.e. formal parameters)
-                             , pmInstArgs      :: [String]          -- instantiations (i.e. actual parameters)
                              , pmInstVars      :: [ParseVar]        -- wires or registers used
                              , pmInstGates     :: [ParseGate]       -- assign or module instantiations
                              , pmInstBehaviors :: [ParseBehavior]   -- always blocks
@@ -177,7 +176,6 @@ parseModuleInst = rWord "module"
                               <$> identifier            -- module name
                               <*> (comma *> identifier) -- instantiation name
                               <*> (comma *> list parsePort)
-                              <*> (comma *> list identifier)
                               <*> (comma *> list parseVar)
                               <*> (comma *> list parseGate)
                               <*> (comma *> list parseBehavior)
@@ -374,7 +372,7 @@ makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultSta
       st . sanitizeGlob <~ uses parseSanitizeGlob S.toList
       st . taintEq      <~ uses parseTaintEq      S.toList
 
-      st %= updateTaintInfo 
+      st %= updateChildSt 
       ----------------------------------------------------------------------------
 
       ----------------------------------------------------------------------------
@@ -501,7 +499,7 @@ collectGate _loc (PModuleInst{..}) = do
   ufUnion <- uses (st . ufs) ((++ pmInstUFs) . ((\(n,as) -> PUF n as) <$>) . M.toList)
   st . irs %=
     (:) ModuleInst{ modInstName = pmInstName
-                  , modInstArgs = zip (toPort <$> pmInstPorts) pmInstArgs
+                  , modParams   = toPort <$> pmInstPorts
                   , modInstSt   = makeIntermediaryIR loc' pmInstVars pmInstGates pmInstBehaviors ufUnion
                   }
   where
@@ -536,24 +534,28 @@ collectUF :: ParseUF -> State ParseSt ()
 collectUF (PUF v args) = st . ufs %= M.insert v args
 
 -----------------------------------------------------------------------------------
-updateTaintInfo :: St -> St
+updateChildSt :: St -> St
 -----------------------------------------------------------------------------------
-updateTaintInfo st' = over irs mapIRs st'
+updateChildSt parentSt = over irs (map mapIR) parentSt
   where
-    mapIRs :: [IR] -> [IR]
-    mapIRs = map mapIR
-
+    ------------------------------------------------------------
     mapIR :: IR -> IR
+    ------------------------------------------------------------
     mapIR ir@(Always{..})     = ir
-    mapIR ir@(ModuleInst{..}) = ir { modInstSt = fixSt modInstSt }
+    mapIR ir@(ModuleInst{..}) = ir { modInstSt = fixChildSt modInstSt }
 
-    fixSt :: St -> St 
-    fixSt = set sources      (st'^.sources) .
-            set sinks        (st'^.sinks) .
-            set sanitize     (st'^.sanitize) .
-            set sanitizeGlob (st'^.sanitizeGlob) .
-            set taintEq      (st'^.taintEq) .
-            over irs mapIRs
+    ------------------------------------------------------------
+    fixChildSt :: St -> St 
+    ------------------------------------------------------------
+    fixChildSt =
+      over ports        (++ (parentSt ^. ports)) .
+      over ufs          (M.union (parentSt ^. ufs)) .
+      set  sources      (parentSt ^. sources) .
+      set  sinks        (parentSt ^. sinks) .
+      set  taintEq      (parentSt ^. taintEq) .
+      set  sanitize     (parentSt ^. sanitize) .
+      set  sanitizeGlob (parentSt ^. sanitizeGlob) .
+      over irs          (map mapIR)
         
   
 

@@ -23,10 +23,10 @@ import           System.Exit
 import           Text.PrettyPrint
 import           Text.Printf
 
-import           Control.Monad
-import           System.IO
-import Verylog.Language.Parser
-import Verylog.Transform.Modularize
+-- import           Control.Monad
+-- import           System.IO
+-- import Verylog.Language.Parser
+-- import Verylog.Transform.Modularize
 
 data Flag = VCGen
           | PrintFInfo
