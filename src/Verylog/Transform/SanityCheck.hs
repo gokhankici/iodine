@@ -36,9 +36,9 @@ sanityCheck = check1 >>> checkLHSIsVar
 check1    :: [AlwaysBlock] -> [AlwaysBlock]
 --------------------------------------------------------------------------------
 check1 as = evalState comp (PassSt { _bas    = M.empty
-                                        , _nbas   = M.empty
-                                        , _errors = []
-                                        })
+                                   , _nbas   = M.empty
+                                   , _errors = []
+                                   })
   where
     comp :: S [AlwaysBlock]
     comp = do checkAssignments as
