@@ -17,6 +17,7 @@ fi
 zparseopts -D -E -- \
            -ir=JUST_IR -vcgen=JUST_VCGEN \
            -print-finfo=FINFO \
+		   -prof=PROF \
            -debug=VC_DEBUG \
            -qarmcOpts+:=QARMC_OPTS \
            -solver:=SOLVER \
@@ -70,6 +71,11 @@ fi
 
 VCGEN_TARGET='fp'
 
+if [[ -n "$PROF" ]]; then
+	local -a PROFILE_ARGS
+	PROFILE_ARGS=('+RTS' '-p' '-RTS')
+fi
+
 # }}}
 
 # Set up global variables {{{
@@ -92,7 +98,7 @@ CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
 QARMC_DEFAULT_OPTS=-get-model
 
 function vcgen_fp() {
-    vcgen-fp $FINFO $JUST_VCGEN $MINIMIZE $@
+    vcgen-fp $PROFILE_ARGS $FINFO $JUST_VCGEN $MINIMIZE $@
 }
 
 # }}}

@@ -12,7 +12,7 @@ import Verylog.Transform.Utils
 import           Control.Exception
 import           Control.Lens
 import           Control.Monad.Reader
--- import qualified Data.List                  as L
+import qualified Data.List                  as L
 import qualified Data.Set                   as S
 import qualified Data.HashSet               as HS
 import qualified Data.HashMap.Strict        as M
@@ -181,12 +181,12 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
     errMsg v = throw $ PassError $ printf "cannot find %s in binders" v
 
     helper []      = S.empty
-    helper (e:es') = foldr (\e' s -> getIds e' `S.union` s) (getIds e) es'
+    helper (e:es') = L.foldl' (\s e' -> getIds e' `S.union` s) (getIds e) es'
 
     getIds :: Expr -> S.Set Id
-    getIds (BinOp{..})      = helper [expL, expR]
+    getIds (BinOp{..})      = getIds expL `S.union` getIds expR
     getIds (Ands es')       = helper es'
-    getIds (Ite{..})        = helper [cnd, expThen, expElse]
+    getIds (Ite{..})        = getIds cnd `S.union` getIds expThen `S.union` getIds expElse
     getIds (KV{..})         = let (vs,es') = unzip kvSubs
                               in S.fromList vs `S.union` helper es'
     getIds (Var v)          = S.singleton v

@@ -31,28 +31,13 @@ fmt = VarFormat { taggedVar   = False
                 , paramVar    = False
                 } 
 
--- set this variable to True if you want to "simplify" the variables
--- inside the HSF file
-debugSimple :: Bool
-debugSimple = False
-
 makeVar :: VarFormat -> Id -> Expr
 makeVar f v = Var (makeVarName f v)
 
 makeVarName :: VarFormat -> Id -> Id
 makeVarName f@(VarFormat{..}) v =
-  -- if   debugSimple
-  -- then let v' = if isPrefixOf "v_" v
-  --               then case drop 2 v of
-  --                      []  -> throw (PassError $ printf "weird variable %s" v)
-  --                      h:t -> (toUpper h):t
-  --               else case v of
-  --                      []  -> throw (PassError "empty var")
-  --                      h:t -> (toUpper h):t
-  --      in printf "%s%s%s%s%s%s%s" par atom v' pos vid prime tag 
-  -- else
-  -- printf "%s%sV%s%s%s%s_%s" par atom pos tag prime vid v
-  printf "%s%sV%s%s%s_%s" par atom pos tag vid v
+  -- printf "%s%sV%s%s%s_%s" par atom pos tag vid v
+  par ++ atom ++ "V" ++ pos ++ tag ++ vid ++ "_" ++ v
 
   where
     atom | atomVar   = "v"
@@ -61,19 +46,12 @@ makeVarName f@(VarFormat{..}) v =
     par  | paramVar  = "arg_"
          | otherwise = ""
 
-    tag  | debugSimple && taggedVar = "_t"
-         | taggedVar = "T"
+    tag  | taggedVar = "T"
          | otherwise = ""
-
-    -- prime | debugSimple && primedVar = "p"
-    --       | primedVar = "P"
-    --       | otherwise = ""
 
     vid   = maybe "" show varId
 
     pos   | (leftVar && rightVar) = throw (PassError $ "Both left & right requested from makeVarName for " ++ v ++ " " ++ show f)
-          | debugSimple && leftVar   = "l"
-          | debugSimple && rightVar  = "r"
           | leftVar   = "L"
           | rightVar  = "R"
           | otherwise = ""

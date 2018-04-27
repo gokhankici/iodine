@@ -2,18 +2,18 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Verylog.Transform.Modularize (modularize) where
+module Verylog.Transform.Modularize (flatten) where
 
 import           Control.Exception
 import           Control.Lens hiding (mapping)
 import           Control.Monad.State.Lazy
-import qualified Data.List                  as Li
 import qualified Data.HashMap.Strict        as M
+import qualified Data.HashSet               as S
 
 import           Verylog.Language.Types
 
-modularize :: St -> [AlwaysBlock]
-modularize = flattenToAlways
+flatten :: St -> [AlwaysBlock]
+flatten = flattenToAlways
 
 -----------------------------------------------------------------------------------
 -- | St -> [AlwaysBlock] :::: Flatten the module hierarchy
@@ -22,33 +22,34 @@ modularize = flattenToAlways
 type S = State Int
 
 flattenToAlways :: St -> [AlwaysBlock]
-flattenToAlways st = evalState (m_flattenToAlways st) 0
+flattenToAlways st = evalState (m_flattenToAlways st []) 0
 
-m_flattenToAlways :: St -> S [AlwaysBlock]
-m_flattenToAlways st = sequence (f st <$> st^.irs) >>= return . concat
+m_flattenToAlways :: St -> [AlwaysBlock] -> S [AlwaysBlock]
+m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
   where
-    f                     :: St -> IR -> S [AlwaysBlock]
-    f stt (Always{..})    =  do i <- get
-                                put (i+1)
-                                return [AB event alwaysStmt i (filterSt alwaysStmt stt) alwaysLoc]
-    f _  (ModuleInst{..}) =  m_flattenToAlways modInstSt
+    flattenIR :: St -> IR -> [AlwaysBlock] -> S [AlwaysBlock]
+    flattenIR stt (Always{..}) l' = do
+      i <- get
+      put (i+1)
+      return $ (AB event alwaysStmt i (filterSt alwaysStmt stt) alwaysLoc):l'
+    flattenIR _  (ModuleInst{..}) l' =
+      m_flattenToAlways modInstSt l'
 
-    filterVars :: [Id] -> [Var] -> [Var]
-    filterVars toKeep = filter (\v -> Li.elem (varName v) toKeep)
+    filterVars :: S.HashSet Id -> [Var] -> [Var]
+    filterVars toKeep = filter (\v -> S.member (varName v) toKeep)
 
+    filterList :: S.HashSet Id -> [Id] -> [Id]
+    filterList toKeep = filter (\x -> S.member x toKeep)
 
-    filterList :: [Id] -> [Id] -> [Id]
-    filterList toKeep = filter (\x -> Li.elem x toKeep)
-
-    filterMap :: [Id] -> M.HashMap Id [Id] -> M.HashMap Id [Id]
-    filterMap toKeep = M.filterWithKey (\k _v -> Li.elem k toKeep)
+    filterMap :: S.HashSet Id -> M.HashMap Id [Id] -> M.HashMap Id [Id]
+    filterMap toKeep = M.filterWithKey (\k _v -> S.member k toKeep)
 
     filterSt :: Stmt -> St -> St
-    filterSt s stt = let vars  = foldVariables id s
+    filterSt s stt = let vars  = S.fromList $ foldVariables id s
                          st'   = over ufs      (filterMap vars)  .
                                  set irs      [] $
                                  stt
-                         vars' = vars ++ (concat $ M.elems (st'^.ufs))
+                         vars' = vars `S.union` (S.fromList $ concat $ M.elems (st'^.ufs))
                          st''  = over ports    (filterVars vars') .
                                  over sources  (filterList vars') .
                                  over sinks    (filterList vars') .
