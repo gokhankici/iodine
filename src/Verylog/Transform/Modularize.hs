@@ -129,14 +129,18 @@ removeWires as = res -- trace (prettify g) res
 
 makeGraph :: [AlwaysBlock] -> EdgeMap -> UGr
 makeGraph as es = 
-  if   all ((< 2) . length) (scc g)
+  if   all ((< 2) . length) cs
   then g
   else error $
        "graph g contains a cycle:\n" ++
-       prettify g ++ "\n\n" ++
-       intercalate "\n" (show <$> as)
+       prettify g ++ "\n\n" ++ 
+       show dups ++ "\n\n" ++ 
+       intercalate "\n" (show <$> (filter (\a -> (a ^. aId) `elem` dups_concat) as))
 
   where
+    cs = scc g
+    dups = filter (\l -> length l > 1) cs
+    dups_concat = concat dups
     g = mkGraph
         ((\i -> (i,())) <$> IM.keys es)
         [ (frNode, toNode, ())
