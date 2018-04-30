@@ -15,14 +15,13 @@ import qualified Data.IntSet                as IS
 import           Data.List
 import           Data.Monoid
 
--- import           Data.Graph
 import Data.Graph.Inductive.Graph
 import Data.Graph.Inductive.PatriciaTree
 import Data.Graph.Inductive.Query
 
 import           Verylog.Language.Types
 
-import Debug.Trace
+-- import Debug.Trace
 
 flatten :: St -> [AlwaysBlock]
 flatten = flattenToAlways >>> removeWires
@@ -91,26 +90,35 @@ type WireMap = M.HashMap Id IS.IntSet
 type EdgeMap = IM.IntMap IS.IntSet
 
 removeWires :: [AlwaysBlock] -> [AlwaysBlock]
-removeWires as = trace toShow as
+removeWires as = res -- trace (prettify g) res
   where
-    toShow = show (prettify g, isConnected g)
-    mkTopsort r =
-      let is = topsort $ subgraph (reachable r g) g
-      in undefined
+    res = mkNewAB <$> components g
+
+    mkNewAB :: [Node] -> AlwaysBlock
+    mkNewAB ns =
+      let is     = topsort $ subgraph ns g
+          blocks = (\i -> IM.findWithDefault (error "") i abMap) <$> is
+          evnt   = getEvent blocks
+          stmt   = Block [ a ^. aStmt | a <- blocks ]
+          id'    = (head blocks) ^. aId + maxId
+          st'    = foldl' (\s a -> s <> (a ^. aSt)) ((head blocks) ^. aSt) (tail blocks)
+          loc    = (last blocks) ^. aLoc
+      in  AB { _aEvent = evnt
+             , _aStmt  = stmt
+             , _aId    = id'
+             , _aSt    = st'
+             , _aLoc   = loc
+             }
+
+    getEvent :: [AlwaysBlock] -> Event
+    getEvent []      = Star
+    getEvent (a:as') = case a ^. aEvent of
+                         PosEdge c -> PosEdge c
+                         NegEdge c -> NegEdge c
+                         Star      -> getEvent as'
       
-    rootNodes = nodes $ nfilter (\n -> indeg g n == 1) g 
-
-    g, _g :: UGr
-    g = if   all ((< 2) . length) (scc _g)
-        then _g
-        else error $ "graph g contains a cycle:\n" ++ prettify _g
-
-    _g = mkGraph
-        ((\i -> (i,())) <$> IM.keys edges2)
-        [ (fr, to, ())
-        | (fr, toSet) <- IM.assocs edges2
-        , to <- IS.toList toSet
-        ]
+    g :: UGr
+    g  = makeGraph as $ wireUseEdges as
 
     abMap :: IM.IntMap AlwaysBlock
     abMap = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
@@ -118,16 +126,35 @@ removeWires as = trace toShow as
     maxId :: Int
     maxId = fst $ IM.findMax abMap
 
-    edges2 :: EdgeMap
-    edges2 =
-      IM.foldlWithKey' (\m i a -> if   i `IM.member` edges1
-                                  then m
-                                  else if   case find varIsReg (a ^. aSt ^. ports) of
-                                              Just _  -> True
-                                              Nothing -> False
-                                       then IM.insert i IS.empty m
-                                       else m
-                       ) edges1 abMap
+
+makeGraph :: [AlwaysBlock] -> EdgeMap -> UGr
+makeGraph as es = 
+  if   all ((< 2) . length) (scc g)
+  then g
+  else error $
+       "graph g contains a cycle:\n" ++
+       prettify g ++ "\n\n" ++
+       intercalate "\n" (show <$> as)
+
+  where
+    g = mkGraph
+        ((\i -> (i,())) <$> IM.keys es)
+        [ (frNode, toNode, ())
+        | (frNode, toSet) <- IM.assocs es
+        , toNode <- IS.toList toSet
+        ]
+
+wireUseEdges :: [AlwaysBlock] -> EdgeMap
+wireUseEdges as =
+  foldl' (\m a -> if   (a ^. aId) `IM.member` edges1
+                  then m
+                  else if   case find varIsReg (a ^. aSt ^. ports) of
+                              Just _  -> True
+                              Nothing -> False
+                       then IM.insert (a ^. aId) IS.empty m
+                       else m
+         ) edges1 as
+  where
 
     varIsReg :: Var -> Bool
     varIsReg (Wire _)     = False

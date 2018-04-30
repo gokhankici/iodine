@@ -8,10 +8,12 @@ import           Control.Lens
 import           Control.Monad.Reader
 import           Control.Monad.State.Lazy
 import qualified Data.HashMap.Strict      as M
+import qualified Data.HashSet             as S
 import           Data.Typeable
 import           Text.PrettyPrint hiding (sep)
 import           Data.List
 import           Data.Hashable
+import qualified Data.Monoid as Mo
 
 --------------------------------------------------------------------------------
 -- IR for the formalism
@@ -224,3 +226,21 @@ instance Show St where
   show = pprint
 instance Show AlwaysBlock where
   show = pprint
+
+instance Mo.Monoid St where
+  mempty        = emptySt
+  mappend m1 m2 =
+    St { _ports        = jn_list ports
+       , _ufs          = (m1 ^. ufs) Mo.<> (m2 ^. ufs)
+       , _sources      = jn_list sources
+       , _sinks        = jn_list sinks
+       , _taintEq      = jn_list taintEq
+       , _sanitize     = jn_list sanitize
+       , _sanitizeGlob = jn_list sanitizeGlob
+       , _irs          = (m1 ^. irs) Mo.<> (m2 ^. irs)
+       }
+    where
+      jn_list fld =
+        S.toList $
+        S.fromList (m1 ^. fld) Mo.<> 
+        S.fromList (m2 ^. fld)
