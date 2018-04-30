@@ -39,10 +39,17 @@ m_flattenToAlways :: St -> [AlwaysBlock] -> HS [AlwaysBlock]
 m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
   where
     flattenIR :: St -> IR -> [AlwaysBlock] -> HS [AlwaysBlock]
-    flattenIR stt (Always{..}) l' = do
-      i <- get
-      put (i+1)
-      return $ (AB event alwaysStmt i (filterSt alwaysStmt stt) alwaysLoc):l'
+    flattenIR stt (Always{..}) l' =
+      case alwaysStmt of
+        Block ss ->
+          foldM (\l'' s -> do i <- get
+                              put (i+1)
+                              return $ (AB event s i (filterSt s stt) alwaysLoc):l''
+                ) l' ss
+        _        -> do
+          i <- get
+          put (i+1)
+          return $ (AB event alwaysStmt i (filterSt alwaysStmt stt) alwaysLoc):l'
     flattenIR _  (ModuleInst{..}) l' =
       m_flattenToAlways modInstSt l'
 
