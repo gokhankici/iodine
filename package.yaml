@@ -33,6 +33,7 @@ dependencies:
 - liquid-fixpoint
 - deepseq
 - hashable
+- fgl
 
 library:
   source-dirs:           src

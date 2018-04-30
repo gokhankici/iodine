@@ -9,6 +9,7 @@ import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Lazy
 import           Data.List
+import           Data.Maybe
 import qualified Data.HashMap.Strict        as M
 import           Text.Printf
 
@@ -30,7 +31,7 @@ freshKeepErrs = bas .= M.empty >> nbas .= M.empty
 --------------------------------------------------------------------------------
 sanityCheck :: [AlwaysBlock] -> [AlwaysBlock]  
 --------------------------------------------------------------------------------
-sanityCheck = check1 >>> checkLHSIsVar
+sanityCheck = check1 -- >>> checkLHSIsVar
 
 --------------------------------------------------------------------------------
 check1    :: [AlwaysBlock] -> [AlwaysBlock]
@@ -106,23 +107,32 @@ checkAssignments as = freshKeepErrs >> mapM_ (checkStmt . view aStmt) as
 --------------------------------------------------------------------------------
 checkLHSIsVar :: [AlwaysBlock] -> [AlwaysBlock]
 --------------------------------------------------------------------------------
-checkLHSIsVar as = case foldl' (\es a -> check (a ^. aStmt) (a ^. aSt ^. ufs) es) [] as of
+checkLHSIsVar as = case foldl' (\es a -> check (a ^. aStmt) (a ^. aSt ^. ports) (a ^. aSt ^. ufs) es) [] as of
                      []  -> as
                      e:_ -> throw e
   where
     ------------------------------------------------------------
-    check :: Stmt -> (M.HashMap Id [Id]) -> [PassError] -> [PassError]
+    check :: Stmt -> [Var] -> (M.HashMap Id [Id]) -> [PassError] -> [PassError]
     ------------------------------------------------------------
-    check      (Block ss) u es            = foldl' (\es' s -> check s u es') es ss 
-    check stmt@(BlockingAsgn l _) u es    = helper stmt l u es
-    check stmt@(NonBlockingAsgn l _) u es = helper stmt l u es
-    check      (IfStmt _ th el) u es      = foldl' (\es' s -> check s u es') es [th,el]
-    check      Skip _ es                  = es
+    check      (Block ss)            vs u es = foldl' (\es' s -> check s vs u es') es ss 
+    check stmt@(BlockingAsgn l _)    vs u es = helper stmt l vs u es
+    check stmt@(NonBlockingAsgn l _) vs u es = helper stmt l vs u es
+    check      (IfStmt _ th el)      vs u es = foldl' (\es' s -> check s vs u es') es [th,el]
+    check      Skip                  _  _ es = es
 
-    helper stmt v m es =
-      case M.lookup v m of
-        Nothing -> es
-        Just _  -> (PassError $ printf "lhs of %s is not a var" (show stmt)) : es
+    helper stmt v vs m es =
+      let isBlocking = case stmt of
+                         BlockingAsgn _ _ -> True
+                         _                -> False
+          isReg      = isJust $ find (\a -> case a of
+                                              Register r -> r == v
+                                              Wire _     -> False) vs
+      in case M.lookup v m of
+           Nothing ->
+             if   isBlocking && isReg
+             then (PassError $ printf "lhs of blocking assignment %s is a register" (show stmt)) : es
+             else es
+           Just _  -> (PassError $ printf "lhs of %s is not a var" (show stmt)) : es
 
 --------------------------------------------------------------------------------
 -- Helper functions
