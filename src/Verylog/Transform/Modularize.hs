@@ -138,13 +138,31 @@ removeWires as = res -- trace (prettify g) res
     maxId = fst $ IM.findMax abMap
 
 calcSubgraphs :: WireMap -> UGr -> [[Node]]
-calcSubgraphs dupWriteMap g = cs
+calcSubgraphs dupWriteMap g =
+  concat [ case ns `intersect` (IM.keys sampleIds) of
+             []   -> [ns]
+             dups -> generateNodes ns dups
+         | ns <- components g
+         ]
   where
-    cs :: [[Node]]
-    cs = components g
+    generateNodes :: [Node] -> [Int] -> [[Node]]
+    generateNodes ns dupIds =
+      let dupWires = foldl' (\l (i,w) -> if i `elem` dupIds then w:l else l
+                            ) [] (IM.assocs sampleIds)
+          allUpds  = M.foldlWithKey' (\iss k is -> if k `elem` dupWires then (IS.toList is):iss else iss
+                                     ) [] dupWriteMap
+          nsToDrop = map concat $ mapM allDropOnes allUpds -- seems like it's doing the right thing ...
+      in [ ns \\ nsNeg | nsNeg <- nsToDrop ]
 
-    sampleIds :: [Int]
-    sampleIds = M.foldlWithKey' (\l _ s -> IS.findMin s : l) [] dupWriteMap
+    allDropOnes :: [a] -> [[a]]
+    allDropOnes as = helper (as, [])
+      where
+        helper ([], _)   = []
+        helper (a:as', l) = (as' ++ l) : (helper (as', a:l))
+
+    sampleIds :: IM.IntMap Id
+    sampleIds = M.foldlWithKey' ( \m w s -> IM.insert (IS.findMin s) w m
+                                ) IM.empty dupWriteMap
 
 makeGraph :: EdgeMap -> UGr
 makeGraph es =
