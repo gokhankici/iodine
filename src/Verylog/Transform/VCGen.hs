@@ -7,7 +7,7 @@ import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Lazy
 import           Data.List
-import qualified Data.HashSet               as S
+import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
 
 import           Verylog.Transform.TransitionRelation
@@ -53,10 +53,11 @@ initial_inv a = Horn { hBody = Boolean True
   where
     st   = a ^. aSt
     sub1 = [ (n_lvar sntz, rvar sntz)
-           | sntz <- S.toList . S.fromList $ st ^. sanitize ++ st ^. sources ++ st ^. sinks
+           | sntz <- S.toList . S.fromList . (filterRegs a) $
+                     st ^. sanitize ++ st ^. sources ++ st ^. sinks
            ]
     sub2 = [ (tv, Number 0)
-           | s <- varName <$> st^.ports, tv <- [n_ltvar, n_rtvar] <*> [s]
+           | s <- getRegisters a, tv <- [n_ltvar, n_rtvar] <*> [s]
            ]
 
 --------------------------------------------------------------------------------
@@ -71,20 +72,20 @@ tag_reset_inv a = Horn { hBody = prevKV a
   where
     st    = a^.aSt
 
-    hsubs  = hsubs1 ++ hsubs2 ++ hsubs3
+    hsubs  = hsubs1 ++ hsubs2 -- ++ hsubs3
     hsubs1 = concat [ [ (n_lvar p, lvar p)
                       , (n_rvar p, rvar p)
                       ]
-                    | p <- varName <$> st^.ports
+                    | p <- getRegisters a
                     ]
     hsubs2 = [ (tv, Number 1)
-             | s <- st^.sources
+             | s <- filterRegs a (st^.sources)
              , tv <- [n_ltvar, n_rtvar] <*> [s]
              ]
-    hsubs3 = [ (tv, Number 0)
-             | v <- (varName <$> st^.ports) \\ (st^.sources)
-             , tv <- [n_ltvar, n_rtvar] <*> [v]
-             ]
+    -- hsubs3 = [ (tv, Number 0)
+    --          | v <- (varName <$> st^.ports) \\ (st^.sources)
+    --          , tv <- [n_ltvar, n_rtvar] <*> [v]
+    --          ]
 
 --------------------------------------------------------------------------------
 next_step_inv :: AlwaysBlock -> Inv 
@@ -96,7 +97,7 @@ next_step_inv a = Horn { hBody = body
                        , hId   = HornId (a ^. aId) InvNext
                        }
   where
-    subs     = ul ++ ur
+    subs     = filterSubs a (ul ++ ur)
     (nl,ul)  = next fmt{leftVar=True}  a
     (nr,ur)  = next fmt{rightVar=True} a
     body     = Ands [ prevKV a
@@ -110,7 +111,7 @@ type Subs = [(Id,Expr)]
 sanGlobs        :: AlwaysBlock -> Subs -> Expr
 sanGlobs a subs = alwaysEqs conf vs subs
   where
-    vs   = (varName <$> a ^. aSt ^. ports) `intersect` (a ^. aSt ^. sanitizeGlob)
+    vs   = (getRegisters a) `intersect` (a ^. aSt ^. sanitizeGlob)
     conf = AEC { isInitEq  = True
                , isPrimeEq = True
                , isValEq   = True
@@ -120,7 +121,7 @@ sanGlobs a subs = alwaysEqs conf vs subs
 taintEqs        :: AlwaysBlock -> Subs -> Expr
 taintEqs a subs = alwaysEqs conf vs subs
   where
-    vs   = (varName <$> a ^. aSt ^. ports) `intersect` (a ^. aSt ^. taintEq)
+    vs   = (getRegisters a) `intersect` (a ^. aSt ^. taintEq)
     conf = AEC { isInitEq  = True
                , isPrimeEq = True
                , isValEq   = False
@@ -198,8 +199,8 @@ readWriteSet a = evalState (comp (a^.aStmt) >> get) (S.empty, S.empty)
   where
     us = a^.aSt^.ufs
 
-    readVars  v = S.fromList $ M.lookupDefault [v] v us
-    writeVars v = S.fromList $ if M.member v us then [] else [v]
+    readVars  v = S.fromList . filterRegs a $ M.lookupDefault [v] v us
+    writeVars v = S.fromList . filterRegs a $ if M.member v us then [] else [v]
     
     comp :: Stmt -> State RWSet ()
     comp (Block ss)            = sequence_ (comp <$> ss)
@@ -227,19 +228,19 @@ non_interference_inv a1 a2 = Horn { hBody = body
     (nr1,ur1) = next fmt{rightVar=True} a1
     updates1  = ul1 ++ ur1
     lukap v   = case lookup v updates1 of
-                  Nothing -> throw $ PassError "cannot find v in updates1"
+                  Nothing -> throw $ PassError $ "cannot find " ++ v ++ " in updates1"
                   Just e  -> (v,e)
-    updates2    = updates2_1 ++ updates2_2
+    updates2    = filterSubs a2 $ updates2_1 ++ updates2_2
     updates2_1  = concat [ [ (n_lvar v,  lvar v)  -- l' = l
                            , (n_rvar v,  rvar v)  -- r' = r
                            , (n_ltvar v, ltvar v) -- lt' = lt
                            , (n_rtvar v, rtvar v) -- rt' = rt
                            ]
                          -- variables not updated by a1 stay the same
-                         | v <- (varName <$> a2^.aSt^.ports) \\ (varName <$> a1^.aSt^.ports) 
+                         | v <- (getRegisters a2) \\ (getRegisters a1) 
                          ]
     updates2_2 = [ lukap v
-                 | p <- (varName <$> a2^.aSt^.ports) `intersect` (varName <$> a1^.aSt^.ports) 
+                 | p <- (getRegisters a2) `intersect` (getRegisters a1) 
                  , v <- primes p
                  ]
     
@@ -266,7 +267,7 @@ provedProperty (PropertyOptions{..}) a =
                                   ]
                    , hId   = HornId (a ^. aId) InvTagEq
                    }
-            | s <- a^.aSt^.sinks
+            | s <- filterRegs a $ a^.aSt^.sinks
             ]
     valEq = [ Horn { hHead =  BinOp EQU (lvar s) (rvar s)
                    , hBody = Ands [ KV { kvId   = a ^. aId
@@ -277,7 +278,7 @@ provedProperty (PropertyOptions{..}) a =
                                   ]
                    , hId   = HornId (a ^. aId) (InvOther "l_sink=r_sink")
                    }
-            | s <- a^.aSt^.sinks
+            | s <- filterRegs a $ a^.aSt^.sinks
             ]
 
 -------------------------------------------------------------------------------- 
@@ -289,34 +290,16 @@ rvar  = makeVar fmt{rightVar=True}
 ltvar = makeVar fmt{taggedVar=True, leftVar=True}
 rtvar = makeVar fmt{taggedVar=True, rightVar=True}
 
--- lvar', ltvar', rtvar' :: Id -> Expr
--- lvar'  = makeVar fmt{primedVar=True, leftVar=True}
--- ltvar' = makeVar fmt{primedVar=True, taggedVar=True, leftVar=True}
--- rtvar' = makeVar fmt{primedVar=True, taggedVar=True, rightVar=True}
-
--- n_lvar', n_rvar', n_ltvar', n_rtvar' :: Id -> Id
--- n_lvar'  = makeVarName fmt{primedVar=True, leftVar=True}
--- n_rvar'  = makeVarName fmt{primedVar=True, rightVar=True}
--- n_ltvar' = makeVarName fmt{primedVar=True, taggedVar=True, leftVar=True}
--- n_rtvar' = makeVarName fmt{primedVar=True, taggedVar=True, rightVar=True}
-
 n_lvar, n_rvar, n_ltvar, n_rtvar :: Id -> Id
 n_lvar   = makeVarName fmt{leftVar=True}
 n_rvar   = makeVarName fmt{rightVar=True}
 n_ltvar  = makeVarName fmt{taggedVar=True, leftVar=True}
 n_rtvar  = makeVarName fmt{taggedVar=True, rightVar=True}
 
-
--- kv[x' := x][y' := y][...]
 prevKV   :: AlwaysBlock -> Expr
 prevKV a = KV { kvId   = a^.aId
-              , kvSubs = [] -- subs
+              , kvSubs = []
               } 
-  -- where
-  --   args  = makeInvArgs fmt a
-  --   args' = args --makeInvArgs fmt{primedVar=True} a
-  --   subs  = zipWith (\ v v' -> (v', Var v)) args args'
-
 primes :: Id -> [Id]
 primes v = [ makeVarName f v
            | f <- [ f'{leftVar=True}
@@ -329,3 +312,20 @@ primes v = [ makeVarName f v
     -- f' = fmt{primedVar=True}
     f' = fmt
 
+filterRegs :: AlwaysBlock -> [Id] -> [Id]
+filterRegs a vs =
+  foldl' (\l v -> if   (Register v) `elem` (a ^. aSt ^. ports)
+                  then v:l
+                  else l
+         ) [] vs
+
+kv_vars :: AlwaysBlock -> S.HashSet Id
+kv_vars a =
+  (S.fromList (allArgs fmt{leftVar=True} (a^.aSt)))
+  `S.union`
+  (S.fromList (allArgs fmt{rightVar=True} (a^.aSt)))
+
+filterSubs :: AlwaysBlock -> [(Id,Expr)] -> [(Id,Expr)]
+filterSubs a = filter (\(v,_) -> v `S.member` m)
+  where
+    m = kv_vars a

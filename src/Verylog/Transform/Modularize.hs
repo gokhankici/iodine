@@ -39,14 +39,14 @@ m_flattenToAlways :: St -> [AlwaysBlock] -> HS [AlwaysBlock]
 m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
   where
     flattenIR :: St -> IR -> [AlwaysBlock] -> HS [AlwaysBlock]
-    flattenIR stt (Always{..}) l' =
-      case alwaysStmt of
-        Block ss ->
-          foldM (\l'' s -> do i <- get
-                              put (i+1)
-                              return $ (AB event s i (filterSt s stt) alwaysLoc):l''
-                ) l' ss
-        _        -> do
+    flattenIR stt (Always{..}) l' = do
+      -- case alwaysStmt of
+      --   Block ss ->
+      --     foldM (\l'' s -> do i <- get
+      --                         put (i+1)
+      --                         return $ (AB event s i (filterSt s stt) alwaysLoc):l''
+      --           ) l' ss
+      --   _        -> do
           i <- get
           put (i+1)
           return $ (AB event alwaysStmt i (filterSt alwaysStmt stt) alwaysLoc):l'
@@ -99,11 +99,11 @@ type EdgeMap = IM.IntMap IS.IntSet
 removeWires :: [AlwaysBlock] -> [AlwaysBlock]
 removeWires as = res -- trace (prettify g) res
   where
-    res = mkNewAB <$> components g
+    res = mkNewAB <$> (calcSubgraphs dupWriteMap g)
 
     mkNewAB :: [Node] -> AlwaysBlock
     mkNewAB ns =
-      let is     = topsort $ subgraph ns g
+      let is     = topsort $ checkCycles as $ subgraph ns g
           blocks = (\i -> IM.findWithDefault (error "") i abMap) <$> is
           evnt   = getEvent blocks
           stmt   = Block [ a ^. aStmt | a <- blocks ]
@@ -123,49 +123,67 @@ removeWires as = res -- trace (prettify g) res
                          PosEdge c -> PosEdge c
                          NegEdge c -> NegEdge c
                          Star      -> getEvent as'
-      
-    g :: UGr
-    g  = makeGraph as $ wireUseEdges as
 
+    g :: UGr
+    g  = makeGraph es
+
+    es          :: EdgeMap
+    dupWriteMap :: WireMap
+    (es, dupWriteMap) = wireUseEdges as
+      
     abMap :: IM.IntMap AlwaysBlock
     abMap = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
 
     maxId :: Int
     maxId = fst $ IM.findMax abMap
 
+calcSubgraphs :: WireMap -> UGr -> [[Node]]
+calcSubgraphs dupWriteMap g = cs
+  where
+    cs :: [[Node]]
+    cs = components g
 
-makeGraph :: [AlwaysBlock] -> EdgeMap -> UGr
-makeGraph as es = 
-  if   all ((< 2) . length) cs
-  then g
-  else error $
+    sampleIds :: [Int]
+    sampleIds = M.foldlWithKey' (\l _ s -> IS.findMin s : l) [] dupWriteMap
+
+makeGraph :: EdgeMap -> UGr
+makeGraph es =
+  mkGraph
+  ((\i -> (i,())) <$> IM.keys es)
+  [ (frNode, toNode, ())
+  | (frNode, toSet) <- IM.assocs es
+  , toNode <- IS.toList toSet
+  , frNode /= toNode
+  ]
+
+checkCycles :: [AlwaysBlock] -> UGr -> UGr
+checkCycles as g =
+  if   any ((>= 2) . length) (scc g)
+  then error $
        "graph g contains a cycle:\n" ++
        prettify g ++ "\n\n" ++ 
        show dups ++ "\n\n" ++ 
-       intercalate "\n" (show <$> (filter (\a -> (a ^. aId) `elem` dups_concat) as))
-
+       intercalate "\n" (show <$> (filter (\a -> (a ^. aId) `elem` dups) as))
+  else g
   where
-    cs = scc g
-    dups = filter (\l -> length l > 1) cs
-    dups_concat = concat dups
-    g = mkGraph
-        ((\i -> (i,())) <$> IM.keys es)
-        [ (frNode, toNode, ())
-        | (frNode, toSet) <- IM.assocs es
-        , toNode <- IS.toList toSet
-        ]
+    cs   = scc g
+    dups = head $ filter (\l -> length l > 1) cs -- pick the first cycle
 
-wireUseEdges :: [AlwaysBlock] -> EdgeMap
-wireUseEdges as =
-  foldl' (\m a -> if   (a ^. aId) `IM.member` edges1
-                  then m
-                  else if   case find varIsReg (a ^. aSt ^. ports) of
-                              Just _  -> True
-                              Nothing -> False
-                       then IM.insert (a ^. aId) IS.empty m
-                       else m
-         ) edges1 as
+wireUseEdges :: [AlwaysBlock] -> (EdgeMap, WireMap)
+wireUseEdges as = (edgeMap, dupWriteMap)
   where
+    edgeMap =
+      foldl' (\m a -> if   (a ^. aId) `IM.member` edges1
+                      then m
+                      else if   case find varIsReg (a ^. aSt ^. ports) of
+                                  Just _  -> True
+                                  Nothing -> False
+                           then IM.insert (a ^. aId) IS.empty m
+                           else m
+             ) edges1 as
+
+    dupWriteMap :: WireMap
+    dupWriteMap = M.filter (\s -> IS.size s > 1) wireWriteMap
 
     varIsReg :: Var -> Bool
     varIsReg (Wire _)     = False
@@ -216,14 +234,32 @@ insertWritesToWires (readMap, writeMap) a =
     -- first element is read set, second is write set
     wireUpdates :: Stmt -> (HS.HashSet Id, HS.HashSet Id)
     wireUpdates (Block ss)            = let r = mconcat (wireUpdates <$> ss) in seq r r
-    wireUpdates (BlockingAsgn l r)    = (checkIfWire r, checkIfWire l)
-    wireUpdates (NonBlockingAsgn l r) = (checkIfWire r, checkIfWire l)
+    wireUpdates s@(BlockingAsgn l r)    =
+      let res = (checkIfWire r, checkIfWire l)
+      in if   isWire l
+         then if   (a^.aEvent) == Star
+              then res
+              else error $
+                   "assignment to wire in non-star blocking assignment" -- sanity check
+                   ++ "\n" ++ show s
+         else res
+    wireUpdates s@(NonBlockingAsgn l r) =
+      let res = (checkIfWire r, checkIfWire l)
+      in if   isWire l
+         then error $
+              "non-blocking assignment to a wire" -- sanity check
+              ++ "\n" ++ show s
+         else res
     wireUpdates (IfStmt c th el)      = let r = wireUpdates th <> wireUpdates el <> (checkIfWire c, HS.empty)
                                         in seq r r
     wireUpdates Skip                  = (HS.empty, HS.empty)
 
+
+    isWire   :: Id -> Bool
+    isWire v = (Wire v) `elem` (a ^. aSt ^. ports)
+
     checkIfWire :: Id -> HS.HashSet Id
-    checkIfWire v = if   (Wire v) `elem` (a ^. aSt ^. ports)
+    checkIfWire v = if   isWire v
                     then HS.singleton v
                     else case  v `M.lookup` (a ^. aSt ^. ufs) of
                            Nothing -> HS.empty

@@ -57,13 +57,13 @@ makeVarName f@(VarFormat{..}) v =
           | otherwise = ""
 
 allArgs        :: VarFormat -> St -> [Id]
-allArgs f st = let ps = varName <$> st^.ports
+allArgs f st = let ps = foldl' helper [] (st^.ports)
                  in (makeVarName f <$> ps) ++ (makeVarName f{taggedVar=True} <$> ps)
+  where
+    helper l (Register r) = r:l
+    helper l (Wire _)     = l
           
--- nextArgs        :: VarFormat -> St -> [Id]
--- nextArgs f st = allArgs f st ++ allArgs f{primedVar=True} st
-
-makeInvArgs        :: VarFormat -> AlwaysBlock -> [Id]
+makeInvArgs     :: VarFormat -> AlwaysBlock -> [Id]
 makeInvArgs f a = allArgs f{leftVar=True} st ++ allArgs f{rightVar=True} st
   where
     st = a^.aSt

@@ -69,6 +69,7 @@ data IR = Always     { event      :: ! Event
 data Event = Star
            | PosEdge Id
            | NegEdge Id
+           deriving (Eq)
 
 data Stmt = Block           { blockStmts :: ! [Stmt] }
           | BlockingAsgn    { lhs        :: ! Id
@@ -244,3 +245,10 @@ instance Mo.Monoid St where
         S.toList $
         S.fromList (m1 ^. fld) Mo.<> 
         S.fromList (m2 ^. fld)
+
+getRegisters :: AlwaysBlock -> [Id]
+getRegisters a =
+  foldl' (\l v -> case v of
+                    Register r -> r:l
+                    Wire _     -> l
+         ) [] (a ^. aSt ^. ports)
