@@ -21,7 +21,7 @@ import Data.Graph.Inductive.Query
 
 import           Verylog.Language.Types
 
--- import Debug.Trace
+import Debug.Trace
 
 flatten :: St -> [AlwaysBlock]
 flatten = flattenToAlways >>> removeWires
@@ -127,8 +127,8 @@ removeWires as = res -- trace (prettify g) res
     g :: UGr
     g  = makeGraph es
 
-    es          :: EdgeMap
-    dupWriteMap :: WireMap
+    es                :: EdgeMap
+    dupWriteMap       :: WireMap
     (es, dupWriteMap) = wireUseEdges as
       
     abMap :: IM.IntMap AlwaysBlock
@@ -138,31 +138,27 @@ removeWires as = res -- trace (prettify g) res
     maxId = fst $ IM.findMax abMap
 
 calcSubgraphs :: WireMap -> UGr -> [[Node]]
-calcSubgraphs dupWriteMap g =
-  concat [ case ns `intersect` (IM.keys sampleIds) of
-             []   -> [ns]
-             dups -> generateNodes ns dups
-         | ns <- components g
-         ]
+calcSubgraphs dupWriteMap g = concat [ generateNodes ns | ns <- components g ]
   where
-    generateNodes :: [Node] -> [Int] -> [[Node]]
-    generateNodes ns dupIds =
-      let dupWires = foldl' (\l (i,w) -> if i `elem` dupIds then w:l else l
-                            ) [] (IM.assocs sampleIds)
-          allUpds  = M.foldlWithKey' (\iss k is -> if k `elem` dupWires then (IS.toList is):iss else iss
-                                     ) [] dupWriteMap
+    generateNodes :: [Node] -> [[Node]]
+    generateNodes ns =
+      let allUpds  = M.foldl' (\iss is -> if   (IS.findMin is) `elem` ns
+                                          then (IS.toList is):iss
+                                          else iss
+                              ) [] dupWriteMap
           nsToDrop = map concat $ mapM allDropOnes allUpds -- seems like it's doing the right thing ...
-      in [ ns \\ nsNeg | nsNeg <- nsToDrop ]
+      in if   allUpds == []
+         then [ns]
+         else trace
+              (show allUpds ++ "\n" ++ show nsToDrop ++ "\n")
+              [ let r = ns \\ nsNeg in seq r r | nsNeg <- seq nsToDrop nsToDrop ]
 
     allDropOnes :: [a] -> [[a]]
     allDropOnes as = helper (as, [])
       where
-        helper ([], _)   = []
-        helper (a:as', l) = (as' ++ l) : (helper (as', a:l))
-
-    sampleIds :: IM.IntMap Id
-    sampleIds = M.foldlWithKey' ( \m w s -> IM.insert (IS.findMin s) w m
-                                ) IM.empty dupWriteMap
+        helper ([], _)    = []
+        helper (a:as', l) =
+          let r = as' ++ l in (seq r r) : (helper (as', a:l))
 
 makeGraph :: EdgeMap -> UGr
 makeGraph es =

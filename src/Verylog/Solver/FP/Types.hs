@@ -29,19 +29,19 @@ import qualified Language.Fixpoint.Types    as FQ
 import           Verylog.Language.Types hiding (St, ufs)
 import           Verylog.Solver.Common
 
-data FQBind = FQBind { bindId   :: Int
-                     , bindName :: Id
-                     , bindType :: FQ.Sort
-                     , bindRef  :: FQ.Expr
+data FQBind = FQBind { bindId   :: ! Int
+                     , bindName :: ! Id
+                     , bindType :: ! FQ.Sort
+                     , bindRef  :: ! FQ.Expr
                      }
 
-data InvFun = InvFun { invFunName   :: Id
-                     , invFunArity  :: Int
-                     , invFunParams :: [Id]
+data InvFun = InvFun { invFunName   :: ! Id
+                     , invFunArity  :: ! Int
+                     , invFunParams :: ! [Id]
                      }
 
-data UFConst = UFConst { ufConstName  :: Id
-                       , ufConstArity :: Int
+data UFConst = UFConst { ufConstName  :: ! Id
+                       , ufConstArity :: ! Int
                        }
  
 type BindMap = M.HashMap Id FQBind

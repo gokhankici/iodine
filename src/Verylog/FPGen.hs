@@ -13,7 +13,10 @@ import Language.Fixpoint.Types
 --------------------------------------------------------------------------------
 pipeline :: FilePath -> String -> FPSt
 --------------------------------------------------------------------------------
-pipeline f = parse f >>> flatten >>> sanityCheck >>> toFpSt
+pipeline f = parse f
+             >>> flatten
+             >>> sanityCheck
+             >>> toFpSt
 
 --------------------------------------------------------------------------------
 fpgen :: FilePath -> IO (FPSt, GInfo SubC Metadata)

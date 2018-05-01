@@ -46,6 +46,8 @@ verylog options:
       The argument of this option is passed to qarmc
   --solver ( hsf | smt | fp )
       Specifies the target of the vcgen (default is hsf)
+  --prof
+      Run with profiling
   -h, --help
       Prints this help
 

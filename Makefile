@@ -4,7 +4,7 @@ THIS_DIR=$(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 .PHONY: all
 
 all:
-	@stack install --fast
+	@stack install
 	@echo "\nLOG:\n"
 	@cat $(THIS_DIR)/.stack-work/logs/$(MODULE_NAME).log-color
 

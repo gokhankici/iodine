@@ -15,7 +15,7 @@ import qualified Text.PrettyPrint.HughesPJ as PP
 data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
            deriving (Show)
 
-data InvType = InvInit | InvReTag | InvNext | InvTagEq | InvWF | InvInter Int | InvOther String
+data InvType = InvInit | InvReTag | InvNext | InvTagEq | InvWF | InvInter ! Int | InvOther ! String
             deriving (Generic, Eq, Ord)
 
 instance Fixpoint InvType where
@@ -44,30 +44,30 @@ instance Fixpoint HornId where
 instance NFData InvType
 instance NFData HornId
 
-data Inv = Horn { hBody :: Expr -- body of the horn clause
-                , hHead :: Expr -- head of the horn clause
-                , hId   :: HornId
+data Inv = Horn { hBody :: ! Expr -- body of the horn clause
+                , hHead :: ! Expr -- head of the horn clause
+                , hId   :: ! HornId
                 }
            deriving (Show)
 
-data Expr = BinOp     { bOp   :: BinOp
-                      , expL  :: Expr
-                      , expR  :: Expr
+data Expr = BinOp     { bOp   :: ! BinOp
+                      , expL  :: ! Expr
+                      , expR  :: ! Expr
                       }
           | Ands      [Expr]
-          | Ite       { cnd     :: Expr
-                      , expThen :: Expr
-                      , expElse :: Expr
+          | Ite       { cnd     :: ! Expr
+                      , expThen :: ! Expr
+                      , expElse :: ! Expr
                       }
-          | KV        { kvId   :: Int
-                      , kvSubs :: [(Id,Expr)]
+          | KV        { kvId   :: ! Int
+                      , kvSubs :: ! [(Id,Expr)]
                       }
           | Var       Id
           | Boolean   Bool
           | Number    Int
-          | UFCheck   { ufArgs  :: [(Expr,Expr)]
-                      , ufNames :: (Expr,Expr)
-                      , ufFunc  :: Id
+          | UFCheck   { ufArgs  :: ! [(Expr,Expr)]
+                      , ufNames :: ! (Expr,Expr)
+                      , ufFunc  :: ! Id
                       }
           deriving (Show)
 
