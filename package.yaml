@@ -34,6 +34,7 @@ dependencies:
 - deepseq
 - hashable
 - fgl
+- fgl-visualize
 
 library:
   source-dirs:           src

@@ -29,16 +29,19 @@ defaultPropertyOptions = PropertyOptions { checkTagEq = True
 --------------------------------------------------------------------------------
 invs :: [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
-invs as = concatMap modular_inv as
-          ++ non_interference_checks as
-          ++ concatMap (provedProperty defaultPropertyOptions) as
+invs as =
+  concatMap modular_inv as
+  ++ non_interference_checks as
+  ++ concatMap (provedProperty defaultPropertyOptions) as
 
 --------------------------------------------------------------------------------
 modular_inv :: AlwaysBlock -> [Inv]  
 --------------------------------------------------------------------------------
 modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
   where
-    a' = a -- trc (printf "\nalways block #%d:\n" (a^.aId)) a a
+    a' = a
+    -- a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
+    -- a' = trc (printf "\nalways block #%d: " (a^.aId)) (length $ makeInvArgs fmt a) a
 
 --------------------------------------------------------------------------------
 initial_inv :: AlwaysBlock -> Inv
@@ -178,17 +181,21 @@ non_interference_checks :: [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
 non_interference_checks as = non_int_chk as [] []
   where
+    interfere :: RWSet -> RWSet -> Bool
     interfere (r1,w1) (r2,w2) = notDistinct r1 w2 || notDistinct r2 w1 || notDistinct w1 w2
+
+    notDistinct :: S.HashSet Id -> S.HashSet Id -> Bool
     notDistinct s1 s2 = not . null $ S.intersection s1 s2  
 
-    non_int_chk []     _checked cs = cs
+    non_int_chk :: [AlwaysBlock] -> [(RWSet,AlwaysBlock)] -> [Inv] -> [Inv]
+    non_int_chk []      _checked cs = cs
     non_int_chk (a1:a1s) checked cs =
-      let f (rw2, a2) cs_prev = if   interfere rw1 rw2
+      let f cs_prev (rw2, a2) = if   interfere rw1 rw2
                                 then (non_interference_inv a1 a2)
                                      : (non_interference_inv a2 a1)
                                      : cs_prev
                                 else cs_prev
-          cs'                 = foldr f cs checked
+          cs'                 = foldl' f cs checked
           rw1                 = readWriteSet a1
       in non_int_chk a1s ((rw1, a1):checked) cs'
 

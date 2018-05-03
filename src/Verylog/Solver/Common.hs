@@ -13,7 +13,7 @@ import Language.Fixpoint.Types (Fixpoint(..), Loc(..), showFix, dummySpan)
 import qualified Text.PrettyPrint.HughesPJ as PP
 
 data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
-           deriving (Show)
+           deriving (Show, Generic)
 
 data InvType = InvInit | InvReTag | InvNext | InvTagEq | InvWF | InvInter ! Int | InvOther ! String
             deriving (Generic, Eq, Ord)
@@ -48,7 +48,7 @@ data Inv = Horn { hBody :: ! Expr -- body of the horn clause
                 , hHead :: ! Expr -- head of the horn clause
                 , hId   :: ! HornId
                 }
-           deriving (Show)
+           deriving (Show, Generic)
 
 data Expr = BinOp     { bOp   :: ! BinOp
                       , expL  :: ! Expr
@@ -69,7 +69,11 @@ data Expr = BinOp     { bOp   :: ! BinOp
                       , ufNames :: ! (Expr,Expr)
                       , ufFunc  :: ! Id
                       }
-          deriving (Show)
+          deriving (Show, Generic)
+
+instance NFData BinOp
+instance NFData Expr
+instance NFData Inv
 
 nextPred :: [Char]
 nextPred = "next"

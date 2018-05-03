@@ -22,6 +22,7 @@ zparseopts -D -E -- \
            -qarmcOpts+:=QARMC_OPTS \
            -solver:=SOLVER \
            -minimize=MINIMIZE \
+		   -no-output=NO_OUTPUT \
            M:=TOPLEVEL_MODULE \
            -emacs=EMACS \
            h=HELP -help=HELP
@@ -162,7 +163,9 @@ EOF
 print_IR $TOPLEVEL_MODULE > $IR_FILE
 
 if [[ -n "$JUST_IR" ]]; then
-    [[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $IR_FILE || cat $IR_FILE
+	if [[ -z "$NO_OUTPUT" ]]; then
+		[[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $IR_FILE || cat $IR_FILE
+	fi
     exit 0
 fi
 # }}}
@@ -174,9 +177,7 @@ last_err=$?
 echo "\n"
 
 if [[ $last_err -ne 0 ]]; then
-    if [[ -z "$JUST_VCGEN" ]]; then
-        cat $FQOUT_FILE
-    fi
+	[[ -z "$NO_OUTPUT" ]] && cat $FQOUT_FILE
     echo "\n"
     red "UNSAFE"
     exit $last_err
@@ -187,7 +188,9 @@ if [[ -n "$VC_DEBUG" ]]; then
 fi
 
 if [[ -n "$JUST_VCGEN" ]]; then
-    [[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $VCGEN_FILE || cat $VCGEN_FILE
+	if [[ -z "$NO_OUTPUT" ]]; then
+		[[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $VCGEN_FILE || cat $VCGEN_FILE
+	fi	
     exit 0
 fi
 # }}}

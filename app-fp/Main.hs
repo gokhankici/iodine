@@ -23,10 +23,9 @@ import           System.Exit
 import           Text.PrettyPrint
 import           Text.Printf
 
--- import           Control.Monad
--- import           System.IO
--- import Verylog.Language.Parser
--- import Verylog.Transform.Modularize
+import System.IO
+import Control.DeepSeq
+
 
 data Flag = VCGen
           | PrintFInfo
@@ -76,30 +75,18 @@ main  = do
 
   (fpst, finfo) <- fpgen optInputFile
 
-  -- when optVCGen $ do
-  --   s <- readFile optInputFile
-  --   let st' = parse optInputFile s
-  --   let countModInsts st =
-  --         foldr (\i n -> case i of
-  --                          Always{..}     -> n
-  --                          ModuleInst{..} -> n + 1 + (countModInsts modInstSt)
-  --               )
-  --         (0::Int) (st ^. irs)
-  --   printf "# module instantiations: %d\n" (countModInsts st')
-  --   let blocks = modularize st'
-  --   printf "# blocks: %d\n" (length blocks)
-  --   -- withFile optOutputFile WriteMode (\f -> hPutStrLn f (show blocks))
-  --   exitSuccess
-
   let cfg = defConfig{ eliminate = Some
-                     , save      = not optMinimize
+                     , save      = optVCGen
                      , srcFile   = optInputFile
                      , metadata  = True
                      , minimize  = optMinimize
                      } 
 
   case () of
-    _ | optVCGen      -> saveQuery cfg finfo >> exitSuccess
+    _ | optVCGen      ->
+        -- withFile optOutputFile WriteMode (\f -> hPutStrLn f (show (fpst ^. fpConstraints))) >> exitSuccess
+        -- (fpst, finfo)  `deepseq` (putStrLn "fully evaluated everything")
+        saveQuery cfg finfo >> exitSuccess
       | optPrintFInfo -> do
           fInfo <- parseFInfo [optOutputFile] :: IO (FInfo ())
           putStrLn $ show fInfo

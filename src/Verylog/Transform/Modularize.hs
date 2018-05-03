@@ -22,6 +22,7 @@ import Data.Graph.Inductive.Query
 import           Verylog.Language.Types
 
 import Debug.Trace
+import Data.Graph.Inductive.Dot
 
 flatten :: St -> [AlwaysBlock]
 flatten = flattenToAlways >>> removeWires
@@ -40,16 +41,9 @@ m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
   where
     flattenIR :: St -> IR -> [AlwaysBlock] -> HS [AlwaysBlock]
     flattenIR stt (Always{..}) l' = do
-      -- case alwaysStmt of
-      --   Block ss ->
-      --     foldM (\l'' s -> do i <- get
-      --                         put (i+1)
-      --                         return $ (AB event s i (filterSt s stt) alwaysLoc):l''
-      --           ) l' ss
-      --   _        -> do
-          i <- get
-          put (i+1)
-          return $ (AB event alwaysStmt i (filterSt alwaysStmt stt) alwaysLoc):l'
+      i <- get
+      put (i+1)
+      return $ (AB event alwaysStmt i (filterSt alwaysStmt stt) alwaysLoc):l'
     flattenIR _  (ModuleInst{..}) l' =
       m_flattenToAlways modInstSt l'
 
@@ -96,18 +90,20 @@ instance FoldVariables IR where
 type WireMap = M.HashMap Id IS.IntSet
 type EdgeMap = IM.IntMap IS.IntSet
 
-removeWires :: [AlwaysBlock] -> [AlwaysBlock]
-removeWires as = res -- trace (prettify g) res
-  where
-    res = mkNewAB <$> (calcSubgraphs dupWriteMap g)
+type G = Gr Int ()
 
-    mkNewAB :: [Node] -> AlwaysBlock
-    mkNewAB ns =
+removeWires :: [AlwaysBlock] -> [AlwaysBlock]
+removeWires as = res
+  where
+    res = snd $
+          foldl' (\(n,l) ns -> (n+1, (mkNewAB n ns):l)) (maxId + 1,[]) (calcSubgraphs dupWriteMap g)
+
+    mkNewAB :: Int -> [Node] -> AlwaysBlock
+    mkNewAB id' ns =
       let is     = topsort $ checkCycles as $ subgraph ns g
           blocks = (\i -> IM.findWithDefault (error "") i abMap) <$> is
           evnt   = getEvent blocks
           stmt   = Block [ a ^. aStmt | a <- blocks ]
-          id'    = (head blocks) ^. aId + maxId
           st'    = foldl' (\s a -> s <> (a ^. aSt)) ((head blocks) ^. aSt) (tail blocks)
           loc    = (last blocks) ^. aLoc
       in  AB { _aEvent = evnt
@@ -124,8 +120,10 @@ removeWires as = res -- trace (prettify g) res
                          NegEdge c -> NegEdge c
                          Star      -> getEvent as'
 
-    g :: UGr
-    g  = makeGraph es
+    g :: G
+    g = makeGraph es
+    -- g = let _g = makeGraph es
+    --     in trace (showDot $ fglToDotGeneric _g show (const "") id) _g
 
     es                :: EdgeMap
     dupWriteMap       :: WireMap
@@ -137,7 +135,7 @@ removeWires as = res -- trace (prettify g) res
     maxId :: Int
     maxId = fst $ IM.findMax abMap
 
-calcSubgraphs :: WireMap -> UGr -> [[Node]]
+calcSubgraphs :: WireMap -> G -> [[Node]]
 calcSubgraphs dupWriteMap g = concat [ generateNodes ns | ns <- components g ]
   where
     generateNodes :: [Node] -> [[Node]]
@@ -149,9 +147,8 @@ calcSubgraphs dupWriteMap g = concat [ generateNodes ns | ns <- components g ]
           nsToDrop = map concat $ mapM allDropOnes allUpds -- seems like it's doing the right thing ...
       in if   allUpds == []
          then [ns]
-         else trace
-              (show allUpds ++ "\n" ++ show nsToDrop ++ "\n")
-              [ let r = ns \\ nsNeg in seq r r | nsNeg <- seq nsToDrop nsToDrop ]
+         else let res = [ let r = ns \\ nsNeg in seq r r | nsNeg <- seq nsToDrop nsToDrop ]
+              in trace (show allUpds) res
 
     allDropOnes :: [a] -> [[a]]
     allDropOnes as = helper (as, [])
@@ -160,17 +157,17 @@ calcSubgraphs dupWriteMap g = concat [ generateNodes ns | ns <- components g ]
         helper (a:as', l) =
           let r = as' ++ l in (seq r r) : (helper (as', a:l))
 
-makeGraph :: EdgeMap -> UGr
+makeGraph :: EdgeMap -> G
 makeGraph es =
   mkGraph
-  ((\i -> (i,())) <$> IM.keys es)
+  ((\i -> (i,i)) <$> IM.keys es)
   [ (frNode, toNode, ())
   | (frNode, toSet) <- IM.assocs es
   , toNode <- IS.toList toSet
   , frNode /= toNode
   ]
 
-checkCycles :: [AlwaysBlock] -> UGr -> UGr
+checkCycles :: [AlwaysBlock] -> G -> G
 checkCycles as g =
   if   any ((>= 2) . length) (scc g)
   then error $

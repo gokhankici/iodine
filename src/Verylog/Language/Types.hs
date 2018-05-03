@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Verylog.Language.Types where
 
@@ -14,6 +15,8 @@ import           Text.PrettyPrint hiding (sep)
 import           Data.List
 import           Data.Hashable
 import qualified Data.Monoid as Mo
+import           GHC.Generics hiding (to)
+import           Control.DeepSeq
 
 --------------------------------------------------------------------------------
 -- IR for the formalism
@@ -25,6 +28,7 @@ data AlwaysBlock = AB { _aEvent   :: ! Event
                       , _aSt      :: ! St
                       , _aLoc     :: ! (String, String) -- Module & instance name
                       }
+                   deriving (Generic)
 
 --------------------------------------------------------------------------------
 -- Intermediary IR after parsing
@@ -34,7 +38,7 @@ type Id = String
 
 data Port = Input  { portName :: ! String }
           | Output { portName :: ! String }
-          deriving (Eq)
+          deriving (Eq, Generic)
 
 instance Show Port where
   show (Input  i) = "input("  ++ i ++ ")"
@@ -46,7 +50,7 @@ instance Hashable Port where
 
 data Var = Register { varName :: ! String }
          | Wire     { varName :: ! String }
-         deriving (Eq)
+         deriving (Eq, Generic)
 
 instance Show Var where
   show (Register r) = "register(" ++ r ++ ")"
@@ -65,11 +69,12 @@ data IR = Always     { event      :: ! Event
                      , modParams   :: ! [Port] -- formal parameters
                      , modInstSt   :: ! St
                      }
+        deriving (Generic)
 
 data Event = Star
            | PosEdge Id
            | NegEdge Id
-           deriving (Eq)
+           deriving (Eq, Generic)
 
 data Stmt = Block           { blockStmts :: ! [Stmt] }
           | BlockingAsgn    { lhs        :: ! Id
@@ -83,6 +88,7 @@ data Stmt = Block           { blockStmts :: ! [Stmt] }
                             , elseStmt   :: ! Stmt
                             }
           | Skip
+          deriving (Generic)
 
 data St = St { _ports        :: ! [Var]
              , _ufs          :: M.HashMap Id [Id]
@@ -93,6 +99,7 @@ data St = St { _ports        :: ! [Var]
              , _sanitizeGlob :: ! [Id]
              , _irs          :: ! [IR]
              }
+          deriving (Generic)
 
 emptySt :: St
 emptySt = St { _ports        = []
@@ -227,6 +234,14 @@ instance Show St where
   show = pprint
 instance Show AlwaysBlock where
   show = pprint
+
+instance NFData Event
+instance NFData Stmt
+instance NFData Var
+instance NFData Port
+instance NFData IR
+instance NFData St
+instance NFData AlwaysBlock
 
 instance Mo.Monoid St where
   mempty        = emptySt

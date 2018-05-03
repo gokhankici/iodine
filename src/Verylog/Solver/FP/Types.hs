@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
-
+{-# LANGUAGE DeriveGeneric #-}
 
 module Verylog.Solver.FP.Types
   ( FQBind(..)
@@ -28,12 +28,15 @@ import qualified Language.Fixpoint.Types    as FQ
 
 import           Verylog.Language.Types hiding (St, ufs)
 import           Verylog.Solver.Common
+import           GHC.Generics hiding (to)
+import           Control.DeepSeq
 
 data FQBind = FQBind { bindId   :: ! Int
                      , bindName :: ! Id
                      , bindType :: ! FQ.Sort
                      , bindRef  :: ! FQ.Expr
                      }
+            deriving (Generic)
 
 data InvFun = InvFun { invFunName   :: ! Id
                      , invFunArity  :: ! Int
@@ -52,11 +55,15 @@ data FPSt = FPSt { _fpConstraints :: ! [Inv]
                  , _fpBinds       :: ! BindMap
                  , _fpUFs         :: ! UFMap
                  }
+            deriving (Generic)
 
 makeLenses ''FPSt
 
 instance Show FPSt where
   show fpst = show (fpst ^. fpABs)
+
+instance NFData FQBind
+instance NFData FPSt
 
 idFromExp :: Expr -> Id
 idFromExp (Var v) = v
