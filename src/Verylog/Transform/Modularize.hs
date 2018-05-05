@@ -234,7 +234,7 @@ insertWritesToWires (readMap, writeMap) a =
     wireUpdates :: Stmt -> (HS.HashSet Id, HS.HashSet Id)
     wireUpdates (Block ss)            = let r = mconcat (wireUpdates <$> ss) in seq r r
     wireUpdates s@(BlockingAsgn l r)    =
-      let res = (checkIfWire r, checkIfWire l)
+      let res = (findUsedWires r, findUsedWires l)
       in if   isWire l
          then if   (a^.aEvent) == Star
               then res
@@ -243,13 +243,13 @@ insertWritesToWires (readMap, writeMap) a =
                    ++ "\n" ++ show s
          else res
     wireUpdates s@(NonBlockingAsgn l r) =
-      let res = (checkIfWire r, checkIfWire l)
+      let res = (findUsedWires r, findUsedWires l)
       in if   isWire l
          then error $
               "non-blocking assignment to a wire" -- sanity check
               ++ "\n" ++ show s
          else res
-    wireUpdates (IfStmt c th el)      = let r = wireUpdates th <> wireUpdates el <> (checkIfWire c, HS.empty)
+    wireUpdates (IfStmt c th el)      = let r = (findUsedWires c, HS.empty) <> wireUpdates th <> wireUpdates el 
                                         in seq r r
     wireUpdates Skip                  = (HS.empty, HS.empty)
 
@@ -257,11 +257,11 @@ insertWritesToWires (readMap, writeMap) a =
     isWire   :: Id -> Bool
     isWire v = (Wire v) `elem` (a ^. aSt ^. ports)
 
-    checkIfWire :: Id -> HS.HashSet Id
-    checkIfWire v = if   isWire v
-                    then HS.singleton v
-                    else case  v `M.lookup` (a ^. aSt ^. ufs) of
-                           Nothing -> HS.empty
-                           Just vs -> mconcat (checkIfWire <$> vs)
+    findUsedWires :: Id -> HS.HashSet Id
+    findUsedWires v = if   isWire v
+                      then HS.singleton v
+                      else case  v `M.lookup` (a ^. aSt ^. ufs) of
+                             Nothing -> HS.empty
+                             Just vs -> mconcat (findUsedWires <$> vs)
                                
 

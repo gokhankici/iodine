@@ -92,8 +92,9 @@ nextStmt (IfStmt{..})          = do
   -- 2. at most one assignment to a single variable
   -- ---------------------------------------------------------------------------
   fmt <- use trFmt
+
+  n <- getLastVarRHS fmt ifCond
   let condTrue  = BinOp GE n (Number 1)
-      n = Var $ makeVarName fmt ifCond
 
   -- if condition is the value of an uninterpreted function,
   -- add a check that equates left & right runs for the value
