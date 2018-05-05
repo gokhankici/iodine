@@ -177,30 +177,16 @@ sanityChecks :: State ParseSt ()
 sanityChecks = do
   -- make sure we have at least one source and a sink
   let isEmpty = (== 0) . length
-  noTaint <- liftM2 (||) (uses (st.sinks) isEmpty) (uses (st.sources) isEmpty)
-  when noTaint $
+  srcs <- uses parseSources S.toList
+  snks <- uses parseSinks   S.toList
+  when (isEmpty srcs || isEmpty snks) $
     throw (PassError "Source or sink taint information is missing")
 
-  -- check if source and sink variables actually exist
-  varNames   <- uses (st . ports) (S.fromList . (map varName))
-  allSources <- use parseSources
-  allSinks   <- use parseSinks
-
-  let isTaintInvalid s = not $ S.null $ S.difference s varNames
-
-  when (isTaintInvalid allSources || isTaintInvalid allSinks) $
-    error $
-    printf "Source or sink taint variable is invalid\n  vars: %s\n  sources: %s\n  sinks: %s\n"
-    (show varNames) (show allSources) (show allSinks)
-
+  -- check if source and sink variables actually exist, and
   -- make sure source or sink variables are registers
-  rs   <- uses (st . ports) (map varName . filter isRegister)
-  srcs <- use (st . sources)
-  snks <- use (st . sinks)
-
+  rs  <- uses (st . ports) (map varName . filter isRegister)
   let src_dif = srcs Li.\\ rs
   let snk_dif = snks Li.\\ rs
-
   when (src_dif /= [] || snk_dif /= []) $
     error $
     printf "Taint variable is not a register !\n  sources: %s\n  sinks: %s\n"
@@ -223,13 +209,13 @@ collectTaint (PSanitizeMod{..}) = parseModSanitize %= mapOfSetInsert sModuleName
 collectTaint (TopModule{..})    = do sanitizeWires      mPorts
                                      sanitizeSubmodules mGates
 
--- wires are sanitized automatically
-sanitizeWires      :: [ParseVar] -> State ParseSt ()
-sanitizeWires vars = sequence_ $ sanitizeWire <$> vars
-  where
-    sanitizeWire               :: ParseVar -> State ParseSt ()
-    sanitizeWire (PWire s)     = parseSanitize %= S.insert s
-    sanitizeWire (PRegister _) = return ()
+-- wires are not sanitized automatically
+sanitizeWires       :: [ParseVar] -> State ParseSt ()
+sanitizeWires _vars = return () -- sequence_ $ sanitizeWire <$> vars
+  -- where
+  --   sanitizeWire               :: ParseVar -> State ParseSt ()
+  --   sanitizeWire (PWire s)     = parseSanitize %= S.insert s
+  --   sanitizeWire (PRegister _) = return ()
 
 -- figures out which variables to sanitize inside the module instantiations
 sanitizeSubmodules       :: [ParseGate] -> State ParseSt ()

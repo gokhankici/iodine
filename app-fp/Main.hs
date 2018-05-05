@@ -75,7 +75,7 @@ main  = do
   (fpst, finfo) <- fpgen optInputFile
 
   let cfg = defConfig{ eliminate = Some
-                     , save      = optVCGen
+                     , save      = True -- optVCGen
                      , srcFile   = optInputFile
                      , metadata  = True
                      , minimize  = optMinimize

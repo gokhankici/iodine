@@ -7,6 +7,7 @@ import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Lazy
 import           Data.List
+import           Data.Maybe
 import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
 
@@ -37,7 +38,10 @@ invs as =
 --------------------------------------------------------------------------------
 modular_inv :: AlwaysBlock -> [Inv]  
 --------------------------------------------------------------------------------
-modular_inv a = [initial_inv, tag_reset_inv, next_step_inv] <*> [a']
+modular_inv a = [ initial_inv
+                , tag_reset_inv
+                , next_step_inv
+                ] <*> [a']
   where
     a' = a
     -- a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
@@ -51,9 +55,10 @@ initial_inv a = Horn { hBody = Boolean True
                                          , kvSubs = sub1 ++ sub2
                                          }
                                     ]
-                     , hId   = HornId (a ^. aId) InvInit
+                     , hId   = HornId i (InvInit i)
                      }
   where
+    i    = a ^. aId
     st   = a ^. aSt
     sub1 = [ (n_lvar sntz, rvar sntz)
            | sntz <- S.toList . S.fromList $
@@ -67,35 +72,38 @@ initial_inv a = Horn { hBody = Boolean True
 tag_reset_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
 tag_reset_inv a = Horn { hBody =  prevKV a
-                       , hHead = KV { kvId   = a^.aId
+                       , hHead = KV { kvId   = i
                                     , kvSubs = hsubs
                                     }
-                       , hId   = HornId (a ^. aId) InvReTag
+                       , hId   = HornId i (InvReTag i)
                        }
   where
-    st      = a^.aSt
-    srcs    = st ^. sources
-    hsubs   = [ let n = if r `elem` srcs then 1 else 0
-                in (t, Number n)
-              | r <- getRegisters a
-              , t <- [n_ltvar, n_rtvar] <*> [r]
-              ]
+    i      = a ^. aId
+    st     = a^.aSt
+    srcs   = st ^. sources
+    hsubs  = [ let n = if r `elem` srcs then 1 else 0
+               in (t, Number n)
+             | r <- getRegisters a
+             , t <- [n_ltvar, n_rtvar] <*> [r]
+             ]
 
 --------------------------------------------------------------------------------
 next_step_inv :: AlwaysBlock -> Inv 
 --------------------------------------------------------------------------------
 next_step_inv a = Horn { hBody = body
-                       , hHead = KV { kvId   = a^.aId
+                       , hHead = KV { kvId   = i
                                     , kvSubs = subs
                                     }
-                       , hId   = HornId (a ^. aId) InvNext
+                       , hId   = HornId i (InvNext i)
                        }
   where
+    i        = a ^. aId
     subs     = ul ++ ur
     (nl,ul)  = next fmt{leftVar=True}  a
     (nr,ur)  = next fmt{rightVar=True} a
     body     = Ands [ prevKV a
-                    , sanGlobs a subs, taintEqs a subs
+                    , sanGlobs a subs
+                    , taintEqs a subs
                     , nl, nr
                     ]
 
@@ -105,7 +113,7 @@ type Subs = [(Id,Expr)]
 sanGlobs        :: AlwaysBlock -> Subs -> Expr
 sanGlobs a subs = alwaysEqs conf vs subs
   where
-    vs   = (getRegisters a) `intersect` (a ^. aSt ^. sanitizeGlob)
+    vs   = a ^. aSt ^. sanitizeGlob
     conf = AEC { isInitEq  = True
                , isPrimeEq = True
                , isValEq   = True
@@ -115,7 +123,7 @@ sanGlobs a subs = alwaysEqs conf vs subs
 taintEqs        :: AlwaysBlock -> Subs -> Expr
 taintEqs a subs = alwaysEqs conf vs subs
   where
-    vs   = (getRegisters a) `intersect` (a ^. aSt ^. taintEq)
+    vs   = a ^. aSt ^. taintEq
     conf = AEC { isInitEq  = True
                , isPrimeEq = True
                , isValEq   = False
@@ -149,21 +157,23 @@ alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
     primeEq =
       if   isPrimeEq
       then [ BinOp EQU exprL exprR
-           | v <- vs, (exprL, exprR) <- findLasts v
+           | v <- vs, (exprL, exprR) <- findLastsIfExist v
            ]
       else []
 
-    findLasts :: Id -> [(Expr, Expr)]
-    findLasts v =
+    findLastsIfExist :: Id -> [(Expr, Expr)]
+    findLastsIfExist v =
+      catMaybes
       [ let vl = makeVarName f{leftVar=True} v
             vr = makeVarName f{rightVar=True} v
         in case (lookup vl subs, lookup vr subs) of
-             (Just el, Just er) -> (el, er)
+             (Just el, Just er) -> Just (el, er)
+             (Nothing, Nothing) -> Nothing
              _                  -> error $
                                    printf "findLasts failed. \n  vl: %s\n  vr: %s\n  subs: %s\n"
                                    vl vr (show subs)
                                    
-      | f <- (\f -> f) <$> fmts
+      | f <- fmts
       ]
   
   
@@ -255,26 +265,27 @@ provedProperty (PropertyOptions{..}) a =
   if checkTagEq then tagEq else [] ++
   if checkValEq then valEq else []
   where
+    i     = a ^. aId
     tagEq = [ Horn { hHead = BinOp GE (rtvar s) (Number 1)
-                   , hBody = Ands [ KV { kvId   = a ^. aId
+                   , hBody = Ands [ KV { kvId   = i
                                        , kvSubs = [ (n_rtvar s, rtvar s)
                                                   , (n_ltvar s, ltvar s)
                                                   ]
                                        }
                                   , BinOp GE (ltvar s) (Number 1)
                                   ]
-                   , hId   = HornId (a ^. aId) InvTagEq
+                   , hId   = HornId i (InvTagEq i)
                    }
             | s <- filterRegs a $ a^.aSt^.sinks
             ]
     valEq = [ Horn { hHead =  BinOp EQU (lvar s) (rvar s)
-                   , hBody = Ands [ KV { kvId   = a ^. aId
+                   , hBody = Ands [ KV { kvId   = i
                                        , kvSubs = [ (n_lvar s, lvar s)
                                                   , (n_rvar s, rvar s)
                                                   ]
                                        }
                                   ]
-                   , hId   = HornId (a ^. aId) (InvOther "l_sink=r_sink")
+                   , hId   = HornId i (InvOther "l_sink=r_sink")
                    }
             | s <- filterRegs a $ a^.aSt^.sinks
             ]

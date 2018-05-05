@@ -87,3 +87,8 @@ getConstantName n =
     Nothing       -> throw $ PassError $ printf "constant %d is not defined (should be 0 or 1)" n
   where
     n' = toInteger n
+
+dbg       :: String -> a -> a
+dbg str a = if verbose then trace str a else a
+  where
+    verbose = True

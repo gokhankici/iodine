@@ -5,7 +5,6 @@
 module Verylog.Transform.Modularize (flatten) where
 
 import           Control.Arrow
-import           Control.Exception
 import           Control.Lens hiding (mapping)
 import           Control.Monad.State.Lazy
 import qualified Data.IntMap.Strict         as IM
@@ -20,14 +19,10 @@ import Data.Graph.Inductive.PatriciaTree
 import Data.Graph.Inductive.Query
 
 import           Verylog.Language.Types
+import           Verylog.Transform.Utils
 
-import Debug.Trace
+import Text.Printf
 import Data.Graph.Inductive.Dot
-
-dbg       :: String -> a -> a
-dbg str a = if verbose then trace str a else a
-  where
-    verbose = True
 
 flatten :: St -> [AlwaysBlock]
 flatten = flattenToAlways >>> removeWires
@@ -62,7 +57,7 @@ m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
     filterMap toKeep = M.filterWithKey (\k _v -> HS.member k toKeep)
 
     filterSt :: Stmt -> St -> St
-    filterSt s stt = let vars  = HS.fromList $ foldVariables id s
+    filterSt s stt = let vars  = HS.fromList $ foldVariables s
                          st'   = over ufs      (filterMap vars)  .
                                  set irs      [] $
                                  stt
@@ -74,20 +69,6 @@ m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
                                  st'
                      in st''
 
-class FoldVariables a where
-  foldVariables :: (Id -> b) -> a -> [b]
-
-instance FoldVariables Stmt where
-  foldVariables f (Block ss)            = concatMap (foldVariables f) ss
-  foldVariables f (BlockingAsgn l r)    = [f l, f r]
-  foldVariables f (NonBlockingAsgn l r) = [f l, f r]
-  foldVariables f (IfStmt c t e)        = [f c] ++ concatMap (foldVariables f) [t,e]
-  foldVariables _ Skip                  = []
-
-instance FoldVariables IR where
-  foldVariables f (Always _ s _) = foldVariables f s
-  foldVariables _ _              = throw (PassError "foldVariables called on non-always block")
-
 -----------------------------------------------------------------------------------
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Merge always blocks to remove wires from invariants
 -----------------------------------------------------------------------------------
@@ -98,7 +79,9 @@ type EdgeMap = IM.IntMap IS.IntSet
 type G = Gr Int ()
 
 removeWires :: [AlwaysBlock] -> [AlwaysBlock]
-removeWires as = res
+removeWires as = dbg
+                 (printf "#blocks after removing wires: %d -> %d" (length as) (length res))
+                 res
   where
     res = snd $
           foldl' (\(n,l) ns -> (n+1, (mkNewAB n ns):l)) (maxId + 1,[]) (calcSubgraphs dupWriteMap g)
@@ -111,12 +94,13 @@ removeWires as = res
           stmt   = Block [ a ^. aStmt | a <- blocks ]
           st'    = foldl' (\s a -> s <> (a ^. aSt)) ((head blocks) ^. aSt) (tail blocks)
           loc    = (last blocks) ^. aLoc
-      in  AB { _aEvent = evnt
-             , _aStmt  = stmt
-             , _aId    = id'
-             , _aSt    = st'
-             , _aLoc   = loc
-             }
+          ab     = AB { _aEvent = evnt
+                      , _aStmt  = stmt
+                      , _aId    = id'
+                      , _aSt    = st'
+                      , _aLoc   = loc
+                      }
+      in dbg (printf "combined %s into %d" (show ns) id') ab
 
     getEvent :: [AlwaysBlock] -> Event
     getEvent []      = Star

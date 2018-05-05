@@ -91,12 +91,13 @@ makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
     mwf a@(AB{..}) =
       let allAs = makeInvArgs fmt a
           ids   = getBindIds fpst (Var <$> allAs)
+          i     = a ^. aId
       in wfC
          (insertsIBindEnv ids emptyIBindEnv)
          (RR FInt (Reft ( symbol "v"
                         , FQT.PKVar (FQT.KV $ symbol (makeInvPred a)) (mkSubst [])
                         )))
-         (HornId (a ^. aId) InvWF)
+         (HornId i (InvWF i))
 
 makeBinders   :: M.HashMap Id FQBind -> FQT.BindEnv
 makeBinders m = bindEnvFromList l

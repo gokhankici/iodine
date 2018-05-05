@@ -198,10 +198,16 @@ nextAsgn a l r = do es1 <- uf_eq r
                        else getLastVarRHS fmt' r 
                 ts2 <- (uses ifConds S.toList) >>= mapM (getLastVarRHS fmt')
                 case ts2 of
-                  []     -> return ts1 
-                  t2:t2s -> return $
-                            BinOp PLUS ts1 (foldr (BinOp PLUS) t2 t2s)
+                  [] -> return ts1 
+                  _  -> let (es1:ess) = nub $ plusVars (ts1:ts2) -- add each unique operand only once
+                        in return $ foldr (BinOp PLUS) es1 ess
                 
+    plusVars :: [Expr] -> [Expr]
+    plusVars es = concatMap f es
+      where
+        f e = case e of
+                BinOp{..} -> concatMap f [expL, expR]
+                _         -> [e]
 
     ----------------------------------------
     ufTagRhs :: S Expr

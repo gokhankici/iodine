@@ -197,15 +197,16 @@ instance PPrint St where
                    ]
 
 instance PPrint AlwaysBlock where
-  toDoc a = text "always(" <> vcat [ comment "ports    " <+> toDoc (a^.aSt^.ports)            <> comma
+  toDoc a = text "always(" <> vcat [ comment "id       " <+> int (a^.aId)                     <> comma
+                                   , comment "mod name " <+> text (a^.aLoc^._1)               <> comma
+                                   , comment "inst name" <+> text (a^.aLoc^._2)               <> comma
+                                   , comment "ports    " <+> toDoc (a^.aSt^.ports)            <> comma
                                    , comment "ufs      " <+> printMap  (a^.aSt^.ufs)          <> comma
                                    , comment "sources  " <+> printList (a^.aSt^.sources)      <> comma
                                    , comment "sinks    " <+> printList (a^.aSt^.sinks)        <> comma
                                    , comment "sanitize " <+> printList (a^.aSt^.sanitize)     <> comma
                                    , comment "san. glob" <+> printList (a^.aSt^.sanitizeGlob) <> comma
-                                   , comment "id       " <+> int (a^.aId)                     <> comma
-                                   , comment "mod name " <+> text (a^.aLoc^._1)               <> comma
-                                   , comment "inst name" <+> text (a^.aLoc^._2)               <> comma
+                                   , comment "taint eq." <+> printList (a^.aSt^.taintEq)      <> comma
                                    , toDoc (a^.aEvent)                                        <> comma
                                    , toDoc (a^.aStmt)
                                    ] <> text ")."
@@ -268,3 +269,17 @@ getRegisters a =
 isRegister :: Var -> Bool
 isRegister (Register _) = True
 isRegister (Wire _)     = False
+
+class FoldVariables a where
+  foldVariables :: a -> [Id]
+
+instance FoldVariables Stmt where
+  foldVariables (Block ss)            = concatMap foldVariables ss
+  foldVariables (BlockingAsgn l r)    = [l, r]
+  foldVariables (NonBlockingAsgn l r) = [l, r]
+  foldVariables (IfStmt c t e)        = [c] ++ concatMap foldVariables [t,e]
+  foldVariables Skip                  = []
+
+instance FoldVariables IR where
+  foldVariables (Always _ s _) = foldVariables s
+  foldVariables _              = throw (PassError "foldVariables called on non-always block")

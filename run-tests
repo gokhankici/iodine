@@ -18,6 +18,7 @@ function red()   { print -P "%F{red}%B$1%b%f" }
 
 MIPS_DIR="$IVL_DIR/benchmarks/472-mips-pipelined"
 
+# --name simple
 typeset -A SIMPLE_TESTS
 SIMPLE_TESTS=( \
 	"01 - 01 - tr-test-1"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-1.v" \
@@ -30,6 +31,7 @@ SIMPLE_TESTS=( \
 	"01 - 08 - secverilog-01" "-M test          $THIS_DIR/test/verilog/pos/secverilog-01.v" \
 	)
 
+# --name mips-stub
 typeset -A MIPS_STUB_TESTS
 MIPS_STUB_TESTS=( \
 	"02 - 01 - mips fragment"       "-M mips_pipeline $MIPS_DIR/472-mips-fragment.v"   \
@@ -38,25 +40,28 @@ MIPS_STUB_TESTS=( \
 	"02 - 04 - mips fragment v4"    "-M mips_pipeline $MIPS_DIR/472-mips-fragment-4.v" \
 	)
 
+# --name mips-module
 typeset -A MIPS_MODULE_TESTS
 MIPS_MODULE_TESTS=( \
 	"03 - 01 - reg32"               "-M reg32            $MIPS_DIR/reg32.v" \
-	"03 - 02 - mux2"                "-M mux2             $MIPS_DIR/mux2.v" \
+	# "03 - 02 - mux2"                "-M mux2             $MIPS_DIR/mux2.v" \
 	"03 - 03 - mux3"                "-M mux3             $MIPS_DIR/mux3.v" \
 	"03 - 04 - control_pipeline"    "-M control_pipeline $MIPS_DIR/control_pipeline.v" \
 	"03 - 05 - mem32-stub"          "-M mem32            $MIPS_DIR/mem32-stub.v" \
 	"03 - 06 - alu"                 "-M alu              $MIPS_DIR/alu.v" \
 	"03 - 07 - alu_ctl"             "-M alu_ctl          $MIPS_DIR/alu_ctl.v" \
-	"03 - 08 - add32"               "-M add32            $MIPS_DIR/add32.v" \
+	# "03 - 08 - add32"               "-M add32            $MIPS_DIR/add32.v" \
 	"03 - 09 - rom32"               "-M rom32            $MIPS_DIR/rom32.v" \
 	"03 - 10 - reg_file"            "-M reg_file         $MIPS_DIR/reg_file.v" \
 	)
 
+# --name major
 typeset -A MAJOR_TESTS
 MAJOR_TESTS=( \
 	"10 - 01 - mips full"    "-M mips_pipeline $MIPS_DIR/mips_pipeline.v" \
 	)
 
+# --name neg
 typeset -A NEG_TESTS_SIMPLE
 NEG_TESTS_SIMPLE=( \
 	"-01 - 01 - neg-test-1"    "-M test $THIS_DIR/test/verilog/neg/neg-test-1.v" \

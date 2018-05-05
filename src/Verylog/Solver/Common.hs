@@ -13,17 +13,23 @@ import Language.Fixpoint.Types (Fixpoint(..), Loc(..), showFix, dummySpan)
 import qualified Text.PrettyPrint.HughesPJ as PP
 
 data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
-           deriving (Show, Generic)
+           deriving (Show, Eq, Generic)
 
-data InvType = InvInit | InvReTag | InvNext | InvTagEq | InvWF | InvInter ! Int | InvOther ! String
+data InvType = InvInit   !Int
+             | InvReTag  !Int
+             | InvNext   !Int
+             | InvTagEq  !Int
+             | InvWF     !Int
+             | InvInter  !Int
+             | InvOther  !String
             deriving (Generic, Eq, Ord)
 
 instance Fixpoint InvType where
-  toFix InvInit      = PP.text "init"
-  toFix InvReTag     = PP.text "re-tag"
-  toFix InvNext      = PP.text "next"
-  toFix InvTagEq     = PP.text "tag eq"
-  toFix InvWF        = PP.text "wf"
+  toFix (InvInit n)  = PP.text "init of block"   PP.<+> PP.int n
+  toFix (InvReTag n) = PP.text "re-tag of block" PP.<+> PP.int n
+  toFix (InvNext n)  = PP.text "next of block"   PP.<+> PP.int n
+  toFix (InvTagEq n) = PP.text "tag eq of block" PP.<+> PP.int n
+  toFix (InvWF n)    = PP.text "wf of block"     PP.<+> PP.int n
   toFix (InvInter n) = PP.text "interference w/" PP.<+> PP.int n
   toFix (InvOther s) = PP.text s
 
@@ -69,7 +75,7 @@ data Expr = BinOp     { bOp   :: ! BinOp
                       , ufNames :: ! (Expr,Expr)
                       , ufFunc  :: ! Id
                       }
-          deriving (Show, Generic)
+          deriving (Show, Eq, Generic)
 
 instance NFData BinOp
 instance NFData Expr
@@ -86,3 +92,4 @@ makeInvPred a = makeInv (a^.aId)
 
 makeInv :: Int -> String
 makeInv n = printf "inv%d" n
+
