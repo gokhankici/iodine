@@ -177,7 +177,7 @@ last_err=$?
 echo "\n"
 
 if [[ $last_err -ne 0 ]]; then
-	[[ -z "$NO_OUTPUT" ]] && cat $FQOUT_FILE
+	[[ -z "$NO_OUTPUT" && -f "$FQOUT_FILE" ]] && cat $FQOUT_FILE
     echo "\n"
     red "UNSAFE"
     exit $last_err
@@ -196,7 +196,7 @@ fi
 # }}}
 
 # Stage 3 : Check Verification Conditions {{{
-cat $FQOUT_FILE
+[[ -f "$FQOUT_FILE" ]] && cat $FQOUT_FILE
 echo "\n"
 green "SAFE"
 

@@ -45,7 +45,7 @@ instance NFData InvType
 instance NFData HornId
 
 data Inv = Horn { hBody :: ! Expr -- body of the horn clause
-                , hHead :: ! Expr -- head of the horn clause
+                , hHead :: ! Expr -- head of the horn clause, must be a kvar
                 , hId   :: ! HornId
                 }
            deriving (Show, Generic)

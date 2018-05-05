@@ -263,7 +263,8 @@ instance Mo.Monoid St where
 
 getRegisters :: AlwaysBlock -> [Id]
 getRegisters a =
-  foldl' (\l v -> case v of
-                    Register r -> r:l
-                    Wire _     -> l
-         ) [] (a ^. aSt ^. ports)
+  map varName $ filter isRegister (a ^. aSt ^. ports)
+
+isRegister :: Var -> Bool
+isRegister (Register _) = True
+isRegister (Wire _)     = False

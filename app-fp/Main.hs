@@ -23,9 +23,8 @@ import           System.Exit
 import           Text.PrettyPrint
 import           Text.Printf
 
-import System.IO
-import Control.DeepSeq
-
+-- import System.IO
+-- import Control.DeepSeq
 
 data Flag = VCGen
           | PrintFInfo

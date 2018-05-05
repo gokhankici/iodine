@@ -48,7 +48,7 @@ next fmt a = evalState comp initSt
 
     comp = do es1 <- nextStmt (a^.aStmt)
 
-              ps  <- uses (trSt . ports) (map varName)
+              ps  <- uses (trSt . ports) (map varName . filter isRegister)
               as  <- use trAs
 
               -- set the primed vars for the lhs of the assignments
@@ -60,6 +60,7 @@ next fmt a = evalState comp initSt
                                    (makeVar     fmt{varId=Just n} v)
                                  ]
                                | (v,n) <- M.toList as -- blocking assignments
+                               , v `elem` ps
                                ]
 
               -- set the primed vars for the untouched variables

@@ -56,39 +56,30 @@ initial_inv a = Horn { hBody = Boolean True
   where
     st   = a ^. aSt
     sub1 = [ (n_lvar sntz, rvar sntz)
-           | sntz <- S.toList . S.fromList . (filterRegs a) $
+           | sntz <- S.toList . S.fromList $
                      st ^. sanitize ++ st ^. sources ++ st ^. sinks
            ]
-    sub2 = [ (tv, Number 0)
-           | s <- getRegisters a, tv <- [n_ltvar, n_rtvar] <*> [s]
+    sub2 = [ (t, Number 0)
+           | t <- makeInvTags fmt a
            ]
 
 --------------------------------------------------------------------------------
 tag_reset_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-tag_reset_inv a = Horn { hBody = prevKV a
+tag_reset_inv a = Horn { hBody =  prevKV a
                        , hHead = KV { kvId   = a^.aId
                                     , kvSubs = hsubs
                                     }
                        , hId   = HornId (a ^. aId) InvReTag
                        }
   where
-    st    = a^.aSt
-
-    hsubs  = hsubs1 ++ hsubs2 -- ++ hsubs3
-    hsubs1 = concat [ [ (n_lvar p, lvar p)
-                      , (n_rvar p, rvar p)
-                      ]
-                    | p <- getRegisters a
-                    ]
-    hsubs2 = [ (tv, Number 1)
-             | s <- filterRegs a (st^.sources)
-             , tv <- [n_ltvar, n_rtvar] <*> [s]
-             ]
-    -- hsubs3 = [ (tv, Number 0)
-    --          | v <- (varName <$> st^.ports) \\ (st^.sources)
-    --          , tv <- [n_ltvar, n_rtvar] <*> [v]
-    --          ]
+    st      = a^.aSt
+    srcs    = st ^. sources
+    hsubs   = [ let n = if r `elem` srcs then 1 else 0
+                in (t, Number n)
+              | r <- getRegisters a
+              , t <- [n_ltvar, n_rtvar] <*> [r]
+              ]
 
 --------------------------------------------------------------------------------
 next_step_inv :: AlwaysBlock -> Inv 
@@ -100,7 +91,7 @@ next_step_inv a = Horn { hBody = body
                        , hId   = HornId (a ^. aId) InvNext
                        }
   where
-    subs     = filterSubs a (ul ++ ur)
+    subs     = ul ++ ur
     (nl,ul)  = next fmt{leftVar=True}  a
     (nr,ur)  = next fmt{rightVar=True} a
     body     = Ands [ prevKV a
@@ -237,7 +228,7 @@ non_interference_inv a1 a2 = Horn { hBody = body
     lukap v   = case lookup v updates1 of
                   Nothing -> throw $ PassError $ "cannot find " ++ v ++ " in updates1"
                   Just e  -> (v,e)
-    updates2    = filterSubs a2 $ updates2_1 ++ updates2_2
+    updates2    = updates2_1 ++ updates2_2
     updates2_1  = concat [ [ (n_lvar v,  lvar v)  -- l' = l
                            , (n_rvar v,  rvar v)  -- r' = r
                            , (n_ltvar v, ltvar v) -- lt' = lt
@@ -326,13 +317,13 @@ filterRegs a vs =
                   else l
          ) [] vs
 
-kv_vars :: AlwaysBlock -> S.HashSet Id
-kv_vars a =
-  (S.fromList (allArgs fmt{leftVar=True} (a^.aSt)))
-  `S.union`
-  (S.fromList (allArgs fmt{rightVar=True} (a^.aSt)))
+-- kv_vars :: AlwaysBlock -> S.HashSet Id
+-- kv_vars a =
+--   (S.fromList (allArgs fmt{leftVar=True} (a^.aSt)))
+--   `S.union`
+--   (S.fromList (allArgs fmt{rightVar=True} (a^.aSt)))
 
-filterSubs :: AlwaysBlock -> [(Id,Expr)] -> [(Id,Expr)]
-filterSubs a = filter (\(v,_) -> v `S.member` m)
-  where
-    m = kv_vars a
+-- filterSubs :: AlwaysBlock -> [(Id,Expr)] -> [(Id,Expr)]
+-- filterSubs a = filter (\(v,_) -> v `S.member` m)
+--   where
+--     m = kv_vars a

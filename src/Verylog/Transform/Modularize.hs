@@ -24,6 +24,11 @@ import           Verylog.Language.Types
 import Debug.Trace
 import Data.Graph.Inductive.Dot
 
+dbg       :: String -> a -> a
+dbg str a = if verbose then trace str a else a
+  where
+    verbose = True
+
 flatten :: St -> [AlwaysBlock]
 flatten = flattenToAlways >>> removeWires
 
@@ -121,9 +126,8 @@ removeWires as = res
                          Star      -> getEvent as'
 
     g :: G
-    g = makeGraph es
-    -- g = let _g = makeGraph es
-    --     in trace (showDot $ fglToDotGeneric _g show (const "") id) _g
+    g = let _g = makeGraph es
+        in  dbg (showDot $ fglToDotGeneric _g show (const "") id) _g
 
     es                :: EdgeMap
     dupWriteMap       :: WireMap
@@ -140,15 +144,15 @@ calcSubgraphs dupWriteMap g = concat [ generateNodes ns | ns <- components g ]
   where
     generateNodes :: [Node] -> [[Node]]
     generateNodes ns =
-      let allUpds  = M.foldl' (\iss is -> if   (IS.findMin is) `elem` ns
-                                          then (IS.toList is):iss
-                                          else iss
-                              ) [] dupWriteMap
-          nsToDrop = map concat $ mapM allDropOnes allUpds -- seems like it's doing the right thing ...
+      let allUpds  = M.foldlWithKey' (\iss w is -> if   (IS.findMin is) `elem` ns
+                                                   then (w, IS.toList is):iss
+                                                   else iss
+                                     ) [] dupWriteMap
+          nsToDrop = map concat $ mapM allDropOnes $ snd <$> allUpds -- seems like it's doing the right thing ...
       in if   allUpds == []
          then [ns]
-         else let res = [ let r = ns \\ nsNeg in seq r r | nsNeg <- seq nsToDrop nsToDrop ]
-              in trace (show allUpds) res
+         else let res = [ ns \\ nsNeg | nsNeg <- nsToDrop ]
+              in  dbg ("duplicate updates: " ++ show allUpds) res
 
     allDropOnes :: [a] -> [[a]]
     allDropOnes as = helper (as, [])

@@ -57,22 +57,20 @@ makeVarName f@(VarFormat{..}) v =
           | otherwise = ""
 
 allArgs        :: VarFormat -> St -> [Id]
-allArgs f st = let ps = foldl' helper [] (st^.ports)
+allArgs f st = let ps = map varName $ filter isRegister (st^.ports)
                  in (makeVarName f <$> ps) ++ (makeVarName f{taggedVar=True} <$> ps)
-  where
-    helper l (Register r) = r:l
-    helper l (Wire _)     = l
           
 makeInvArgs     :: VarFormat -> AlwaysBlock -> [Id]
 makeInvArgs f a = allArgs f{leftVar=True} st ++ allArgs f{rightVar=True} st
   where
     st = a^.aSt
 
-makeInvParams        :: AlwaysBlock -> [Id]
-makeInvParams a = allArgs fmt'{leftVar=True} st ++ allArgs fmt'{rightVar=True} st
+makeInvTags     :: VarFormat -> AlwaysBlock -> [Id]
+makeInvTags f a = allTags f{leftVar=True} ++ allTags f{rightVar=True}
   where
-    st   = a^.aSt
-    fmt' = fmt{paramVar=True}
+    st         = a^.aSt
+    rs         = map varName $ filter isRegister (st^.ports)
+    allTags f' = makeVarName f'{taggedVar=True} <$> rs
 
 trc         :: Show b => String -> b -> a -> a
 trc msg b a = trace (printf "%s%s" msg (show b)) a

@@ -4,12 +4,9 @@
 module Verylog.Transform.SanityCheck ( sanityCheck
                                      ) where
 
-import           Control.Arrow
 import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Lazy
-import           Data.List
-import           Data.Maybe
 import qualified Data.HashMap.Strict        as M
 import           Text.Printf
 
@@ -103,36 +100,6 @@ checkAssignments as = freshKeepErrs >> mapM_ (checkStmt . view aStmt) as
 
       bas  .= M.unionWith max thBAs  elBAs
       nbas .= M.unionWith max thNBAs elNBAs
-
---------------------------------------------------------------------------------
-checkLHSIsVar :: [AlwaysBlock] -> [AlwaysBlock]
---------------------------------------------------------------------------------
-checkLHSIsVar as = case foldl' (\es a -> check (a ^. aStmt) (a ^. aSt ^. ports) (a ^. aSt ^. ufs) es) [] as of
-                     []  -> as
-                     e:_ -> throw e
-  where
-    ------------------------------------------------------------
-    check :: Stmt -> [Var] -> (M.HashMap Id [Id]) -> [PassError] -> [PassError]
-    ------------------------------------------------------------
-    check      (Block ss)            vs u es = foldl' (\es' s -> check s vs u es') es ss 
-    check stmt@(BlockingAsgn l _)    vs u es = helper stmt l vs u es
-    check stmt@(NonBlockingAsgn l _) vs u es = helper stmt l vs u es
-    check      (IfStmt _ th el)      vs u es = foldl' (\es' s -> check s vs u es') es [th,el]
-    check      Skip                  _  _ es = es
-
-    helper stmt v vs m es =
-      let isBlocking = case stmt of
-                         BlockingAsgn _ _ -> True
-                         _                -> False
-          isReg      = isJust $ find (\a -> case a of
-                                              Register r -> r == v
-                                              Wire _     -> False) vs
-      in case M.lookup v m of
-           Nothing ->
-             if   isBlocking && isReg
-             then (PassError $ printf "lhs of blocking assignment %s is a register" (show stmt)) : es
-             else es
-           Just _  -> (PassError $ printf "lhs of %s is not a var" (show stmt)) : es
 
 --------------------------------------------------------------------------------
 -- Helper functions

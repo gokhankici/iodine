@@ -129,7 +129,7 @@ makeState :: [ParseIR] -> St
 -----------------------------------------------------------------------------------
 makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultState^.sanitize)) resultState
   where
-    resultState = evalState (comp >> use st) emptyParseSt
+    resultState = evalState comp emptyParseSt
   
     flattenUFs   :: M.HashMap Id [Id] -> M.HashMap Id [Id]
     flattenUFs m = let varDeps v = case M.lookup v m of
@@ -169,6 +169,8 @@ makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultSta
       -- 6. do some sanity checks
       sanityChecks
 
+      use st
+
 makeState _ = throw (PassError "First ir is not a toplevel module !")
 
 sanityChecks :: State ParseSt ()
@@ -190,6 +192,20 @@ sanityChecks = do
     error $
     printf "Source or sink taint variable is invalid\n  vars: %s\n  sources: %s\n  sinks: %s\n"
     (show varNames) (show allSources) (show allSinks)
+
+  -- make sure source or sink variables are registers
+  rs   <- uses (st . ports) (map varName . filter isRegister)
+  srcs <- use (st . sources)
+  snks <- use (st . sinks)
+
+  let src_dif = srcs Li.\\ rs
+  let snk_dif = snks Li.\\ rs
+
+  when (src_dif /= [] || snk_dif /= []) $
+    error $
+    printf "Taint variable is not a register !\n  sources: %s\n  sinks: %s\n"
+    (show src_dif) (show snk_dif)
+
 
 -----------------------------------------------------------------------------------
 collectTaint :: ParseIR -> State ParseSt ()
