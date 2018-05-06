@@ -6,8 +6,8 @@ module Verylog.Transform.VCGen ( invs
 import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Lazy
-import           Data.List
 import           Data.Maybe
+import           Data.List
 import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
 
@@ -52,7 +52,7 @@ initial_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
 initial_inv a = Horn { hBody = Boolean True
                      , hHead = Ands [ KV { kvId   = a ^. aId
-                                         , kvSubs = sub1 ++ sub2
+                                         , kvSubs = filterSubs a (sub1 ++ sub2)
                                          }
                                     ]
                      , hId   = HornId i (InvInit i)
@@ -73,7 +73,7 @@ tag_reset_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
 tag_reset_inv a = Horn { hBody =  prevKV a
                        , hHead = KV { kvId   = i
-                                    , kvSubs = hsubs
+                                    , kvSubs = filterSubs a hsubs
                                     }
                        , hId   = HornId i (InvReTag i)
                        }
@@ -92,7 +92,7 @@ next_step_inv :: AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
 next_step_inv a = Horn { hBody = body
                        , hHead = KV { kvId   = i
-                                    , kvSubs = subs
+                                    , kvSubs = filterSubs a subs
                                     }
                        , hId   = HornId i (InvNext i)
                        }
@@ -118,6 +118,7 @@ sanGlobs a subs = alwaysEqs conf vs subs
                , isPrimeEq = True
                , isValEq   = True
                , isTagEq   = True
+               , aecDbg    = a
                }
 
 taintEqs        :: AlwaysBlock -> Subs -> Expr
@@ -128,12 +129,14 @@ taintEqs a subs = alwaysEqs conf vs subs
                , isPrimeEq = True
                , isValEq   = False
                , isTagEq   = True
+               , aecDbg    = a
                }
 
 data AlwaysEqConfig = AEC { isInitEq  :: Bool
                           , isPrimeEq :: Bool
                           , isValEq   :: Bool
                           , isTagEq   :: Bool
+                          , aecDbg    :: AlwaysBlock
                           }
 
 alwaysEqs :: AlwaysEqConfig -> [Id] -> Subs -> Expr
@@ -157,21 +160,21 @@ alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
     primeEq =
       if   isPrimeEq
       then [ BinOp EQU exprL exprR
-           | v <- vs, (exprL, exprR) <- findLastsIfExist v
+           | v <- vs, (exprL, exprR) <- findLastIfExists v
            ]
       else []
 
-    findLastsIfExist :: Id -> [(Expr, Expr)]
-    findLastsIfExist v =
+    findLastIfExists :: Id -> [(Expr, Expr)]
+    findLastIfExists v =
       catMaybes
       [ let vl = makeVarName f{leftVar=True} v
             vr = makeVarName f{rightVar=True} v
         in case (lookup vl subs, lookup vr subs) of
              (Just el, Just er) -> Just (el, er)
-             (Nothing, Nothing) -> Nothing
-             _                  -> error $
-                                   printf "findLasts failed. \n  vl: %s\n  vr: %s\n  subs: %s\n"
-                                   vl vr (show subs)
+             _                  -> Nothing
+                                   -- error $
+                                   -- printf "findLasts failed for block #%d. \n  vl: %s\n  vr: %s\n  subs: %s\n%s"
+                                   -- (aecDbg^.aId) vl vr (show subs) (show aecDbg)
                                    
       | f <- fmts
       ]
@@ -227,7 +230,7 @@ non_interference_inv :: AlwaysBlock -> AlwaysBlock -> Inv
 -- when a1 takes a step, a2 still holds
 non_interference_inv a1 a2 = Horn { hBody = body
                                   , hHead = KV { kvId   = a2 ^. aId
-                                               , kvSubs = updates2
+                                               , kvSubs = filterSubs a2 updates2
                                                }
                                   , hId   = HornId (a2 ^. aId) (InvInter (a1 ^. aId))
                                   }
@@ -245,10 +248,12 @@ non_interference_inv a1 a2 = Horn { hBody = body
                            , (n_rtvar v, rtvar v) -- rt' = rt
                            ]
                          -- variables not updated by a1 stay the same
-                         | v <- (getRegisters a2) \\ (getRegisters a1) 
+                         --- | v <- (getRegisters a2) \\ (getRegisters a1) 
+                         | v <- varName <$> ((a2 ^. aSt ^. ports) \\ (a1 ^. aSt ^. ports)) 
                          ]
     updates2_2 = [ lukap v
-                 | p <- (getRegisters a2) `intersect` (getRegisters a1) 
+                 --- | p <- (getRegisters a2) `intersect` (getRegisters a1) 
+                 | p <- varName <$> ((a2 ^. aSt ^. ports) `intersect` (a1 ^. aSt ^. ports)) 
                  , v <- primes p
                  ]
     
@@ -328,13 +333,12 @@ filterRegs a vs =
                   else l
          ) [] vs
 
--- kv_vars :: AlwaysBlock -> S.HashSet Id
--- kv_vars a =
---   (S.fromList (allArgs fmt{leftVar=True} (a^.aSt)))
---   `S.union`
---   (S.fromList (allArgs fmt{rightVar=True} (a^.aSt)))
+filterSubs :: AlwaysBlock -> [(Id,Expr)] -> [(Id,Expr)]
+filterSubs a = filter (\(v,_) -> v `S.member` kv_vars)
+  where
+    kv_vars :: S.HashSet Id
+    kv_vars =
+      (S.fromList (allArgs fmt{leftVar=True} (a^.aSt)))
+      `S.union`
+      (S.fromList (allArgs fmt{rightVar=True} (a^.aSt)))
 
--- filterSubs :: AlwaysBlock -> [(Id,Expr)] -> [(Id,Expr)]
--- filterSubs a = filter (\(v,_) -> v `S.member` m)
---   where
---     m = kv_vars a
