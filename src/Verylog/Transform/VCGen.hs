@@ -43,7 +43,7 @@ modular_inv a = [ initial_inv
                 , next_step_inv
                 ] <*> [a']
   where
-    a' = a
+    a' = dbg (printf "\nalways block #%d:\n%s" (a^.aId) (show a)) a
     -- a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
     -- a' = trc (printf "\nalways block #%d: " (a^.aId)) (length $ makeInvArgs fmt a) a
 
@@ -102,41 +102,36 @@ next_step_inv a = Horn { hBody = body
     (nl,ul)  = next fmt{leftVar=True}  a
     (nr,ur)  = next fmt{rightVar=True} a
     body     = Ands [ prevKV a
-                    , sanGlobs a subs
-                    , taintEqs a subs
+                    , sanGlobs (a^.aSt^.sanitizeGlob) subs
+                    , taintEqs (a^.aSt^.taintEq) subs
                     , nl, nr
                     ]
 
 type Subs = [(Id,Expr)]
 
 -- sanitize globs are always the same
-sanGlobs        :: AlwaysBlock -> Subs -> Expr
-sanGlobs a subs = alwaysEqs conf vs subs
+sanGlobs        :: [Id] -> Subs -> Expr
+sanGlobs vs subs = alwaysEqs conf vs subs
   where
-    vs   = a ^. aSt ^. sanitizeGlob
     conf = AEC { isInitEq  = True
                , isPrimeEq = True
                , isValEq   = True
                , isTagEq   = True
-               , aecDbg    = a
                }
 
-taintEqs        :: AlwaysBlock -> Subs -> Expr
-taintEqs a subs = alwaysEqs conf vs subs
+taintEqs        :: [Id] -> Subs -> Expr
+taintEqs vs subs = alwaysEqs conf vs subs
   where
-    vs   = a ^. aSt ^. taintEq
     conf = AEC { isInitEq  = True
                , isPrimeEq = True
                , isValEq   = False
                , isTagEq   = True
-               , aecDbg    = a
                }
 
 data AlwaysEqConfig = AEC { isInitEq  :: Bool
                           , isPrimeEq :: Bool
                           , isValEq   :: Bool
                           , isTagEq   :: Bool
-                          , aecDbg    :: AlwaysBlock
                           }
 
 alwaysEqs :: AlwaysEqConfig -> [Id] -> Subs -> Expr
@@ -172,9 +167,6 @@ alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
         in case (lookup vl subs, lookup vr subs) of
              (Just el, Just er) -> Just (el, er)
              _                  -> Nothing
-                                   -- error $
-                                   -- printf "findLasts failed for block #%d. \n  vl: %s\n  vr: %s\n  subs: %s\n%s"
-                                   -- (aecDbg^.aId) vl vr (show subs) (show aecDbg)
                                    
       | f <- fmts
       ]
@@ -257,10 +249,11 @@ non_interference_inv a1 a2 = Horn { hBody = body
                  , v <- primes p
                  ]
     
+    merge f = S.toList $ (S.fromList (view f a1)) `S.union` (S.fromList (view f a2))
     body   = Ands [ prevKV a1
                   , prevKV a2
-                  , sanGlobs a1 updates1, taintEqs a1 updates1
-                  , sanGlobs a2 updates2, taintEqs a2 updates2
+                  , sanGlobs (merge (aSt.sanitizeGlob)) (updates1++updates2)
+                  , taintEqs (merge (aSt.taintEq)) (updates1++updates2)
                   , nl1
                   , nr1
                   ]

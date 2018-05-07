@@ -80,15 +80,23 @@ type G = Gr Int ()
 
 removeWires :: [AlwaysBlock] -> [AlwaysBlock]
 removeWires as = dbg
-                 (printf "#blocks after removing wires: %d -> %d" (length as) (length res))
+                 ( printf "individual blocks:\n%s\n\n#blocks after removing wires: %d -> %d"
+                   prev_str (length as) (length res)
+                 )
                  res
   where
+    prev_str = intercalate "\n\n" (show <$> as)
     res = snd $
-          foldl' (\(n,l) ns -> (n+1, (mkNewAB n ns):l)) (maxId + 1,[]) (calcSubgraphs dupWriteMap g)
+          foldl'
+          (\(n,l) ns -> ( n+1
+                        , (mkNewAB n ns):l
+                        ))
+          (maxId + 1,[])
+          (calcSubgraphs dupWriteMap g)
 
-    mkNewAB :: Int -> [Node] -> AlwaysBlock
-    mkNewAB id' ns =
-      let is     = topsort $ checkCycles as $ subgraph ns g
+    mkNewAB :: Int -> G -> AlwaysBlock
+    mkNewAB id' g =
+      let is     = topsort $ checkCycles as g
           blocks = (\i -> IM.findWithDefault (error "") i abMap) <$> is
           evnt   = getEvent blocks
           stmt   = Block [ a ^. aStmt | a <- blocks ]
@@ -100,7 +108,7 @@ removeWires as = dbg
                       , _aSt    = st'
                       , _aLoc   = loc
                       }
-      in dbg (printf "combined %s into %d" (show ns) id') ab
+      in dbg (printf "combined %s into %d" (show $ fst <$> labNodes g) id') ab
 
     getEvent :: [AlwaysBlock] -> Event
     getEvent []      = Star
@@ -123,9 +131,18 @@ removeWires as = dbg
     maxId :: Int
     maxId = fst $ IM.findMax abMap
 
-calcSubgraphs :: WireMap -> G -> [[Node]]
-calcSubgraphs dupWriteMap g = concat [ generateNodes ns | ns <- components g ]
+calcSubgraphs :: WireMap -> G -> [G]
+calcSubgraphs dupWriteMap g = undefined
   where
+    helper :: [Node] -> G
+    helper ns =
+      let subG   = subgraph ns g
+          --leaves = 
+      in undefined
+
+    combinedNodes :: [[Node]]
+    combinedNodes = concat [ generateNodes ns | ns <- components g ]
+
     generateNodes :: [Node] -> [[Node]]
     generateNodes ns =
       let allUpds  = M.foldlWithKey' (\iss w is -> if   (IS.findMin is) `elem` ns
@@ -241,7 +258,7 @@ insertWritesToWires (readMap, writeMap) a =
               else error $
                    "assignment to wire in non-star blocking assignment" -- sanity check
                    ++ "\n" ++ show s
-         else res
+         else res -- error $ "blocking assignment to non-wire: " ++ l
     wireUpdates s@(NonBlockingAsgn l r) =
       let res = (findUsedWires r, findUsedWires l)
       in if   isWire l

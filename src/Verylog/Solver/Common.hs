@@ -25,12 +25,12 @@ data InvType = InvInit   !Int
             deriving (Generic, Eq, Ord)
 
 instance Fixpoint InvType where
-  toFix (InvInit n)  = PP.text "init of block"   PP.<+> PP.int n
-  toFix (InvReTag n) = PP.text "re-tag of block" PP.<+> PP.int n
-  toFix (InvNext n)  = PP.text "next of block"   PP.<+> PP.int n
-  toFix (InvTagEq n) = PP.text "tag eq of block" PP.<+> PP.int n
-  toFix (InvWF n)    = PP.text "wf of block"     PP.<+> PP.int n
-  toFix (InvInter n) = PP.text "interference w/" PP.<+> PP.int n
+  toFix (InvInit n)  = PP.text "init of block"     PP.<+> PP.int n
+  toFix (InvReTag n) = PP.text "re-tag of block"   PP.<+> PP.int n
+  toFix (InvNext n)  = PP.text "next of block"     PP.<+> PP.int n
+  toFix (InvTagEq n) = PP.text "tag eq of block"   PP.<+> PP.int n
+  toFix (InvWF n)    = PP.text "wf of block"       PP.<+> PP.int n
+  toFix (InvInter n) = PP.text "interference with" PP.<+> PP.int n
   toFix (InvOther s) = PP.text s
 
 instance Show InvType where
