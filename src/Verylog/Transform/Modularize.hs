@@ -16,7 +16,7 @@ import           Data.Monoid
 
 import Data.Graph.Inductive.Graph
 import Data.Graph.Inductive.PatriciaTree
-import Data.Graph.Inductive.Query
+import Data.Graph.Inductive.Query hiding (trc)
 
 import           Verylog.Language.Types
 import           Verylog.Transform.Utils
@@ -154,7 +154,7 @@ calcSubgraphs dupWriteMap g = concat [ pathsToLeaves (subgraph ns g) | ns <- com
       in if   allUpds == []
          then [ns]
          else let res = [ ns \\ nsNeg | nsNeg <- nsToDrop ]
-              in  dbg ("duplicate updates: " ++ show allUpds) res
+              in  trc "duplicate updates: " allUpds res
 
     allDropOnes :: [a] -> [[a]]
     allDropOnes as = helper (as, [])
