@@ -81,22 +81,22 @@ type G = Gr Int ()
 removeWires :: [AlwaysBlock] -> [AlwaysBlock]
 removeWires as = dbg
                  ( printf "individual blocks:\n%s\n\n#blocks after removing wires: %d -> %d"
-                   prev_str (length as) (length res)
+                   as_str (length as) (length res)
                  )
                  res
   where
-    prev_str = intercalate "\n\n" (show <$> as)
+    as_str = intercalate "\n\n" (show <$> as)
     res = snd $
           foldl'
           (\(n,l) ns -> ( n+1
                         , (mkNewAB n ns):l
                         ))
           (maxId + 1,[])
-          (calcSubgraphs dupWriteMap g)
+          (calcSubgraphs dupWriteMap globalG)
 
     mkNewAB :: Int -> G -> AlwaysBlock
-    mkNewAB id' g =
-      let is     = topsort $ checkCycles as g
+    mkNewAB id' gr =
+      let is     = topsort $ checkCycles as gr
           blocks = (\i -> IM.findWithDefault (error "") i abMap) <$> is
           evnt   = getEvent blocks
           stmt   = Block [ a ^. aStmt | a <- blocks ]
@@ -108,7 +108,7 @@ removeWires as = dbg
                       , _aSt    = st'
                       , _aLoc   = loc
                       }
-      in dbg (printf "combined %s into %d" (show $ fst <$> labNodes g) id') ab
+      in dbg (printf "combined %s into %d" (show $ fst <$> labNodes gr) id') ab
 
     getEvent :: [AlwaysBlock] -> Event
     getEvent []      = Star
@@ -117,9 +117,9 @@ removeWires as = dbg
                          NegEdge c -> NegEdge c
                          Star      -> getEvent as'
 
-    g :: G
-    g = let _g = makeGraph es
-        in  dbg (showDot $ fglToDotGeneric _g show (const "") id) _g
+    globalG :: G
+    globalG = let _g = makeGraph es in
+                dbg (showDot $ fglToDotGeneric _g show (const "") id) _g
 
     es                :: EdgeMap
     dupWriteMap       :: WireMap
@@ -132,13 +132,14 @@ removeWires as = dbg
     maxId = fst $ IM.findMax abMap
 
 calcSubgraphs :: WireMap -> G -> [G]
-calcSubgraphs dupWriteMap g = undefined
+calcSubgraphs dupWriteMap g = concat [ pathsToLeaves (subgraph ns g) | ns <- combinedNodes ]
   where
-    helper :: [Node] -> G
-    helper ns =
-      let subG   = subgraph ns g
-          --leaves = 
-      in undefined
+    pathsToLeaves :: G -> [G]
+    pathsToLeaves gr = [ parentG r | r <- roots ]
+      where
+        rootG     = gfiltermap (\c -> if suc' c == [] then Just c else Nothing) gr
+        roots     = fst <$> labNodes rootG
+        parentG r = subgraph (rdfs [r] gr) gr
 
     combinedNodes :: [[Node]]
     combinedNodes = concat [ generateNodes ns | ns <- components g ]

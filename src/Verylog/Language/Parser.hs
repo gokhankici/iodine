@@ -78,6 +78,9 @@ data ParseIR = TopModule    { mPortNames :: [ParsePort]       -- port list (i.e.
              | PSanitizeMod { sModuleName :: String
                             , sVarName    :: String
                             }
+             | PTaintEqMod  { sModuleName :: String
+                            , sVarName    :: String
+                            }
              | PSanitizeGlob String
              | PTaintEq      String
              deriving (Show)
@@ -101,6 +104,7 @@ data ParseSt = ParseSt { _parseSources      :: S.HashSet Id
                        , _parseSanitizeGlob :: S.HashSet Id
                        , _parseTaintEq      :: S.HashSet Id
                        , _parseModSanitize  :: M.HashMap Id (S.HashSet Id)
+                       , _parseModTaintEq   :: M.HashMap Id (S.HashSet Id)
                        , _parseUFs          :: M.HashMap Id [Id]
                        , _st                :: ! St
                        }
@@ -114,6 +118,7 @@ emptyParseSt = ParseSt { _parseSources      = S.empty
                        , _parseSanitizeGlob = S.empty
                        , _parseTaintEq      = S.empty
                        , _parseModSanitize  = M.empty
+                       , _parseModTaintEq   = M.empty
                        , _parseUFs          = M.empty
                        , _st                = emptySt
                        }
@@ -206,6 +211,7 @@ collectTaint (PNotSanitize{..}) = case nsModuleName of
 collectTaint (PSanitizeGlob s)  = do parseSanitizeGlob %= S.insert s
                                      parseSanitize     %= S.insert s
 collectTaint (PSanitizeMod{..}) = parseModSanitize %= mapOfSetInsert sModuleName sVarName
+collectTaint (PTaintEqMod{..})  = parseModTaintEq  %= mapOfSetInsert sModuleName sVarName
 collectTaint (TopModule{..})    = do sanitizeWires      mPorts
                                      sanitizeSubmodules mGates
 
@@ -226,6 +232,12 @@ sanitizeSubmodules gates = sequence_ $ sanitizeInst <$> gates
     sanitizeInst (PModuleInst{..}) = do
       sanitizeWires      pmInstVars
       sanitizeSubmodules pmInstGates
+
+      tainteqs <- uses parseModTaintEq (M.lookup pmModuleName)
+      case tainteqs of
+        Nothing -> return ()
+        Just ts -> sequence_ $
+                   (\v -> parseTaintEq %= S.insert (mk_mod_var pmInstName v)) <$> S.toList ts
 
       vars         <- uses parseModSanitize (M.lookup pmModuleName)
       maybeNegVars <- uses parseNotSanitize (M.lookup pmModuleName)
@@ -371,6 +383,7 @@ parseTaint :: Parser ParseIR
 parseTaint = spaceConsumer
              *> (     rWord "taint_source"  *> parens (PSource <$> identifier)
                   <|> rWord "taint_sink"    *> parens (PSink <$> identifier)
+                  <|> rWord "taint_eq_mod"  *> parens (PTaintEqMod <$> identifier <*> (comma *> identifier))
                   <|> rWord "taint_eq"      *> parens (PTaintEq <$> identifier)
                   <|> rWord "sanitize_mod"  *> parens (PSanitizeMod <$> identifier <*> (comma *> identifier))
                   <|> rWord "sanitize_glob" *> parens (PSanitizeGlob <$> identifier)

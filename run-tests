@@ -16,7 +16,8 @@ function blue()  { print -P "%F{blue}%B$1%b%f" }
 function green() { print -P "%F{green}%B$1%b%f" }
 function red()   { print -P "%F{red}%B$1%b%f" }
 
-MIPS_DIR="$IVL_DIR/benchmarks/472-mips-pipelined"
+BMKS_DIR="$IVL_DIR/benchmarks"
+MIPS_DIR="$BMKS_DIR/472-mips-pipelined"
 
 # --name simple
 typeset -A SIMPLE_TESTS
@@ -59,6 +60,7 @@ MIPS_MODULE_TESTS=( \
 typeset -A MAJOR_TESTS
 MAJOR_TESTS=( \
 	"10 - 01 - mips full"    "-M mips_pipeline $MIPS_DIR/mips_pipeline.v" \
+	"10 - 02 - yarvi"        "-M yarvi         $BMKS_DIR/yarvi/shared/yarvi.v" \
 	)
 
 # --name neg

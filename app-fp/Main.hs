@@ -30,6 +30,7 @@ data Flag = VCGen
           | PrintFInfo
           | Visualize
           | Minimize
+          | NoSave
           deriving (Show, Eq, Ord)
 
 options :: [OptDescr Flag]
@@ -38,6 +39,7 @@ options =
   , Option [] ["print-finfo"] (NoArg PrintFInfo) "Just vcgen, do not solve"
   , Option [] ["visualize"]   (NoArg Visualize)  "Visualize assignments"
   , Option [] ["minimize"]    (NoArg Minimize)   "print minimal failing constraint set"
+  , Option [] ["no-save"]     (NoArg NoSave)     "do not save fq* files"
   ]
 
 data Options = Options { optInputFile  :: FilePath
@@ -46,6 +48,7 @@ data Options = Options { optInputFile  :: FilePath
                        , optPrintFInfo :: Bool
                        , optVisualize  :: Bool
                        , optMinimize   :: Bool
+                       , optNoSave     :: Bool
                        }
 
 parseOpts :: IO Options
@@ -61,6 +64,7 @@ parseOpts = do
                    , optPrintFInfo = PrintFInfo`elem` opts
                    , optVisualize  = Visualize `elem` opts
                    , optMinimize   = Minimize `elem` opts
+                   , optNoSave     = NoSave `elem` opts
                    }
       (_,_,errs) ->
         error (concat errs ++ usageInfo header options)
@@ -75,7 +79,7 @@ main  = do
   (fpst, finfo) <- fpgen optInputFile
 
   let cfg = defConfig{ eliminate = Some
-                     , save      = True -- optVCGen
+                     , save      = not optNoSave
                      , srcFile   = optInputFile
                      , metadata  = True
                      , minimize  = optMinimize

@@ -17,12 +17,13 @@ fi
 zparseopts -D -E -- \
            -ir=JUST_IR -vcgen=JUST_VCGEN \
            -print-finfo=FINFO \
-		   -prof=PROF \
+           -prof=PROF \
            -debug=VC_DEBUG \
            -qarmcOpts+:=QARMC_OPTS \
            -solver:=SOLVER \
            -minimize=MINIMIZE \
-		   -no-output=NO_OUTPUT \
+           -no-output=NO_OUTPUT \
+           -no-save=NO_SAVE \
            M:=TOPLEVEL_MODULE \
            -emacs=EMACS \
            h=HELP -help=HELP
@@ -101,7 +102,7 @@ CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
 QARMC_DEFAULT_OPTS=-get-model
 
 function vcgen_fp() {
-    vcgen-fp $PROFILE_ARGS $FINFO $JUST_VCGEN $MINIMIZE $@
+    vcgen-fp $PROFILE_ARGS $FINFO $JUST_VCGEN $MINIMIZE $NO_SAVE $@
 }
 
 # }}}
