@@ -18,6 +18,7 @@ function red()   { print -P "%F{red}%B$1%b%f" }
 
 BMKS_DIR="$IVL_DIR/benchmarks"
 MIPS_DIR="$BMKS_DIR/472-mips-pipelined"
+CRYPTO_DIR="$BMKS_DIR/crypto_cores"
 
 # --name simple
 typeset -A SIMPLE_TESTS
@@ -61,6 +62,7 @@ typeset -A MAJOR_TESTS
 MAJOR_TESTS=( \
 	"10 - 01 - mips full"    "-M mips_pipeline $MIPS_DIR/mips_pipeline.v" \
 	"10 - 02 - yarvi"        "-M yarvi         $BMKS_DIR/yarvi/shared/yarvi.v" \
+	"10 - 03 - sha256"       "-M sha256        $CRYPTO_DIR/sha_core/trunk/rtl/sha256.v" \
 	)
 
 # --name neg
