@@ -3,5 +3,7 @@
     "files.exclude": {
         "**/.log*" : true,
         "**/old-src" : true,
+        "**/.*.pl" : true,
+        "**/*~" : true
     },
 }

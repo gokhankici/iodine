@@ -71,6 +71,8 @@ NEG_TESTS_SIMPLE=( \
 	"-01 - 01 - neg-test-1"    "-M test $THIS_DIR/test/verilog/neg/neg-test-1.v" \
 	"-01 - 02 - neg-test-2"    "-M test $THIS_DIR/test/verilog/neg/neg-test-2.v" \
 	"-01 - 03 - neg-test-3"    "-M test $THIS_DIR/test/verilog/neg/neg-test-3.v" \
+	"-01 - 04 - neg-test-4"    "-M test $THIS_DIR/test/verilog/neg/neg-test-4.v" \
+	"-01 - 05 - neg-test-5"    "-M test $THIS_DIR/test/verilog/neg/neg-test-5.v" \
 
 	"-02 - 01 - secver-neg-01" "-M test $THIS_DIR/test/verilog/neg/secverilog-neg-01.v" \
 	)
