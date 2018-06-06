@@ -118,8 +118,8 @@ removeWires as = dbg
                          Star      -> getEvent as'
 
     globalG :: G
-    globalG = let _g = makeGraph es in
-                dbg (showDot $ fglToDotGeneric _g show (const "") id) _g
+    globalG = let _g = makeGraph es
+              in  dbg (myPrintG _g) _g
 
     es                :: EdgeMap
     dupWriteMap       :: WireMap
@@ -178,11 +178,16 @@ checkCycles as g =
   if   any ((>= 2) . length) (scc g)
   then error $
        "graph g contains a cycle:\n" ++
-       prettify g ++ "\n\n" ++ 
-       show dups ++ "\n\n" ++ 
-       intercalate "\n" (show <$> (filter (\a -> (a ^. aId) `elem` dups) as))
+
+       sep ++ "connected components:\n" ++ show cs ++ "\n\n" ++ 
+
+       sep ++ "dups:\n"   ++ show dups ++ "\n" ++
+       (myPrintG (nfilter (\n -> n `elem` dups) g)) ++ "\n\n" ++ 
+
+       sep ++ "blocks:\n" ++ intercalate "\n" (show <$> (filter (\a -> (a ^. aId) `elem` dups) as))
   else g
   where
+    sep  = "--------------------------------------------------------------------------------\n"
     cs   = scc g
     dups = head $ filter (\l -> length l > 1) cs -- pick the first cycle
 
@@ -283,3 +288,6 @@ insertWritesToWires (readMap, writeMap) a =
                              Just vs -> mconcat (findUsedWires <$> vs)
                                
 
+
+myPrintG   :: G -> String
+myPrintG g = showDot $ fglToDotGeneric g show (const "") id
