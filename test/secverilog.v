@@ -19,9 +19,9 @@ always @(posedge clk) begin
 
 	case (state)
 		0: begin 
+			 inH   <= in; 
 		     if (in[0] == 0) begin
 				 out   <= 0;
-				 inH   <= in; 
 				 state <= 1; 
 			 end else begin
 				 out   <= wallclock;
