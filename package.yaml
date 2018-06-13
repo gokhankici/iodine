@@ -51,6 +51,7 @@ library:
   - Verylog.Transform.Modularize
   - Verylog.Solver.Common
   - Verylog.Solver.FP.Types
+  - Verylog.Solver.FP.FQ
 
 executables:
   vcgen-fp:

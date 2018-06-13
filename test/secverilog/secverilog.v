@@ -30,15 +30,20 @@ always @(posedge clk) begin
 		   end 
 		1: begin 
 		     if (secret == 0 || inH == 0) begin
-				 state  <= 0; 
+				 state  <= 2; 
 				 secret <= 0;
 			 end else begin
-				 state  <= 2; 
+				 state  <= 3; 
 			 end
 	       end
-		2: begin 
+		2: begin  // pc = ZL state
 		     state  <= 0;
-			 secret <= secret * inH;
+		   end
+		3: begin  // pc = ZL state
+		     state  <= 4;
+		   end
+		4: begin // pc = ZL state
+		     state  <= 0;
 		   end
 	endcase
 end

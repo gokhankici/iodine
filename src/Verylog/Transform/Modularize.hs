@@ -21,6 +21,8 @@ import Data.Graph.Inductive.Query hiding (trc)
 import           Verylog.Language.Types
 import           Verylog.Transform.Utils
 
+import Control.Exception
+
 import Text.Printf
 import Data.Graph.Inductive.Dot
 
@@ -176,18 +178,13 @@ makeGraph es =
 checkCycles :: [AlwaysBlock] -> G -> G
 checkCycles as g =
   if   any ((>= 2) . length) (scc g)
-  then error $
-       "graph g contains a cycle:\n" ++
-
-       sep ++ "connected components:\n" ++ show cs ++ "\n\n" ++ 
-
-       sep ++ "dups:\n"   ++ show dups ++ "\n" ++
-       (myPrintG (nfilter (\n -> n `elem` dups) g)) ++ "\n\n" ++ 
-
-       sep ++ "blocks:\n" ++ intercalate "\n" (show <$> (filter (\a -> (a ^. aId) `elem` dups) as))
+  then throw $
+       CycleError { cycleStr      = myPrintG (nfilter (\n -> n `elem` dups) g)
+                  , cycleErrorStr = intercalate "\n\n"
+                                    (reverse $ show <$> (filter (\a -> (a ^. aId) `elem` dups) as))
+                  }
   else g
   where
-    sep  = "--------------------------------------------------------------------------------\n"
     cs   = scc g
     dups = head $ filter (\l -> length l > 1) cs -- pick the first cycle
 

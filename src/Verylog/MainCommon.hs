@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Verylog.MainCommon where
 
 import Control.Exception  (catch)
@@ -14,12 +15,19 @@ peHandle e = renderError e >>= hPutStrLn stderr >> exitFailure
 
 passHandle :: PassError -> IO ()
 passHandle (PassError msg) = do
+  redError msg
+  exitFailure
+passHandle (CycleError{..}) = do
+  hPutStrLn stderr cycleErrorStr
+  exitFailure
+
+redError :: String -> IO ()
+redError msg = do
   hSetSGR stderr [ SetColor Foreground Vivid Red
                  , SetConsoleIntensity BoldIntensity
                  ]
   hPutStrLn stderr msg
   hSetSGR stderr []
-  exitFailure
 
 getFiles :: IO (FilePath, FilePath)
 getFiles = do

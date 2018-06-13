@@ -130,6 +130,9 @@ readIRs st f = st^.irs.to (map (r . f))
     r m = runReader m st
 
 data PassError = PassError !String
+               | CycleError { cycleStr      :: !String
+                            , cycleErrorStr :: !String
+                            }
                deriving (Show, Typeable)
 
 instance Exception PassError

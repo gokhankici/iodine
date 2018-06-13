@@ -2,10 +2,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
+import Verylog.MainCommon
 import Verylog.FPGen
 import Verylog.Solver.FP.Types
 import Verylog.Solver.Common
 import Verylog.Language.Types
+import Verylog.Solver.FP.FQ
 
 import Language.Fixpoint.Solver
 import Language.Fixpoint.Types
@@ -15,16 +17,16 @@ import qualified Data.Set        as S
 import qualified Data.Map.Strict as M
 import           Data.List
 import           Data.Maybe
-import           Control.Lens
+import           Control.Exception
+import           Control.Lens hiding ((<.>))
 import           System.Console.ANSI
 import           System.Console.GetOpt
 import           System.Environment (getArgs)
+import           System.FilePath.Posix
 import           System.Exit
+import           System.IO
 import           Text.PrettyPrint
 import           Text.Printf
-
--- import System.IO
--- import Control.DeepSeq
 
 data Flag = VCGen
           | PrintFInfo
@@ -71,12 +73,25 @@ parseOpts = do
         where
           header = "Usage: vcgen-fp [OPTION...] files..."
   
-
 main :: IO ()
 main  = do
   Options{..} <- parseOpts
 
-  (fpst, finfo) <- fpgen optInputFile
+  fileContents <- readFile optInputFile
+
+  fpst <- do
+    res <- try $ evaluate $ pipeline optInputFile fileContents
+    case res of
+      Left (PassError msg)  -> putStrLn msg >> exitFailure
+      Left (CycleError{..}) -> do
+        let dotFileName = optInputFile <.> "dot"
+        writeFile dotFileName cycleStr
+        hPutStrLn stderr cycleErrorStr
+        redError "\nCYCLE DETECTED !\n"
+        exitFailure
+      Right r -> return r
+
+  let finfo = toFqFormat fpst
 
   let cfg = defConfig{ eliminate = Some
                      , save      = not optNoSave

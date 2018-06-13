@@ -45,6 +45,9 @@
 (assert (= (ZL 1) HIGH))
 (assert (= (ZL 2) HIGH))
 (assert (= (ZL 3) HIGH))
+(assert (= (ZL 4) HIGH))
+(assert (= (ZL 5) HIGH))
+(assert (= (ZL 6) HIGH))
 
 ; LH(0)=L, LH(1)=H
 (declare-fun LH (Int) Label)
@@ -99,7 +102,7 @@
 (declare-fun state33 () Int)
 (assert (<= 0  state33))
 (assert (<= state33 3))
-(assert (and (= state 0) (= state 1) (= state33 0)  (not(leq HIGH  (ZL state33)))))    ; state <= 0 @secverilog.v:33
+(assert (and (= state 0) (= state 1) (= state33 2)  (not(leq HIGH  (ZL state33)))))    ; state <= 2 @secverilog.v:33
 (check-sat)
 (pop)
 
@@ -114,7 +117,7 @@
 (declare-fun state36 () Int)
 (assert (<= 0  state36))
 (assert (<= state36 3))
-(assert (and (= state 0) (= state 1) (= state36 2)  (not(leq HIGH  (ZL state36)))))    ; state <= 2 @secverilog.v:36
+(assert (and (= state 0) (= state 1) (= state36 3)  (not(leq HIGH  (ZL state36)))))    ; state <= 3 @secverilog.v:36
 (check-sat)
 (pop)
 
@@ -129,7 +132,19 @@
 
 
 (push)
-(assert (and (= state 0) (= state 1) (= state 2)  (not(leq HIGH  HIGH))))    ; secret <= (secret)*(inH) @secverilog.v:41
+(declare-fun state43 () Int)
+(assert (<= 0  state43))
+(assert (<= state43 3))
+(assert (and (= state 0) (= state 1) (= state 2) (= state 3) (= state43 4)  (not(leq (ZL state)  (ZL state43)))))    ; state <= 4 @secverilog.v:43
+(check-sat)
+(pop)
+
+
+(push)
+(declare-fun state46 () Int)
+(assert (<= 0  state46))
+(assert (<= state46 3))
+(assert (and (= state 0) (= state 1) (= state 2) (= state 3) (= state 4) (= state46 0)  (not(leq (ZL state)  (ZL state46)))))    ; state <= 0 @secverilog.v:46
 (check-sat)
 (pop)
 
