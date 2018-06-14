@@ -50,6 +50,10 @@ verylog options:
       Specifies the target of the vcgen (default is hsf)
   --prof
       Run with profiling
+  --no-output
+      ...
+  --no-save
+      do not generate .fq files
   -h, --help
       Prints this help
 

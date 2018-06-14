@@ -102,9 +102,9 @@ main  = do
 
   case () of
     _ | optVCGen      ->
-        -- withFile optOutputFile WriteMode (\f -> hPutStrLn f (show (fpst ^. fpConstraints))) >> exitSuccess
-        -- (fpst, finfo)  `deepseq` (putStrLn "fully evaluated everything")
-        saveQuery cfg finfo >> exitSuccess
+        if   optNoSave
+        then putStrLn $ intercalate "\n\n" (show <$> fpst ^. fpABs)
+        else saveQuery cfg finfo >> exitSuccess
       | optPrintFInfo -> do
           fInfo <- parseFInfo [optOutputFile] :: IO (FInfo ())
           putStrLn $ show fInfo
