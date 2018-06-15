@@ -26,6 +26,7 @@ zparseopts -D -E -- \
            -no-save=NO_SAVE \
            M:=TOPLEVEL_MODULE \
            -emacs=EMACS \
+           -abduction=ABDUCTION \
            h=HELP -help=HELP
 
 if [[ $# -eq 0 || -n "$HELP" ]]; then
@@ -54,6 +55,8 @@ verylog options:
       ...
   --no-save
       do not generate .fq files
+  --abduction
+      run the abduction interactive loop
   -h, --help
       Prints this help
 
@@ -106,7 +109,7 @@ CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
 QARMC_DEFAULT_OPTS=-get-model
 
 function vcgen_fp() {
-    vcgen-fp $PROFILE_ARGS $FINFO $JUST_VCGEN $MINIMIZE $NO_SAVE $@
+    vcgen-fp $PROFILE_ARGS $FINFO $JUST_VCGEN $MINIMIZE $NO_SAVE $ABDUCTION $@
 }
 
 # }}}

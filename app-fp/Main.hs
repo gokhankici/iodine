@@ -2,6 +2,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
+import Abduction
+
 import Verylog.MainCommon
 import Verylog.FPGen
 import Verylog.Solver.FP.Types
@@ -33,6 +35,7 @@ data Flag = VCGen
           | Visualize
           | Minimize
           | NoSave
+          | Abduction
           deriving (Show, Eq, Ord)
 
 options :: [OptDescr Flag]
@@ -42,6 +45,7 @@ options =
   , Option [] ["visualize"]   (NoArg Visualize)  "Visualize assignments"
   , Option [] ["minimize"]    (NoArg Minimize)   "print minimal failing constraint set"
   , Option [] ["no-save"]     (NoArg NoSave)     "do not save fq* files"
+  , Option [] ["abduction"]   (NoArg Abduction)  "find hidden assumptions"
   ]
 
 data Options = Options { optInputFile  :: FilePath
@@ -51,6 +55,7 @@ data Options = Options { optInputFile  :: FilePath
                        , optVisualize  :: Bool
                        , optMinimize   :: Bool
                        , optNoSave     :: Bool
+                       , optAbduction  :: Bool
                        }
 
 parseOpts :: IO Options
@@ -62,11 +67,12 @@ parseOpts = do
         let [fin, fout] = rest
         in Options { optInputFile  = fin
                    , optOutputFile = fout
-                   , optVCGen      = VCGen `elem` opts
-                   , optPrintFInfo = PrintFInfo`elem` opts
-                   , optVisualize  = Visualize `elem` opts
-                   , optMinimize   = Minimize `elem` opts
-                   , optNoSave     = NoSave `elem` opts
+                   , optVCGen      = VCGen      `elem` opts
+                   , optPrintFInfo = PrintFInfo `elem` opts
+                   , optVisualize  = Visualize  `elem` opts
+                   , optMinimize   = Minimize   `elem` opts
+                   , optNoSave     = NoSave     `elem` opts
+                   , optAbduction  = Abduction  `elem` opts
                    }
       (_,_,errs) ->
         error (concat errs ++ usageInfo header options)
@@ -98,6 +104,7 @@ main  = do
                      , srcFile   = optInputFile
                      , metadata  = True
                      , minimize  = optMinimize
+                     -- , cores     = Just 4
                      } 
 
   case () of
@@ -109,6 +116,7 @@ main  = do
           fInfo <- parseFInfo [optOutputFile] :: IO (FInfo ())
           putStrLn $ show fInfo
           exitSuccess
+      | optAbduction  -> abduction cfg{save=False} fpst
       | otherwise     -> do
           res <- solve cfg finfo
           let statStr = render . resultDoc . fmap fst
