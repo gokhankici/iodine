@@ -10,6 +10,7 @@ zparseopts -D -E -- \
 	-continue=CONTINUE \
 	-no-output=NO_OUT \
 	-time=TIME \
+	-times:=TIMES \
 	n:=NAME -name:=NAME
 
 function blue()  { print -P "%F{blue}%B$1%b%f" }
@@ -78,6 +79,11 @@ NEG_TESTS_SIMPLE=( \
 	"-02 - 02 - secver-neg-02" "-M test $THIS_DIR/test/verilog/neg/secverilog-neg-02.v" \
 	)
 
+if [[ -z "$TIMES" ]]; then
+	REPLICATE=1
+else
+	REPLICATE="$TIMES[2]"
+fi
 
 if   [[ "$NAME[2]" == "simple" ]]; then
 	typeset -A TESTS
@@ -155,65 +161,71 @@ run_verylog() {
 	fi
 }
 
-for test_name in ${(ok)TESTS}; do
-	if [[ -z "$NO_OUT" ]]; then
-		blue "================================================================================"
-		blue "   RUNNING $test_name"
-		blue "================================================================================"
-	fi
 
-	test_input="${TESTS[$test_name]}"
-	local -a test_arr
-	test_arr=("${(@s/ /)test_input}")
+for ((i=0; i<$REPLICATE; i++)); do
 
-	run_verylog ${test_arr} $@
+	blue "=== RUN $i ====================================================================="
 
-	last_err=$?
+	for test_name in ${(ok)TESTS}; do
+		if [[ -z "$NO_OUT" ]]; then
+			blue "================================================================================"
+			blue "   RUNNING $test_name"
+			blue "================================================================================"
+		fi
 
-	if [[ $last_err -ne 0 ]]; then
-		red "================================================================================"
-		red "   TEST '$test_name' FAILED !" 1>&2
-		red "================================================================================"
+		test_input="${TESTS[$test_name]}"
+		local -a test_arr
+		test_arr=("${(@s/ /)test_input}")
 
-		if [[ -z "$CONTINUE" ]]; then
-			exit 1
-		fi	
-	else
-		green "================================================================================"
-		green "   TEST '$test_name' PASSED !" 1>&2
-		green "================================================================================"
-	fi
-done
+		run_verylog ${test_arr} $@
 
-for test_name in ${(ok)NEG_TESTS}; do
-	if [[ -z "$NO_OUT" ]]; then
-		blue "================================================================================"
-		blue "   RUNNING NEG $test_name"
-		blue "================================================================================"
-	fi
+		last_err=$?
 
-	test_input="${NEG_TESTS[$test_name]}"
-	local -a test_arr
-	test_arr=("${(@s/ /)test_input}")
+		if [[ $last_err -ne 0 ]]; then
+			red "================================================================================"
+			red "   TEST '$test_name' FAILED !" 1>&2
+			red "================================================================================"
+
+			if [[ -z "$CONTINUE" ]]; then
+				exit 1
+			fi	
+		else
+			green "================================================================================"
+			green "   TEST '$test_name' PASSED !" 1>&2
+			green "================================================================================"
+		fi
+	done
+
+	for test_name in ${(ok)NEG_TESTS}; do
+		if [[ -z "$NO_OUT" ]]; then
+			blue "================================================================================"
+			blue "   RUNNING NEG $test_name"
+			blue "================================================================================"
+		fi
+
+		test_input="${NEG_TESTS[$test_name]}"
+		local -a test_arr
+		test_arr=("${(@s/ /)test_input}")
 
 
-	run_verylog ${test_arr} $@
-	
-	last_err=$?
+		run_verylog ${test_arr} $@
 
-	if [[ $last_err -eq 0 ]]; then
-		red "================================================================================"
-		red "   NEG TEST '$test_name' FAILED !" 1>&2
-		red "================================================================================"
+		last_err=$?
 
-		if [[ -z "$CONTINUE" ]]; then
-			exit 1
-		fi	
-	else
-		green "================================================================================"
-		green "   NEG TEST '$test_name' PASSED !" 1>&2
-		green "================================================================================"
-	fi
+		if [[ $last_err -eq 0 ]]; then
+			red "================================================================================"
+			red "   NEG TEST '$test_name' FAILED !" 1>&2
+			red "================================================================================"
+
+			if [[ -z "$CONTINUE" ]]; then
+				exit 1
+			fi	
+		else
+			green "================================================================================"
+			green "   NEG TEST '$test_name' PASSED !" 1>&2
+			green "================================================================================"
+		fi
+	done
 done
 
 if [[ -z "$CONTINUE" ]]; then

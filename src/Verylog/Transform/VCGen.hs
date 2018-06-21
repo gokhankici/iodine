@@ -62,7 +62,7 @@ initial_inv a = Horn { hBody = Boolean True
     st   = a ^. aSt
     sub1 = [ (n_lvar sntz, rvar sntz)
            | sntz <- S.toList . S.fromList $
-                     st ^. sanitize ++ st ^. sources ++ st ^. sinks
+                     st ^. sanitize
            ]
     sub2 = [ (t, Number 0)
            | t <- makeInvTags fmt a
