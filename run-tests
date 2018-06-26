@@ -11,7 +11,14 @@ zparseopts -D -E -- \
 	-no-output=NO_OUT \
 	-time=TIME \
 	-times:=TIMES \
-	n:=NAME -name:=NAME
+	n:=NAME -name:=NAME \
+	h=HELP -help=HELP
+
+if [[ -n "$HELP" ]]; then
+	echo "${0:t} options:"
+	echo "    (u)nit, continue, no-output, time, times <N>, (n)ame <S>, (h)elp"
+	exit 0
+fi
 
 function blue()  { print -P "%F{blue}%B$1%b%f" }
 function green() { print -P "%F{green}%B$1%b%f" }
