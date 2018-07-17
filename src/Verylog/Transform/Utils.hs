@@ -91,4 +91,4 @@ getConstantName n =
 dbg       :: String -> a -> a
 dbg str a = if verbose then trace str a else a
   where
-    verbose = False
+    verbose = True

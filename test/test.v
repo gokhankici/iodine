@@ -7,9 +7,18 @@ module test(clk);
    // @annot{taint_sink(out)}
    reg out;
 
-   always @(*) begin
-	   out = in + 1;
-	   out = in + 2;
+   // always @(*) begin
+   //         out = in;
+   // end
+
+   wire a,b,c;
+   reg  r;
+   
+   assign c = a & b;
+
+   always @(posedge clk) begin
+      r <= c;
    end
+   
 
 endmodule
