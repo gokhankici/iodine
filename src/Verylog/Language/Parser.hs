@@ -168,6 +168,14 @@ makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultSta
       st . sanitize     <~ uses parseSanitize     S.toList
       st . sanitizeGlob <~ uses parseSanitizeGlob S.toList
 
+      prts <- use (st . ports)
+      let topInputs = let f (PInput i) l  = if   (Wire i) `elem` prts
+                                            then i:l
+                                            else l
+                          f (POutput _) l = l
+                      in  foldr f [] mPortNames
+      st . taintEq %= S.toList . S.union (S.fromList topInputs) . S.fromList
+
       -- 5. create intermediary IR from parse IR
       st . irs <~ uses st (makeIntermediaryIR loc mBehaviors mGates)
 

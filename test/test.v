@@ -1,13 +1,11 @@
-module test(clk);
-   input clk;
+module test(clk, a, b, o);
+   input clk, a, b;
+   output o;
 
    // @annot{taint_source(a)}
    // @annot{taint_sink(r)}
 
-   // @annot{taint_eq(a)}
-   // @annot{taint_eq(b)}
-
-   wire a,b,c;
+   wire c;
    reg  r;
    
    assign c = a & b;
