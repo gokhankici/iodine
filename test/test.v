@@ -1,19 +1,44 @@
-module test(clk, a, b, ar, o);
-   input clk, a, b;
-   output o;
-   input wire ar;
-
+module test(a, b, o);
    // @annot{taint_source(a)}
-   // @annot{taint_sink(r)}
+   // @annot{taint_source(b)}
+   // @annot{taint_sink(o)}
 
-   wire c;
-   reg  r;
-   
-   assign c = a & b;
+   input wire [ 4:0] a;
+   input wire [26:0] b;
+   output reg        o;
 
-   always @(posedge clk) begin
-      r <= c;
-   end
+   always @(*)
+     case(a)
+	00: o = 1'h0;
+        01: o =  b;
+	// 01: o =  b[0]; 
+	// 02: o = |b[01:0];
+	// 03: o = |b[02:0];
+	// 04: o = |b[03:0];
+	// 05: o = |b[04:0];
+	// 06: o = |b[05:0];
+	// 07: o = |b[06:0];
+	// 08: o = |b[07:0];
+	// 09: o = |b[08:0];
+	// 10: o = |b[09:0];
+	// 11: o = |b[10:0];
+	// 12: o = |b[11:0];
+	// 13: o = |b[12:0];
+	// 14: o = |b[13:0];
+	// 15: o = |b[14:0];
+	// 16: o = |b[15:0];
+	// 17: o = |b[16:0];
+	// 18: o = |b[17:0];
+	// 19: o = |b[18:0];
+	// 20: o = |b[19:0];
+	// 21: o = |b[20:0];
+	// 22: o = |b[21:0];
+	// 23: o = |b[22:0];
+	// 24: o = |b[23:0];
+	// 25: o = |b[24:0];
+	// 26: o = |b[25:0];
+	// 27: o = |b[26:0];
+     endcase
    
 
 endmodule
