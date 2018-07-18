@@ -4,23 +4,29 @@
 
 module Verylog.Transform.DFG (wireTaints) where
 
-import           Control.Lens                       hiding (mapping)
-import qualified Data.HashSet                       as HS
-import qualified Data.HashMap.Strict                as HM
+import           Control.Lens            hiding (mapping)
+import qualified Data.HashSet            as HS
+import qualified Data.HashMap.Strict     as HM
+import           Text.Printf
 import           Verylog.Language.Types
--- import           Verylog.Transform.Utils
-
-type M = HM.HashMap Id [Id]
-type S = HS.HashSet Id
 
 --------------------------------------------------------------------------------
 wireTaints :: AlwaysBlock -> [Id] -> [Id]
 --------------------------------------------------------------------------------
--- takes an always block and a list of wires, and returns the registers that
+-- takes an always block and a list of wires/registers, and returns the registers that
 -- should be tainted by the analysis at the initial state
-wireTaints a srcs = HS.toList $ worklist a assignments srcs
+wireTaints a srcs =  rs ++ (HS.toList $ worklist a assignments ws)
   where
     assignments = stmt2Assignments (a ^. aStmt) (a ^. aSt ^. ufs)
+
+    (rs,ws) = let f p (rss,wss) =
+                    let l = filter (\p' -> varName p' == p) prts
+                    in case l of
+                         []             -> error $ printf "cannot find %s in ports" p
+                         (Register _):_ -> (p:rss, wss)
+                         (Wire _):_     -> (rss, p:wss)
+              in  foldr f ([],[]) srcs
+    prts    = a ^. aSt ^. ports
 
 worklist :: AlwaysBlock -> M -> [Id] -> S
 worklist a assignments wl = h (wl, HS.empty, HS.empty)
@@ -37,7 +43,7 @@ worklist a assignments wl = h (wl, HS.empty, HS.empty)
               rhss     = case HM.lookup p assignments of
                            Nothing -> []
                            Just l  -> l
-              wrklst'  = foldr (\rhs wl' -> if   HS.member rhs donelst'
+              wrklst'  = foldr (\rhs wl' -> if   HS.member rhs donelst
                                             then wl'
                                             else rhs:wl') wrklst_ rhss
           in h (wrklst', donelst', reglst')
@@ -52,8 +58,8 @@ stmt2Assignments s unintFuncs = h [] s
   where
     h :: [Id] -> Stmt -> M
     h _ Skip                  = HM.empty
-    h l (BlockingAsgn{..})    = h2 (l2ls lhs ++ l) rhs HM.empty 
-    h l (NonBlockingAsgn{..}) = h2 (l2ls lhs ++ l) rhs HM.empty 
+    h l (BlockingAsgn{..})    = h2 (l2ls rhs ++ l) lhs HM.empty 
+    h l (NonBlockingAsgn{..}) = h2 (l2ls rhs ++ l) lhs HM.empty 
     h l (IfStmt{..})          = HM.unionWith (++)
                                 (h (l2ls ifCond ++ l) thenStmt)
                                 (h (l2ls ifCond ++ l) elseStmt)
@@ -69,3 +75,10 @@ stmt2Assignments s unintFuncs = h [] s
     l2ls l = case HM.lookup l unintFuncs of
                Nothing -> [l]
                Just ls -> ls
+
+
+type M = HM.HashMap Id [Id]
+type S = HS.HashSet Id
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------

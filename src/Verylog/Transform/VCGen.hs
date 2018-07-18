@@ -13,6 +13,7 @@ import qualified Data.HashMap.Strict      as M
 
 import           Verylog.Transform.TransitionRelation
 import           Verylog.Transform.Utils as U
+import           Verylog.Transform.DFG
 import           Verylog.Language.Types
 
 import           Verylog.Solver.Common
@@ -81,11 +82,12 @@ tag_reset_inv a = Horn { hBody =  prevKV a
     i      = a ^. aId
     st     = a^.aSt
     srcs   = st ^. sources
-    hsubs  = [ let n = if r `elem` srcs then 1 else 0
+    hsubs  = [ let n = if r `elem` regsToTag then 1 else 0
                in (t, Number n)
              | r <- getRegisters a
              , t <- [n_ltvar, n_rtvar] <*> [r]
              ]
+    regsToTag = wireTaints a srcs
 
 --------------------------------------------------------------------------------
 next_step_inv :: AlwaysBlock -> Inv 

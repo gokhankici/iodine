@@ -187,15 +187,20 @@ sanityChecks = do
   when (isEmpty srcs || isEmpty snks) $
     throw (PassError "Source or sink taint information is missing")
 
-  -- check if source and sink variables actually exist, and
-  -- make sure source or sink variables are registers
-  rs  <- uses (st . ports) (map varName . filter isRegister)
-  let src_dif = srcs Li.\\ rs
-  let snk_dif = snks Li.\\ rs
-  when (src_dif /= [] || snk_dif /= []) $
-    error $
-    printf "Taint variable is not a register !\n  sources: %s\n  sinks: %s\n"
-    (show src_dif) (show snk_dif)
+  prts <- use parsePorts
+  let f p = S.member (Register p) prts || S.member (Wire p) prts 
+  when (not $ all f (srcs ++ snks)) $
+    throw (PassError "Source or sink taint is an unknown variable")
+
+  -- -- check if source and sink variables actually exist, and
+  -- -- make sure source or sink variables are registers
+  -- rs  <- uses (st . ports) (map varName . filter isRegister)
+  -- let src_dif = srcs Li.\\ rs
+  -- let snk_dif = snks Li.\\ rs
+  -- when (src_dif /= [] || snk_dif /= []) $
+  --   error $
+  --   printf "Taint variable is not a register !\n  sources: %s\n  sinks: %s\n"
+  --   (show src_dif) (show snk_dif)
 
 
 -----------------------------------------------------------------------------------
