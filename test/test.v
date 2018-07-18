@@ -1,19 +1,16 @@
 module test(clk);
    input clk;
 
-   // @annot{taint_source(in)}
-   reg in;
+   // @annot{taint_source(a_)}
+   // @annot{taint_sink(r)}
+   // @annot{taint_eq(b)}
 
-   // @annot{taint_sink(out)}
-   reg out;
-
-   // always @(*) begin
-   //         out = in;
-   // end
+   reg a_;
 
    wire a,b,c;
    reg  r;
    
+   assign a = a_;
    assign c = a & b;
 
    always @(posedge clk) begin

@@ -114,7 +114,7 @@ filterNoRegs as = filter f as
                                        _          -> False) False vars
           in if check
              then True
-             else trc "removed unnecessary block" a False
+             else dbg ("removed unnecessary block:\n" ++ show a) False
 
 
 --------------------------------------------------------------------------------
