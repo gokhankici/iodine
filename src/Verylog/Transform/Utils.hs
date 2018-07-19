@@ -95,3 +95,7 @@ dbg       :: String -> a -> a
 dbg str a = if verbose then trace str a else a
   where
     verbose = False
+
+twoPairs :: [a] -> [(a,a)]
+twoPairs []     = []
+twoPairs (x:xs) = [ (x,x') | x' <- xs ] ++ twoPairs xs

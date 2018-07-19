@@ -2,7 +2,9 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Verylog.Transform.DFG (wireTaints) where
+module Verylog.Transform.DFG ( wireTaints
+                             , assignmentMap
+                             ) where
 
 import           Control.Lens            hiding (mapping)
 import qualified Data.HashSet            as HS
@@ -15,10 +17,8 @@ wireTaints :: AlwaysBlock -> [Id] -> [Id]
 --------------------------------------------------------------------------------
 -- takes an always block and a list of wires/registers, and returns the registers that
 -- should be tainted by the analysis at the initial state
-wireTaints a srcs =  rs ++ (HS.toList $ worklist a assignments ws)
+wireTaints a srcs =  rs ++ (HS.toList $ worklist a (assignmentMap a) ws)
   where
-    assignments = stmt2Assignments (a ^. aStmt) (a ^. aSt ^. ufs)
-
     (rs,ws) = let f p (rss,wss) =
                     let l = filter (\p' -> varName p' == p) prts
                     in case l of
@@ -27,6 +27,9 @@ wireTaints a srcs =  rs ++ (HS.toList $ worklist a assignments ws)
                          (Wire _):_     -> (rss, p:wss)
               in  foldr f ([],[]) srcs
     prts    = a ^. aSt ^. ports
+
+assignmentMap :: AlwaysBlock -> M
+assignmentMap a = stmt2Assignments (a ^. aStmt) (a ^. aSt ^. ufs)
 
 worklist :: AlwaysBlock -> M -> [Id] -> S
 worklist a assignments wl = h (wl, HS.empty, HS.empty)

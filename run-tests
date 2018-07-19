@@ -40,6 +40,7 @@ SIMPLE_TESTS=( \
 	"01 - 07 - stall hand"    "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
 	"01 - 08 - secverilog-01" "-M test          $THIS_DIR/test/verilog/pos/secverilog-01.v" \
 	"01 - 09 - tr-test-9"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-9.v" \
+	"01 - 10 - tr-test-10"    "-M test          $THIS_DIR/test/verilog/pos/tr-test-10.v" \
 	)
 
 # --name mips-stub

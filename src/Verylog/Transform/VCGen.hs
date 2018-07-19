@@ -106,8 +106,27 @@ next_step_inv a = Horn { hBody = body
     body     = Ands [ prevKV a
                     , sanGlobs (a^.aSt^.sanitizeGlob) subs
                     , taintEqs (a^.aSt^.taintEq) subs
+                    , Ands $ h <$> twoPairs wiss
                     , nl, nr
                     ]
+
+    wiss :: [Id] -- wire input sources
+    wiss = filter f srcs
+      where
+        f s        = (Wire s) `elem` prts && notInLhs s
+        am         = assignmentMap a
+        srcs       = a ^. aSt ^. sources
+        prts       = a ^. aSt ^. ports
+        notInLhs s = M.null $ M.filter (\l -> s `elem` l) am
+
+    h (x,y)  = let fl = fmt{taggedVar=True, leftVar=True}
+                   fr = fmt{taggedVar=True, rightVar=True}
+                   xl = makeVar fl x
+                   xr = makeVar fr x
+                   yl = makeVar fl y
+                   yr = makeVar fr y
+               in  BinOp AND (BinOp EQU xl yr) (BinOp EQU xr yl)
+
 
 type Subs = [(Id,Expr)]
 
