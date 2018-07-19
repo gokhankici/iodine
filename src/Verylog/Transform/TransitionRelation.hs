@@ -217,7 +217,7 @@ nextAsgn a l r = do es1 <- uf_eq r
                   vars <- ufAtomsRHS fmt r
                   case vars of
                     []   -> return $ Boolean False -- rhs is constant, no tag propagation needed
-                    v:vs -> return $ foldr (BinOp PLUS) v vs
+                    v:vs -> return $ foldr (BinOp OR) v vs
 
     mkTagged fmt = fmt{taggedVar=True}
 

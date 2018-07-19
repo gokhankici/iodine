@@ -10,7 +10,6 @@ import qualified Language.Fixpoint.Types  as FQ
 
 import           Verylog.Language.Types 
 import           Verylog.Solver.Common
-import           Verylog.Solver.FP.FQ
 import           Verylog.Solver.FP.Types
 import           Verylog.Transform.Utils
 import           Verylog.Transform.VCGen
@@ -38,6 +37,10 @@ getBinds as cs = evalState comp (length constants + 1, m)
               use _2
 
     m = foldr constBind M.empty (zip [1..] constants)
+    h (Number n)      = FQ.ECon (FQ.I (toInteger n))
+    h (Boolean True)  = FQ.PTrue
+    h (Boolean False) = FQ.PFalse
+    h _               = error "oh no!"
     constBind (i, (name, e)) =
       M.insert name FQBind { bindId   = i
                            , bindName = name
@@ -48,7 +51,7 @@ getBinds as cs = evalState comp (length constants + 1, m)
                                           Boolean _ -> FQ.PIff
                                           _         -> FQ.PAtom FQ.Eq)
                                         (FQ.EVar $ FQ.symbol "v")
-                                        (convertExpr e)
+                                        (h e)
                            }
 
 getBind            :: Inv -> S ()
