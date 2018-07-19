@@ -65,7 +65,7 @@ initial_inv a = Horn { hBody = Boolean True
            | sntz <- S.toList . S.fromList $
                      st ^. sanitize
            ]
-    sub2 = [ (t, Number 0)
+    sub2 = [ (t, Boolean False)
            | t <- makeInvTags fmt a
            ]
 
@@ -82,8 +82,8 @@ tag_reset_inv a = Horn { hBody =  prevKV a
     i      = a ^. aId
     st     = a^.aSt
     srcs   = st ^. sources
-    hsubs  = [ let n = if r `elem` regsToTag then 1 else 0
-               in (t, Number n)
+    hsubs  = [ let b = if r `elem` regsToTag then True else False
+               in (t, Boolean b)
              | r <- getRegisters a
              , t <- [n_ltvar, n_rtvar] <*> [r]
              ]
@@ -146,9 +146,10 @@ alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
     initEq :: [Expr]
     initEq  =
       if   isInitEq
-      then [ BinOp EQU 
-             (makeVar f{leftVar=True} v)
-             (makeVar f{rightVar=True} v)
+      then [ let o = if taggedVar f then IFF else EQU
+             in  BinOp o
+                 (makeVar f{leftVar=True} v)
+                 (makeVar f{rightVar=True} v)
            | v <- vs, f <- fmts
            ]
       else []
@@ -156,18 +157,19 @@ alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
     primeEq :: [Expr]
     primeEq =
       if   isPrimeEq
-      then [ BinOp EQU exprL exprR
-           | v <- vs, (exprL, exprR) <- findLastIfExists v
+      then [ BinOp o exprL exprR
+           | v <- vs, (exprL, exprR, o) <- findLastIfExists v
            ]
       else []
 
-    findLastIfExists :: Id -> [(Expr, Expr)]
+    findLastIfExists :: Id -> [(Expr, Expr, BinOp)]
     findLastIfExists v =
       catMaybes
       [ let vl = makeVarName f{leftVar=True} v
             vr = makeVarName f{rightVar=True} v
+            o  = if taggedVar f then IFF else EQU
         in case (lookup vl subs, lookup vr subs) of
-             (Just el, Just er) -> Just (el, er)
+             (Just el, Just er) -> Just (el, er, o)
              _                  -> Nothing
                                    
       | f <- fmts
@@ -266,13 +268,13 @@ provedProperty (PropertyOptions{..}) a =
   if checkValEq then valEq else []
   where
     i     = a ^. aId
-    tagEq = [ Horn { hHead = BinOp GE (rtvar s) (Number 1)
+    tagEq = [ Horn { hHead = BinOp IFF (rtvar s) (Boolean True)
                    , hBody = Ands [ KV { kvId   = i
                                        , kvSubs = [ (n_rtvar s, rtvar s)
                                                   , (n_ltvar s, ltvar s)
                                                   ]
                                        }
-                                  , BinOp GE (ltvar s) (Number 1)
+                                  , BinOp IFF (ltvar s) (Boolean True)
                                   ]
                    , hId   = HornId i (InvTagEq i)
                    }

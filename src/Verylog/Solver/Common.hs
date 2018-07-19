@@ -12,7 +12,7 @@ import Control.DeepSeq
 import Language.Fixpoint.Types (Fixpoint(..), Loc(..), showFix, dummySpan)
 import qualified Text.PrettyPrint.HughesPJ as PP
 
-data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES
+data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES | IFF
            deriving (Show, Eq, Generic)
 
 data InvType = InvInit   !Int

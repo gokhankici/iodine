@@ -201,7 +201,7 @@ nextAsgn a l r = do es1 <- uf_eq r
                 case ts2 of
                   [] -> return ts1 
                   _  -> let (es1:ess) = nub $ plusVars (ts1:ts2) -- add each unique operand only once
-                        in return $ foldr (BinOp PLUS) es1 ess
+                        in return $ foldr (BinOp OR) es1 ess
                 
     plusVars :: [Expr] -> [Expr]
     plusVars es = concatMap f es
@@ -216,7 +216,7 @@ nextAsgn a l r = do es1 <- uf_eq r
     ufTagRhs = do fmt <- uses trFmt mkTagged
                   vars <- ufAtomsRHS fmt r
                   case vars of
-                    []   -> return $ Number 0 -- rhs is constant, no tag propagation needed
+                    []   -> return $ Boolean False -- rhs is constant, no tag propagation needed
                     v:vs -> return $ foldr (BinOp PLUS) v vs
 
     mkTagged fmt = fmt{taggedVar=True}

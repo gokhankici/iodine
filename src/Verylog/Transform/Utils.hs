@@ -56,6 +56,9 @@ makeVarName f@(VarFormat{..}) v =
           | rightVar  = "R"
           | otherwise = ""
 
+isTag :: Id -> Bool
+isTag v = isPrefixOf "VLT" v || isPrefixOf "VRT" v
+
 allArgs        :: VarFormat -> St -> [Id]
 allArgs f st = let ps = map varName $ filter isRegister (st^.ports)
                  in (makeVarName f <$> ps) ++ (makeVarName f{taggedVar=True} <$> ps)

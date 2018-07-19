@@ -63,7 +63,7 @@ getBindsFromExp (Var v)     = do
     n' <- use _1; _1 += 1
     _2 %= M.insert v (FQBind { bindId   = n'
                              , bindName = v
-                             , bindType = FQ.FInt
+                             , bindType = if isTag v then FQ.FTC FQ.boolFTyCon else FQ.FInt
                              , bindRef  = FQ.prop True
                              })
 getBindsFromExp (UFCheck{..})    =
