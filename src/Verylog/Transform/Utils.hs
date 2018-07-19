@@ -78,18 +78,18 @@ makeInvTags f a = allTags f{leftVar=True} ++ allTags f{rightVar=True}
 trc         :: Show b => String -> b -> a -> a
 trc msg b a = trace (printf "%s%s" msg (show b)) a
 
-constants :: [(String,Integer)]
-constants = [ ("zero", 0)
-            , ("one",  1)
+constants :: [(String,Expr)]
+constants = [ ("zero",  Number 0)
+            , ("one",   Number 1)
+            , ("tru",   Boolean True)
+            , ("fals",  Boolean False)
             ]
 
-getConstantName :: Int -> String
-getConstantName n =
-  case find ((==) n' . snd) constants of
+getConstantName :: Expr -> String
+getConstantName e =
+  case find ((==) e . snd) constants of
     Just (name,_) -> name
-    Nothing       -> throw $ PassError $ printf "constant %d is not defined (should be 0 or 1)" n
-  where
-    n' = toInteger n
+    Nothing       -> throw $ PassError $ printf "unknown constant: %s" (show e)
 
 dbg       :: String -> a -> a
 dbg str a = if verbose then trace str a else a

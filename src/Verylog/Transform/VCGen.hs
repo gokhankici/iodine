@@ -268,14 +268,12 @@ provedProperty (PropertyOptions{..}) a =
   if checkValEq then valEq else []
   where
     i     = a ^. aId
-    tagEq = [ Horn { hHead = BinOp IFF (rtvar s) (Boolean True)
-                   , hBody = Ands [ KV { kvId   = i
-                                       , kvSubs = [ (n_rtvar s, rtvar s)
-                                                  , (n_ltvar s, ltvar s)
-                                                  ]
-                                       }
-                                  , BinOp IFF (ltvar s) (Boolean True)
-                                  ]
+    tagEq = [ Horn { hHead = BinOp IFF (ltvar s) (rtvar s)
+                   , hBody = KV { kvId   = i
+                                , kvSubs = [ (n_rtvar s, rtvar s)
+                                           , (n_ltvar s, ltvar s)
+                                           ]
+                                }
                    , hId   = HornId i (InvTagEq i)
                    }
             | s <- filterRegs a $ a^.aSt^.sinks

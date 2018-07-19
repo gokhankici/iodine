@@ -2,6 +2,7 @@
 
 module Verylog.Solver.FP.FQ ( toFqFormat
                             , Metadata
+                            , convertExpr
                             ) where
 
 import Verylog.Solver.Common
@@ -58,7 +59,7 @@ toFqFormat fpst =
           [ QP (symbol "v") PatNone FInt
           , QP (symbol "x") (PatPrefix (symbol pre_x) 1) (FTC boolFTyCon)
           ] 
-          (FQT.PIff (eVar "x") PFalse)
+          (FQT.PIff (eVar "x") (eVar $ getConstantName (Boolean False)))
           (dummyPos "")
         | (n,pre_x) <-
             zip [1..]
@@ -146,7 +147,7 @@ convertExpr (UFCheck{..}) =
   in  pAnd [ FQT.PAtom Eq (mkVar l) lSel
            , FQT.PAtom Eq (mkVar r) rSel
            ]
-convertExpr (Number n)    = FQT.EVar $ FQT.symbol $ getConstantName n
+convertExpr (Number n)    = FQT.EVar $ FQT.symbol $ getConstantName (Number n)
 convertExpr (Boolean b)   = prop b
 
 getBindIds :: FPSt -> [Expr] -> [Int]
@@ -174,7 +175,7 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs
           (n1,n2)   = ufNames & both %~ idFromExp
       in S.fromList $ n1:n2:as1 ++ as2
-    getIds (Number n)       = S.singleton $ getConstantName n
+    getIds (Number n)       = S.singleton $ getConstantName (Number n)
     getIds (Boolean _)      = S.empty
 
 
