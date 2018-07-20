@@ -106,18 +106,19 @@ next_step_inv a = Horn { hBody = body
     body     = Ands [ prevKV a
                     , sanGlobs (a^.aSt^.sanitizeGlob) subs
                     , taintEqs (a^.aSt^.taintEq) subs
-                    , Ands $ h <$> twoPairs wiss
+                    , wireInputSources a
                     , nl, nr
                     ]
 
-    wiss :: [Id] -- wire input sources
-    wiss = filter f srcs
-      where
-        f s        = (Wire s) `elem` prts && notInLhs s
-        am         = assignmentMap a
-        srcs       = a ^. aSt ^. sources
-        prts       = a ^. aSt ^. ports
-        notInLhs s = M.null $ M.filter (\l -> s `elem` l) am
+-- wire input sources
+wireInputSources :: AlwaysBlock -> Expr
+wireInputSources a = Ands $ h <$> twoPairs (filter f srcs)
+  where
+    f s        = (Wire s) `elem` prts && notInLhs s
+    am         = assignmentMap a
+    srcs       = a ^. aSt ^. sources
+    prts       = a ^. aSt ^. ports
+    notInLhs s = M.null $ M.filter (\l -> s `elem` l) am
 
     h (x,y)  = let fl = fmt{taggedVar=True, leftVar=True}
                    fr = fmt{taggedVar=True, rightVar=True}
@@ -125,7 +126,11 @@ next_step_inv a = Horn { hBody = body
                    xr = makeVar fr x
                    yl = makeVar fl y
                    yr = makeVar fr y
-               in  BinOp AND (BinOp EQU xl yr) (BinOp EQU xr yl)
+               in  Ands [ BinOp EQU xl yr
+                        , BinOp EQU xr yl
+                        , BinOp EQU xl xr
+                        , BinOp EQU yl yr
+                        ]
 
 
 type Subs = [(Id,Expr)]
@@ -277,6 +282,7 @@ non_interference_inv a1 a2 = Horn { hBody = body
                   , prevKV a2
                   , sanGlobs (merge (aSt.sanitizeGlob)) (updates1++updates2)
                   , taintEqs (merge (aSt.taintEq)) (updates1++updates2)
+                  , wireInputSources a1
                   , nl1
                   , nr1
                   ]

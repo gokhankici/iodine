@@ -64,12 +64,22 @@ m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
                                  set irs      [] $
                                  stt
                          vars' = vars `HS.union` (HS.fromList $ concat $ M.elems (st'^.ufs))
+                         lhss  = HS.fromList $ getLhss s
                          st''  = over ports    (filterVars vars') .
                                  over sources  (filterList vars') .
-                                 over sinks    (filterList vars') .
+                                 -- over sinks    (filterList vars') .
+                                 over sinks    (filterList lhss) .
                                  over sanitize (filterList vars') $
                                  st'
                      in st''
+
+    
+    getLhss Skip                  = []
+    getLhss (BlockingAsgn{..})    = [lhs]
+    getLhss (NonBlockingAsgn{..}) = [lhs]
+    getLhss (IfStmt{..})          = getLhss thenStmt ++ getLhss elseStmt
+    getLhss (Block{..})           = concatMap getLhss blockStmts
+
 
 -----------------------------------------------------------------------------------
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Merge always blocks to remove wires from invariants
