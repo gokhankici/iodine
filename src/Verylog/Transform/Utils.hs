@@ -94,7 +94,7 @@ getConstantName e =
 dbg       :: String -> a -> a
 dbg str a = if verbose then trace str a else a
   where
-    verbose = True
+    verbose = False
 
 twoPairs :: [a] -> [(a,a)]
 twoPairs []     = []
