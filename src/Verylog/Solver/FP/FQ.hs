@@ -52,22 +52,22 @@ toFqFormat fpst =
           ] 
           (FQT.PIff (eVar "x") (eVar "y"))
           (dummyPos "")
-        , mkQual
-          (symbol "Eq3")
-          [ QP (symbol "v") PatNone FInt
-          , QP (symbol "x") (PatPrefix (symbol "VLT") 1) (FTC boolFTyCon)
-          , QP (symbol "y") (PatPrefix (symbol "VRT") 2) (FTC boolFTyCon)
-          ] 
-          (FQT.PImp (eVar "x") (eVar "y"))
-          (dummyPos "")
-        , mkQual
-          (symbol "Eq4")
-          [ QP (symbol "v") PatNone FInt
-          , QP (symbol "x") (PatPrefix (symbol "VLT") 1) (FTC boolFTyCon)
-          , QP (symbol "y") (PatPrefix (symbol "VRT") 2) (FTC boolFTyCon)
-          ] 
-          (FQT.PImp (eVar "y") (eVar "x"))
-          (dummyPos "")
+        -- , mkQual
+        --   (symbol "Eq3")
+        --   [ QP (symbol "v") PatNone FInt
+        --   , QP (symbol "x") (PatPrefix (symbol "VLT") 1) (FTC boolFTyCon)
+        --   , QP (symbol "y") (PatPrefix (symbol "VRT") 2) (FTC boolFTyCon)
+        --   ] 
+        --   (FQT.PImp (eVar "x") (eVar "y"))
+        --   (dummyPos "")
+        -- , mkQual
+        --   (symbol "Eq4")
+        --   [ QP (symbol "v") PatNone FInt
+        --   , QP (symbol "x") (PatPrefix (symbol "VLT") 1) (FTC boolFTyCon)
+        --   , QP (symbol "y") (PatPrefix (symbol "VRT") 2) (FTC boolFTyCon)
+        --   ] 
+        --   (FQT.PImp (eVar "y") (eVar "x"))
+        --   (dummyPos "")
         ]
         ++
         [ mkQual

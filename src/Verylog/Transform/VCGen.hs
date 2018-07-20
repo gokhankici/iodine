@@ -114,6 +114,7 @@ next_step_inv a = Horn { hBody = body
 wireInputSources :: AlwaysBlock -> Expr
 wireInputSources a = Ands $ h <$> twoPairs (filter f srcs)
   where
+    -- this should be ok since when there's a wire, we pull its definition
     f s        = (Wire s) `elem` prts && notInLhs s
     am         = assignmentMap a
     srcs       = a ^. aSt ^. sources
