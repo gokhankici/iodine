@@ -27,6 +27,7 @@ zparseopts -D -E -- \
            M:=TOPLEVEL_MODULE \
            -emacs=EMACS \
            -abduction=ABDUCTION \
+		   -graphs=GRAPHS \
            h=HELP -help=HELP
 
 if [[ $# -eq 0 || -n "$HELP" ]]; then
@@ -109,7 +110,11 @@ CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
 QARMC_DEFAULT_OPTS=-get-model
 
 function vcgen_fp() {
-    vcgen-fp $PROFILE_ARGS $FINFO $JUST_VCGEN $MINIMIZE $NO_SAVE $ABDUCTION $@
+	if [[ -n "$GRAPHS" ]]; then
+		verylog-graphs $PROFILE_ARGS $FINFO $JUST_VCGEN $MINIMIZE $NO_SAVE $ABDUCTION $@
+	else
+		vcgen-fp $PROFILE_ARGS $FINFO $JUST_VCGEN $MINIMIZE $NO_SAVE $ABDUCTION $@
+	fi
 }
 
 # }}}

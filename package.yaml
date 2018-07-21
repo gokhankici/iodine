@@ -52,11 +52,23 @@ library:
   - Verylog.Solver.Common
   - Verylog.Solver.FP.Types
   - Verylog.Solver.FP.FQ
+  - Verylog.Transform.DFG
 
 executables:
   vcgen-fp:
     main:                Main.hs
     source-dirs:         app-fp
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -Wall 
+    - -O2
+    dependencies:
+    - verylog-hs
+  verylog-graphs:
+    main:                Main.hs
+    source-dirs:         app-graphs
     ghc-options:
     - -threaded
     - -rtsopts

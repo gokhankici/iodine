@@ -4,6 +4,7 @@
 
 module Verylog.Transform.DFG ( wireTaints
                              , assignmentMap
+                             , stmt2Assignments
                              ) where
 
 import           Control.Lens            hiding (mapping)
