@@ -34,6 +34,7 @@ flatten = flattenToAlways >>> removeWires
 -----------------------------------------------------------------------------------
 
 type HS = State Int
+type S  = HS.HashSet Id
 
 flattenToAlways :: St -> [AlwaysBlock]
 flattenToAlways st = evalState (m_flattenToAlways st []) 0
@@ -109,26 +110,23 @@ removeWires as = dbg
     mkNewAB :: Int -> G -> AlwaysBlock
     mkNewAB id' gr =
       let is     = topsort $ checkCycles as gr
-          blocks = (\i -> IM.findWithDefault (error "") i abMap) <$> is
+          blocks = eventCheck $ (\i -> IM.findWithDefault (error "") i abMap) <$> is
           evnt   = getEvent blocks
           stmt   = Block [ a ^. aStmt | a <- blocks ]
           st'    = foldl' (\s a -> s <> (a ^. aSt)) ((head blocks) ^. aSt) (tail blocks)
           loc    = (last blocks) ^. aLoc
-          ab     = AB { _aEvent = evnt
-                      , _aStmt  = stmt
-                      , _aId    = id'
-                      , _aSt    = st'
-                      , _aLoc   = loc
+          ab     = AB { _aEvent   = evnt
+                      , _aStmt    = stmt
+                      , _aId      = id'
+                      , _aSt      = st'
+                      , _aLoc     = loc
                       }
       in dbg (printf "combined %s into %d" (show $ fst <$> labNodes gr) id') ab
 
     getEvent :: [AlwaysBlock] -> Event
-    getEvent []      = Star
-    getEvent (a:as') = case a ^. aEvent of
-                         PosEdge c -> PosEdge c
-                         NegEdge c -> NegEdge c
-                         Star      -> getEvent as'
+    getEvent xs = (last xs) ^. aEvent
 
+    -- make global assignment graph from edge map
     globalG :: G
     globalG = let _g = makeGraph es
               in  dbg (myPrintG _g) _g
@@ -136,10 +134,19 @@ removeWires as = dbg
     es                :: EdgeMap
     dupWriteMap       :: WireMap
     (es, dupWriteMap) = wireUseEdges as
+
+    eventCheck :: [AlwaysBlock] -> [AlwaysBlock]
+    eventCheck xs = if   all (\a -> a^.aEvent == Star) (init xs)
+                    then xs
+                    else error $
+                         "all blocks except the last one should be always@(*)\n" ++
+                         show xs
       
+    -- block # -> block
     abMap :: IM.IntMap AlwaysBlock
     abMap = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
 
+    -- max id of the always blocks
     maxId :: Int
     maxId = fst $ IM.findMax abMap
 
@@ -204,7 +211,7 @@ wireUseEdges as = (edgeMap, dupWriteMap)
     edgeMap =
       foldl' (\m a -> if   (a ^. aId) `IM.member` edges1
                       then m
-                      else if   case find varIsReg (a ^. aSt ^. ports) of
+                      else if   case find isRegister (a ^. aSt ^. ports) of
                                   Just _  -> True
                                   Nothing -> False
                            then IM.insert (a ^. aId) IS.empty m
@@ -213,10 +220,6 @@ wireUseEdges as = (edgeMap, dupWriteMap)
 
     dupWriteMap :: WireMap
     dupWriteMap = M.filter (\s -> IS.size s > 1) wireWriteMap
-
-    varIsReg :: Var -> Bool
-    varIsReg (Wire _)     = False
-    varIsReg (Register _) = True
 
     edges1 :: EdgeMap
     edges1 = M.foldlWithKey' helper IM.empty wireWriteMap
@@ -235,12 +238,28 @@ wireUseEdges as = (edgeMap, dupWriteMap)
                                      ) wi es'
                 ) es ws
 
+
+    -- -- all the registers that are ok to merge with
+    -- _okRegs = HS.unions $ (\a -> case a ^. aEvent of
+    --                               Star -> h (a^.aStmt)
+    --                               _    -> HS.empty
+    --                      ) <$> as
+
+    -- h ::  Stmt -> S
+    -- h Skip                  = HS.empty
+    -- h (BlockingAsgn{..})    = HS.singleton lhs
+    -- h (NonBlockingAsgn{..}) = HS.empty
+    -- h (IfStmt{..})          = HS.union (h thenStmt) (h elseStmt)
+    -- h (Block{..})           = HS.unions (h <$> blockStmts)
+
+    -- okRegs = _okRegs `deepseq` _okRegs
+
     wireReadMap, wireWriteMap :: WireMap
-    (wireReadMap, wireWriteMap) = foldl' insertWritesToWires (M.empty, M.empty) as
+    (wireReadMap, wireWriteMap) = foldl' insertWritesToVars (M.empty, M.empty) as
 
 
-insertWritesToWires :: (WireMap, WireMap) -> AlwaysBlock -> (WireMap, WireMap)
-insertWritesToWires (readMap, writeMap) a =
+insertWritesToVars :: (WireMap, WireMap) -> AlwaysBlock -> (WireMap, WireMap)
+insertWritesToVars (readMap, writeMap) a =
   ( updateMap readMap readSet
   , updateMap writeMap writeSet
   )
@@ -251,19 +270,18 @@ insertWritesToWires (readMap, writeMap) a =
     updateMap :: WireMap -> HS.HashSet Id -> WireMap
     updateMap m s = HS.foldl' addToSet m s
 
-    (readSet, writeSet) = wireUpdates (a ^. aStmt)
+    (readSet, writeSet) = varUpdates (a ^. aStmt)
 
     addToSet :: WireMap -> Id -> WireMap
-    addToSet m' w = let r = M.alter alterF w m'
-                    in r `seq` r
+    addToSet m' w = M.alter alterF w m'
 
     alterF (Nothing) = Just $ IS.singleton i
     alterF (Just s)  = Just $ IS.insert i s
 
     -- first element is read set, second is write set
-    wireUpdates :: Stmt -> (HS.HashSet Id, HS.HashSet Id)
-    wireUpdates (Block ss)            = let r = mconcat (wireUpdates <$> ss) in seq r r
-    wireUpdates s@(BlockingAsgn l r)    =
+    varUpdates :: Stmt -> (HS.HashSet Id, HS.HashSet Id)
+    varUpdates (Block ss)            = let r = mconcat (varUpdates <$> ss) in seq r r
+    varUpdates s@(BlockingAsgn l r)    =
       let res = (findUsedWires r, findUsedWires l)
       in if   isWire l
          then if   (a^.aEvent) == Star
@@ -272,29 +290,27 @@ insertWritesToWires (readMap, writeMap) a =
                    "assignment to wire in non-star blocking assignment" -- sanity check
                    ++ "\n" ++ show s
          else res -- error $ "blocking assignment to non-wire: " ++ l
-    wireUpdates s@(NonBlockingAsgn l r) =
+    varUpdates s@(NonBlockingAsgn l r) =
       let res = (findUsedWires r, findUsedWires l)
       in if   isWire l
          then error $
               "non-blocking assignment to a wire" -- sanity check
               ++ "\n" ++ show s
          else res
-    wireUpdates (IfStmt c th el)      = let r = (findUsedWires c, HS.empty) <> wireUpdates th <> wireUpdates el 
-                                        in seq r r
-    wireUpdates Skip                  = (HS.empty, HS.empty)
+    varUpdates (IfStmt c th el) = let r = (findUsedWires c, HS.empty) <> varUpdates th <> varUpdates el
+                                   in seq r r
+    varUpdates Skip             = (HS.empty, HS.empty)
 
-
-    isWire   :: Id -> Bool
     isWire v = (Wire v) `elem` (a ^. aSt ^. ports)
 
-    findUsedWires :: Id -> HS.HashSet Id
-    findUsedWires v = if   isWire v
-                      then HS.singleton v
-                      else case  v `M.lookup` (a ^. aSt ^. ufs) of
-                             Nothing -> HS.empty
-                             Just vs -> mconcat (findUsedWires <$> vs)
-                               
+    -- isOKReg v = HS.member v okRegs
 
+    findUsedWires :: Id -> HS.HashSet Id
+    findUsedWires v | isWire v  = HS.singleton v
+                    --- | isOKReg v = HS.singleton v
+                    | otherwise = case  v `M.lookup` (a ^. aSt ^. ufs) of
+                                    Nothing -> HS.empty
+                                    Just vs -> mconcat (findUsedWires <$> vs)
 
 myPrintG   :: G -> String
 myPrintG g = showDot $ fglToDotGeneric g show (const "") id

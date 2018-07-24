@@ -215,12 +215,12 @@ non_interference_checks as = non_int_chk as [] []
     non_int_chk :: [AlwaysBlock] -> [(RWSet,AlwaysBlock)] -> [Inv] -> [Inv]
     non_int_chk []      _checked cs = cs
     non_int_chk (a1:a1s) checked cs =
-      let f cs_prev (rw2, a2) = if   interfere rw1 rw2
+      let f (rw2, a2) cs_prev = if   interfere rw1 rw2
                                 then (non_interference_inv a1 a2)
                                      : (non_interference_inv a2 a1)
                                      : cs_prev
                                 else cs_prev
-          cs'                 = foldl' f cs checked
+          cs'                 = foldr f cs checked
           rw1                 = readWriteSet a1
       in non_int_chk a1s ((rw1, a1):checked) cs'
 

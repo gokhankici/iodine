@@ -1,4 +1,5 @@
 .stack-work/
+.stack-work-profile/
 /verylog-hs.cabal
 configuration.sh
 .*.pl
