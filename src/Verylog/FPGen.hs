@@ -1,8 +1,9 @@
-module Verylog.FPGen ( pipeline ) where
+module Verylog.FPGen ( pipeline, pipeline' ) where
 
 import Control.Arrow
 
 import Verylog.Language.Parser
+import Verylog.Language.Types
 import Verylog.Transform.Modularize
 import Verylog.Transform.SanityCheck
 import Verylog.Transform.FPVCGen
@@ -17,3 +18,9 @@ pipeline f = parse f
              >>> toFpSt
 
   
+--------------------------------------------------------------------------------
+pipeline' :: FilePath -> String -> [AlwaysBlock]
+--------------------------------------------------------------------------------
+pipeline' f = parse f
+              >>> flatten
+              >>> sanityCheck

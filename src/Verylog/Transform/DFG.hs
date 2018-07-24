@@ -46,7 +46,7 @@ worklist a assignments wl = h (wl, HS.empty, HS.empty)
                          else reglst
               rhss     = case HM.lookup p assignments of
                            Nothing -> []
-                           Just l  -> l
+                           Just l  -> HS.toList l
               wrklst'  = foldr (\rhs wl' -> if   HS.member rhs donelst
                                             then wl'
                                             else rhs:wl') wrklst_ rhss
@@ -57,22 +57,22 @@ worklist a assignments wl = h (wl, HS.empty, HS.empty)
                             _          -> s)
            HS.empty (a ^. aSt ^. ports)
 
-stmt2Assignments :: Stmt -> M -> M
+stmt2Assignments :: Stmt -> HM.HashMap Id [Id] -> M
 stmt2Assignments s unintFuncs = h [] s
   where
     h :: [Id] -> Stmt -> M
     h _ Skip                  = HM.empty
     h l (BlockingAsgn{..})    = h2 (l2ls rhs ++ l) lhs HM.empty 
     h l (NonBlockingAsgn{..}) = h2 (l2ls rhs ++ l) lhs HM.empty 
-    h l (IfStmt{..})          = HM.unionWith (++)
+    h l (IfStmt{..})          = HM.unionWith HS.union
                                 (h (l2ls ifCond ++ l) thenStmt)
                                 (h (l2ls ifCond ++ l) elseStmt)
-    h l (Block{..})           = foldr (HM.unionWith (++)) HM.empty (h l <$> blockStmts)
+    h l (Block{..})           = foldr (HM.unionWith HS.union) HM.empty (h l <$> blockStmts)
 
     h2 :: [Id] -> Id -> M -> M
     h2 ls r m = foldr (\l m' -> HM.alter (\ml -> case ml of
-                                             Nothing -> Just [r]
-                                             Just rs -> Just (r:rs)
+                                             Nothing -> Just $ HS.singleton r
+                                             Just rs -> Just $ HS.insert r rs
                                          ) l m') m ls
 
     l2ls   :: Id -> [Id]
@@ -81,8 +81,8 @@ stmt2Assignments s unintFuncs = h [] s
                Just ls -> ls
 
 
-type M = HM.HashMap Id [Id]
 type S = HS.HashSet Id
+type M = HM.HashMap Id S
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------

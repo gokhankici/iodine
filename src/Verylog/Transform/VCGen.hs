@@ -127,10 +127,10 @@ wireInputSources a = Ands $ h <$> twoPairs (filter f srcs)
                    xr = makeVar fr x
                    yl = makeVar fl y
                    yr = makeVar fr y
-               in  Ands [ BinOp EQU xl yr
-                        , BinOp EQU xr yl
-                        , BinOp EQU xl xr
-                        , BinOp EQU yl yr
+               in  Ands [ BinOp IFF xl yr
+                        , BinOp IFF xr yl
+                        , BinOp IFF xl xr
+                        , BinOp IFF yl yr
                         ]
 
 
