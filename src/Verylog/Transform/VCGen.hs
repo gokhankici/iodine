@@ -29,9 +29,9 @@ defaultPropertyOptions = PropertyOptions { checkTagEq = True
                                          }
 
 --------------------------------------------------------------------------------
-invs :: [AlwaysBlock] -> [Inv]
+invs :: [Id] -> [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
-invs as =
+invs srcs as =
   concatMap modular_inv as
   ++ non_interference_checks as
   ++ concatMap (provedProperty defaultPropertyOptions) as

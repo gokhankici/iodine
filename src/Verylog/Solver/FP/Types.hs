@@ -8,6 +8,7 @@ module Verylog.Solver.FP.Types
   , UFConst(..)
   , BindMap
   , UFMap
+  , FPQualifier(..)
 
   , FPSt(..)
   , fpConstraints
@@ -30,6 +31,9 @@ import           Verylog.Language.Types hiding (St, ufs)
 import           Verylog.Solver.Common
 import           GHC.Generics hiding (to)
 import           Control.DeepSeq
+
+data FPQualifier = QualifImpl Id [Id]
+                 deriving (Generic, Show)
 
 data FQBind = FQBind { bindId   :: ! Int
                      , bindName :: ! Id
@@ -54,6 +58,7 @@ data FPSt = FPSt { _fpConstraints :: ! [Inv]
                  , _fpABs         :: ! [AlwaysBlock]
                  , _fpBinds       :: ! BindMap
                  , _fpUFs         :: ! UFMap
+                 , _fpQualifiers  :: ! [FPQualifier]
                  }
             deriving (Generic)
 
@@ -64,6 +69,7 @@ instance Show FPSt where
 
 instance NFData FQBind
 instance NFData FPSt
+instance NFData FPQualifier
 
 idFromExp :: Expr -> Id
 idFromExp (Var v) = v

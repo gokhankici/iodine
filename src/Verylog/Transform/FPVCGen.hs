@@ -15,14 +15,16 @@ import           Verylog.Transform.Utils
 import           Verylog.Transform.VCGen
 -- import Debug.Trace
 
-toFpSt    :: [AlwaysBlock] -> FPSt
-toFpSt as = FPSt { _fpConstraints = cs
-                 , _fpABs         = as
-                 , _fpBinds       = bs -- trace (show $ M.keys bs) bs
-                 , _fpUFs         = M.unions $ (view (aSt . ufs)) <$> as
-                 }
+toFpSt    :: ([AlwaysBlock], ([Id],[FPQualifier])) -> FPSt
+toFpSt (as, (srcs,qs)) =
+  FPSt { _fpConstraints = cs
+       , _fpABs         = as
+       , _fpBinds       = bs -- trace (show $ M.keys bs) bs
+       , _fpUFs         = M.unions $ (view (aSt . ufs)) <$> as
+       , _fpQualifiers  = qs
+       }
   where
-    cs   = invs as
+    cs   = invs srcs as
     bs   = getBinds as cs
 
 

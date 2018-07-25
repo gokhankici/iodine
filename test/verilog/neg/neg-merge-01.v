@@ -10,27 +10,20 @@ module test(clk, opa, opb, fast, out);
 
    reg x, y;
 
-   assign w1a = opa[31];
-   assign w1b = opb[31];
-
-   assign w2a = opa[30];
-   assign w2b = opb[30];
+   assign wa = opa[31];
+   assign wb = opb[31];
    
    always @(*) begin
-      if(fast)
-        x = w1a + w1b;
-      else
-        x = w1a;
-   end
-
-   always @(posedge clk) begin
-      if(w2a | w2b)
-        y <= 0;
-      else
-        y <= x;
+      x = wa + wb;
    end
 
    always @(posedge clk)
-     out <= y;
+     if (fast) begin
+       y   <= x;
+       out <= y;
+     end 
+     else
+       out <= x;
+       
 
 endmodule

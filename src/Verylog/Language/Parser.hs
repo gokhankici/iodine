@@ -28,7 +28,7 @@ import           Text.Printf
 
 import           Verylog.Language.Types
 import           Verylog.Language.Utils
-
+import           Verylog.Solver.FP.Types
 -----------------------------------------------------------------------------------
 -- | Verylog IR
 -----------------------------------------------------------------------------------
@@ -83,6 +83,9 @@ data ParseIR = TopModule    { mPortNames :: [ParsePort]       -- port list (i.e.
                             }
              | PSanitizeGlob String
              | PTaintEq      String
+             | PQualifier    { invLhs :: String
+                             , invRhs :: [String]
+                             }
              deriving (Show)
 
 data ParseStmt = PBlock           [ParseStmt]
@@ -229,6 +232,7 @@ collectTaint (PSanitizeMod{..}) = parseModSanitize %= mapOfSetInsert sModuleName
 collectTaint (PTaintEqMod{..})  = parseModTaintEq  %= mapOfSetInsert sModuleName sVarName
 collectTaint (TopModule{..})    = do sanitizeWires      mPorts
                                      sanitizeSubmodules mGates
+collectTaint (PQualifier{..})   = return ()
 
 -- wires are not sanitized automatically
 sanitizeWires       :: [ParseVar] -> State ParseSt ()
@@ -329,16 +333,21 @@ makeStmt  PSkip                 = Skip
 -- --------------------------------------------------------------------------------
         
 type Parser = Parsec SourcePos String
+type ExtraStuff = ([Id], [FPQualifier])
 
 -- --------------------------------------------------------------------------------
-parseWithoutConversion :: FilePath -> String -> [ParseIR]
+parseWithoutConversion :: FilePath -> String -> ([ParseIR], ExtraStuff)
 -- --------------------------------------------------------------------------------
-parseWithoutConversion f = parseWith parseIR f
+parseWithoutConversion fp s = foldr f ([],([],[])) (parseWith parseIR fp s)
+  where
+    f (PQualifier{..}) = second $ second ((:) (QualifImpl invLhs invRhs))
+    f p@(PSource src)  = first ((:) p) >>> second (first ((:) src))
+    f p                = first ((:) p)
 
 -- --------------------------------------------------------------------------------
-parse :: FilePath -> String -> St
+parse :: FilePath -> String -> (St, ExtraStuff)
 -- --------------------------------------------------------------------------------
-parse f = parseWithoutConversion f >>> makeState
+parse f = parseWithoutConversion f >>> first makeState
 
 parseWith  :: Parser a -> FilePath -> String -> a
 parseWith p f s = case runParser (whole p) f s of
@@ -404,6 +413,9 @@ parseTaint = spaceConsumer
                   <|> rWord "sanitize_glob" *> parens (PSanitizeGlob <$> identifier)
                   <|> rWord "not_sanitize"  *> parens (PNotSanitize <$> identifier <*> optionMaybe (comma *> identifier))
                   <|> rWord "sanitize"      *> parens (PSanitize <$> parseMany1 identifier comma)
+                  <|> rWord "qualifier"     *> parens (PQualifier <$>
+                                                       identifier <*>
+                                                       (comma *> list identifier))
                 )
              <* char '.' <* spaceConsumer
 

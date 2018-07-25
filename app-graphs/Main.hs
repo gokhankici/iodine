@@ -51,7 +51,7 @@ main1 args = do
       _fout = optOutputFile args
 
   fstr <- readFile fin
-  let st = parse fin fstr
+  let st = fst $ parse fin fstr
 
   let stmts = foldr (\ir ss -> case ir of
                               Always{..} -> alwaysStmt : ss
