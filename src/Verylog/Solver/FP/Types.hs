@@ -15,6 +15,7 @@ module Verylog.Solver.FP.Types
   , fpABs
   , fpBinds
   , fpUFs
+  , fpQualifiers
 
   , idFromExp
   -- , argVars

@@ -8,27 +8,11 @@ qualif Custom1_11(v  : int,
                   opa as VLT_opa : bool, 
                   opb as VLT_opb : bool): 
   ((x => || [opa; opb]))
-qualif Custom1_21(v  : int, 
-                  x   as VLT_x : bool, 
-                  opa as VLT_opa : bool): 
-  ((opa => x))
-qualif Custom1_31(v  : int, 
-                  x   as VLT_x : bool, 
-                  opb as VLT_opb : bool): 
-  ((opb => x))
 qualif Custom1_12(v  : int, 
                   x   as VRT_x : bool, 
                   opa as VRT_opa : bool, 
                   opb as VRT_opb : bool): 
   ((x => || [opa; opb]))
-qualif Custom1_22(v  : int, 
-                  x   as VRT_x : bool, 
-                  opa as VRT_opa : bool): 
-  ((opa => x))
-qualif Custom1_32(v  : int, 
-                  x   as VRT_x : bool, 
-                  opb as VRT_opb : bool): 
-  ((opb => x))
 
 
 

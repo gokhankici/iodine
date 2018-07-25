@@ -65,11 +65,10 @@ toFqFormat fpst =
             zip [1..]
             [ "VLT_"  , "VRT_" ]
         ]
-        -- ++
-        -- concat [ custom (1::Int) ["opa"]
-        --        , custom (2::Int) ["opb"]
-        --        , custom (3::Int) ["opa", "opb"]
-        --        ]
+        ++
+        concat [ custom n l rs
+               | (n, QualifImpl l rs) <- zip ([1..] :: [Int]) (fpst ^. fpQualifiers)
+               ]
       bindMds     = M.empty
       highOrBinds = False
       highOrQuals = False
@@ -77,20 +76,20 @@ toFqFormat fpst =
       axiomEnv    = AEnv [] [] M.empty
       dataDecls   = []
 
-      -- custom i rs =
-      --   [ mkQual
-      --     (symbol $ "Custom" ++ show i ++ "_" ++ prefix)
-      --     ( [ QP (symbol "v") PatNone FInt
-      --       , QP (symbol "x") (PatPrefix (symbol prefix) 1)(FTC boolFTyCon)
-      --       ] ++
-      --       [ QP (symbol r) (PatPrefix (symbol $ prefix ++ "_" ++ r) 1)(FTC boolFTyCon)
-      --       | r <- rs
-      --       ]
-      --     )
-      --     (FQT.PImp (eVar "x") $ FQT.POr [eVar v | v <- rs])
-      --     (dummyPos "")
-      --   | prefix <- ["VLT", "VRT"]
-      --   ]
+      custom n l rs = 
+        [ mkQual
+          (symbol $ "Custom" ++ show n ++ "_" ++ show n2)
+          ( [ QP (symbol "v") PatNone FInt
+            , QP (symbol  l ) (PatExact (symbol $ prefix ++ "_" ++ l)) (FTC boolFTyCon)
+            ] ++
+            [ QP (symbol r) (PatExact (symbol $ prefix ++ "_" ++ r)) (FTC boolFTyCon)
+            | r <- rs
+            ]
+          )
+          (FQT.PImp (eVar "x") $ FQT.POr [eVar v | v <- rs])
+          (dummyPos "")
+        | (n2, prefix) <- zip ([1..] :: [Int]) ["VLT", "VRT"]
+        ]
   in  fi cns wfs binders gConsts dConsts cuts qualifiers bindMds highOrBinds highOrQuals assrts axiomEnv dataDecls 
 
 makeConstraints :: FPSt -> [SubC Metadata]

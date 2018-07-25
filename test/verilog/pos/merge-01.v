@@ -8,6 +8,8 @@ module test(clk, opa, opb, fast, out);
    // @annot{taint_sink(out)}
    output reg [31:0] out;
 
+   // @annot{qualifier(x,[opa,opb])}
+
    reg x, y;
 
    assign w1a = opa[31];
