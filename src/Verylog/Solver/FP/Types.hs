@@ -33,7 +33,9 @@ import           Verylog.Solver.Common
 import           GHC.Generics hiding (to)
 import           Control.DeepSeq
 
-data FPQualifier = QualifImpl Id [Id]
+data FPQualifier = QualifImpl { qualifLhs  :: !Id
+                              , qualifRhss :: ![Id]
+                              }
                  deriving (Generic, Show)
 
 data FQBind = FQBind { bindId   :: ! Int

@@ -111,7 +111,7 @@ makeWFConstraints :: FPSt -> [WfC Metadata]
 makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
   where
     mwf a@(AB{..}) =
-      let allAs = makeInvArgs fmt a
+      let allAs = s $ makeInvArgs fmt a ++ otherBinds
           ids   = getBindIds fpst (Var <$> allAs)
           i     = a ^. aId
       in wfC
@@ -120,6 +120,11 @@ makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
                         , FQT.PKVar (FQT.KV $ symbol (makeInvPred a)) (mkSubst [])
                         )))
          (HornId i (InvWF i))
+
+    otherBinds = makeBothTags . s $ concatMap qualifRhss (fpst ^. fpQualifiers)
+
+    s = HS.toList . HS.fromList
+
 
 makeBinders   :: M.HashMap Id FQBind -> FQT.BindEnv
 makeBinders m = bindEnvFromList l

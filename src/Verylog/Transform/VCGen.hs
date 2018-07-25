@@ -32,32 +32,35 @@ defaultPropertyOptions = PropertyOptions { checkTagEq = True
 invs :: [Id] -> [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
 invs srcs as =
-  concatMap modular_inv as
+  concatMap (modular_inv srcs) as
   ++ non_interference_checks as
   ++ concatMap (provedProperty defaultPropertyOptions) as
 
 --------------------------------------------------------------------------------
-modular_inv :: AlwaysBlock -> [Inv]  
+modular_inv :: [Id] -> AlwaysBlock -> [Inv]
 --------------------------------------------------------------------------------
-modular_inv a = [ initial_inv
-                , tag_reset_inv
-                , next_step_inv
-                ] <*> [a']
+modular_inv srcs a =
+  [ initial_inv srcs
+  , tag_reset_inv srcs
+  , next_step_inv
+  ] <*> [a']
   where
     a' = dbg (printf "\nalways block #%d:\n%s" (a^.aId) (show a)) a
     -- a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
     -- a' = trc (printf "\nalways block #%d: " (a^.aId)) (length $ makeInvArgs fmt a) a
 
 --------------------------------------------------------------------------------
-initial_inv :: AlwaysBlock -> Inv
+initial_inv :: [Id] -> AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-initial_inv a = Horn { hBody = Boolean True
-                     , hHead = Ands [ KV { kvId   = a ^. aId
-                                         , kvSubs = filterSubs a (sub1 ++ sub2)
-                                         }
-                                    ]
-                     , hId   = HornId i (InvInit i)
-                     }
+initial_inv srcs a =
+  Horn { hBody = Boolean True
+       , hHead = Ands [ KV { kvId   = a ^. aId
+                           , kvSubs = filterSubs a (sub1 ++ sub2)
+                                      ++ [ (v, Boolean False) | v <- makeBothTags srcs]
+                           }
+                      ]
+       , hId   = HornId i (InvInit i)
+       }
   where
     i    = a ^. aId
     st   = a ^. aSt
@@ -70,24 +73,19 @@ initial_inv a = Horn { hBody = Boolean True
            ]
 
 --------------------------------------------------------------------------------
-tag_reset_inv :: AlwaysBlock -> Inv
+tag_reset_inv :: [Id] -> AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-tag_reset_inv a = Horn { hBody =  prevKV a
-                       , hHead = KV { kvId   = i
-                                    , kvSubs = filterSubs a hsubs
-                                    }
-                       , hId   = HornId i (InvReTag i)
-                       }
+tag_reset_inv srcs a =
+  Horn { hBody =  prevKV a
+       , hHead = KV { kvId   = i
+                    , kvSubs = filterSubs a hsubs
+                               ++ [ (v, Boolean True) | v <- makeBothTags srcs]
+                    }
+       , hId   = HornId i (InvReTag i)
+       }
   where
     i      = a ^. aId
-    st     = a^.aSt
-    srcs   = st ^. sources
-    hsubs  = [ let b = if r `elem` regsToTag then True else False
-               in (t, Boolean b)
-             | r <- getRegisters a
-             , t <- [n_ltvar, n_rtvar] <*> [r]
-             ]
-    regsToTag = wireTaints a srcs
+    hsubs  = [(t, Boolean False) | t <- makeBothTags $ (getRegisters a \\ srcs)]
 
 --------------------------------------------------------------------------------
 next_step_inv :: AlwaysBlock -> Inv 

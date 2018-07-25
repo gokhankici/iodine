@@ -8,22 +8,31 @@ module test(clk, opa, opb, fast, out);
    // @annot{taint_sink(out)}
    output reg [31:0] out;
 
+   // @annot{qualifier(x,[opa,opb])}
+
    reg x, y;
 
-   assign wa = opa[31];
-   assign wb = opb[31];
+   assign w1a = opa[31];
+   assign w1b = opb[31];
+
+   assign w2a = opa[30];
+   assign w2b = opb[30];
    
    always @(*) begin
-      x = wa + wb;
+     if(fast)
+      x = w1a;
+     else
+      x = w1b;
+   end
+
+   always @(posedge clk) begin
+      if(w2a | w2b)
+        y <= 0;
+      else
+        y <= x;
    end
 
    always @(posedge clk)
-     if (fast) begin
-       y   <= x;
-       out <= y;
-     end 
-     else
-       out <= x;
-       
+     out <= y;
 
 endmodule

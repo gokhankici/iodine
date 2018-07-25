@@ -34,7 +34,6 @@ flatten = flattenToAlways >>> removeWires
 -----------------------------------------------------------------------------------
 
 type HS = State Int
-type S  = HS.HashSet Id
 
 flattenToAlways :: St -> [AlwaysBlock]
 flattenToAlways st = evalState (m_flattenToAlways st []) 0

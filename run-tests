@@ -41,6 +41,7 @@ SIMPLE_TESTS=( \
 	"01 - 08 - secverilog-01" "-M test          $THIS_DIR/test/verilog/pos/secverilog-01.v" \
 	"01 - 09 - tr-test-9"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-9.v" \
 	"01 - 10 - tr-test-10"    "-M test          $THIS_DIR/test/verilog/pos/tr-test-10.v" \
+	"01 - 11 - merge-01"      "-M test          $THIS_DIR/test/verilog/pos/merge-01.v"   \
 	)
 
 # --name mips-stub
@@ -84,6 +85,7 @@ NEG_TESTS_SIMPLE=( \
 	# "-01 - 04 - neg-test-4"    "-M test $THIS_DIR/test/verilog/neg/neg-test-4.v" \
 	"-01 - 05 - neg-test-5"    "-M test $THIS_DIR/test/verilog/neg/neg-test-5.v" \
 	"-01 - 06 - tp"            "-M test $THIS_DIR/test/verilog/neg/tp.v" \
+	"-01 - 07 - neg-merge-01"  "-M test $THIS_DIR/test/verilog/neg/neg-merge-01.v" \
 
 	"-02 - 01 - secver-neg-01" "-M test $THIS_DIR/test/verilog/neg/secverilog-neg-01.v" \
 	"-02 - 02 - secver-neg-02" "-M test $THIS_DIR/test/verilog/neg/secverilog-neg-02.v" \

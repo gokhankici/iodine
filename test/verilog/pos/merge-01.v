@@ -19,10 +19,7 @@ module test(clk, opa, opb, fast, out);
    assign w2b = opb[30];
    
    always @(*) begin
-      if(fast)
-        x = w1a + w1b;
-      else
-        x = w1a;
+     x = w1a + w1b;
    end
 
    always @(posedge clk) begin

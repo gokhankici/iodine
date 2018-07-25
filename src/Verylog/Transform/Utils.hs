@@ -75,6 +75,11 @@ makeInvTags f a = allTags f{leftVar=True} ++ allTags f{rightVar=True}
     rs         = map varName $ filter isRegister (st^.ports)
     allTags f' = makeVarName f'{taggedVar=True} <$> rs
 
+makeBothTags :: [Id] -> [Id]
+makeBothTags vs = [mk fmt{leftVar=True}, mk fmt{rightVar=True}] <*> vs
+  where
+    mk f = makeVarName f{taggedVar=True}
+
 trc         :: Show b => String -> b -> a -> a
 trc msg b a = trace (printf "%s%s" msg (show b)) a
 
