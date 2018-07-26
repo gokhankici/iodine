@@ -5,9 +5,9 @@
 module Main where
 
 import           Control.Lens
-import           Control.Monad
+-- import           Control.Monad
 import           Data.List
-import qualified Data.Set as DS
+-- import qualified Data.Set as DS
 -- import           Data.Foldable
 import           Verylog.Language.Parser (parse)
 import           Verylog.Language.Types
@@ -20,7 +20,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet        as HS
 import           Verylog.Transform.TransitionRelation
 import           Verylog.Solver.Common
-import           Text.Printf
+-- import           Text.Printf
 
 --------------------------------------------------------------------------------
 -- PARSING OPTIONS
@@ -99,22 +99,22 @@ findFirstAssignment v as = head $ filter (h . (view aStmt)) as
     h (IfStmt{..})          = h thenStmt || h elseStmt
     h (Block{..})           = any h blockStmts  
 
--- goUp :: HM.HashMap Id [Id] -> Stmt -> Acc2 -> Acc2
--- goUp _  Skip acc              = acc
--- goUp us (IfStmt{..}) acc      = foldr (goUp us) acc [thenStmt, elseStmt]
--- goUp us (Block{..})  acc      = foldr (goUp us) acc blockStmts
--- goUp us s acc@(start,v,wl,dl) = if not start && l /= v then acc else acc'
---   where
---     acc' = (True, v, wl', dl')
---     wl'  = HS.delete l wl
---     dl'  = if   HS.member l dl
---            then dl
---            else 
+findMissing :: Id -> HM.HashMap Id S -> S
+findMissing v m = h (wl_init, HS.singleton v, HS.empty)
+  where
+    Just wl_init = HM.lookup v m
 
---     l    = lhs s
---     rs   = case HM.lookup (rhs s) us of
---              Nothing -> HS.singleton (rhs s)
---              Just vs -> HS.fromList vs
+    h :: (S,S,S) -> S
+    h (wl, dl, dk) =
+      if   HS.null wl
+      then dk
+      else let (w:_)    = HS.toList wl
+               (rs,dk') = case HM.lookup w m of
+                            Nothing -> (HS.empty, HS.insert w dk)
+                            Just s  -> (s, dk)
+               wl'      = HS.delete w wl `HS.union` (HS.difference rs dl)
+               dl'      = HS.insert w dl
+           in h (wl', dl', dk')
 
 main2 :: Options -> IO ()
 main2 (Options{..}) = do
@@ -128,24 +128,35 @@ main2 (Options{..}) = do
 
       Just (Var vt1) = lookup vt upds 
 
-  printf "%s is last updated with %s" vt vt1
+  -- printf "%s is last updated with %s\n" vt vt1
 
   let es  = h e
       es' = filter (\(BinOp{..}) -> let Var l = expL in "VLT" `isPrefixOf` l) es
 
-  when ([EQU] /= (DS.toList . DS.fromList $ bOp <$> es')) $
-    error "OH NO!"
-  
-  sequence_ $ print <$> es'
-  print "done"
+  let m = foldl' (\m' (BinOp{..}) ->
+                     let Var l = expL
+                         s     = getVars expR
+                     in HM.alter (\x -> case x of
+                                          Nothing -> Just s
+                                          Just s' -> Just $ s' `HS.union` s) l m') HM.empty es'
+
+  sequence_ $ print <$> (HS.toList $ findMissing vt1 m)
 
   where
+    -- returns a list of binops
     h :: Expr -> [Expr]
     h (Ands es)     = concatMap h es
     h (Ite{..})     = concatMap h [expThen, expElse]
     h b@(BinOp{..}) = [b]
     h (UFCheck{..}) = []
     h e             = error $ "unsupported expr:" ++ show e
+
+    getVars :: Expr -> S
+    getVars (Boolean _) = HS.empty
+    getVars (Number _)  = HS.empty
+    getVars (Var v)     = HS.singleton v
+    getVars (BinOp{..}) = getVars expL `HS.union` getVars expR
+    getVars e           = error $ "getVars error: unsupported " ++ show e
 
 --------------------------------------------------------------------------------
 -- MAIN FUNCTION
