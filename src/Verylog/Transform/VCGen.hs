@@ -104,32 +104,32 @@ next_step_inv a = Horn { hBody = body
     body     = Ands [ prevKV a
                     , sanGlobs (a^.aSt^.sanitizeGlob) subs
                     , taintEqs (a^.aSt^.taintEq) subs
-                    , wireInputSources a
+                    -- , wireInputSources a
                     , nl, nr
                     ]
 
--- wire input sources
-wireInputSources :: AlwaysBlock -> Expr
-wireInputSources a = Ands $ h <$> twoPairs (filter f srcs)
-  where
-    -- this should be ok since when there's a wire, we pull its definition
-    f s        = (Wire s) `elem` prts && notInLhs s
-    am         = assignmentMap a
-    srcs       = a ^. aSt ^. sources
-    prts       = a ^. aSt ^. ports
-    notInLhs s = M.null $ M.filter (\l -> s `elem` l) am
+-- -- wire input sources
+-- wireInputSources :: AlwaysBlock -> Expr
+-- wireInputSources a = Ands $ h <$> twoPairs (filter f srcs)
+--   where
+--     -- this should be ok since when there's a wire, we pull its definition
+--     f s        = (Wire s) `elem` prts && notInLhs s
+--     am         = assignmentMap a
+--     srcs       = a ^. aSt ^. sources
+--     prts       = a ^. aSt ^. ports
+--     notInLhs s = M.null $ M.filter (\l -> s `elem` l) am
 
-    h (x,y)  = let fl = fmt{taggedVar=True, leftVar=True}
-                   fr = fmt{taggedVar=True, rightVar=True}
-                   xl = makeVar fl x
-                   xr = makeVar fr x
-                   yl = makeVar fl y
-                   yr = makeVar fr y
-               in  Ands [ BinOp IFF xl yr
-                        , BinOp IFF xr yl
-                        , BinOp IFF xl xr
-                        , BinOp IFF yl yr
-                        ]
+--     h (x,y)  = let fl = fmt{taggedVar=True, leftVar=True}
+--                    fr = fmt{taggedVar=True, rightVar=True}
+--                    xl = makeVar fl x
+--                    xr = makeVar fr x
+--                    yl = makeVar fl y
+--                    yr = makeVar fr y
+--                in  Ands [ BinOp IFF xl yr
+--                         , BinOp IFF xr yl
+--                         , BinOp IFF xl xr
+--                         , BinOp IFF yl yr
+--                         ]
 
 
 type Subs = [(Id,Expr)]
@@ -292,7 +292,7 @@ non_interference_inv a1 a2 = Horn { hBody = body
                   , prevKV a2
                   , sanGlobs (merge (aSt.sanitizeGlob)) (updates1++updates2)
                   , taintEqs (merge (aSt.taintEq)) (updates1++updates2)
-                  , wireInputSources a1
+                  -- , wireInputSources a1
                   , nl1
                   , nr1
                   ]
