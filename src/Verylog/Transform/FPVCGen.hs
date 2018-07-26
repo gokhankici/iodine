@@ -5,6 +5,7 @@ module Verylog.Transform.FPVCGen ( toFpSt
 
 import           Control.Monad.State.Lazy
 import           Control.Lens
+import           Data.List
 import qualified Data.HashMap.Strict      as M
 import qualified Language.Fixpoint.Types  as FQ
 
@@ -19,13 +20,24 @@ toFpSt    :: ([AlwaysBlock], ([Id],[FPQualifier])) -> FPSt
 toFpSt (as, (srcs,qs)) =
   FPSt { _fpConstraints = cs
        , _fpABs         = as
-       , _fpBinds       = bs -- trace (show $ M.keys bs) bs
+       , _fpBinds       = bs'
        , _fpUFs         = M.unions $ (view (aSt . ufs)) <$> as
        , _fpQualifiers  = qs
        }
   where
     cs   = invs srcs as
     bs   = getBinds as cs
+    ni   = M.size bs + 1
+    ts   = makeBothTags $ concatMap (\(QualifImpl l rs) -> l:rs) qs
+    bs'  = foldl' (\m (n,name) -> h m n name) bs (zip [ni..] ts)
+    h m i name =
+      M.alter (f FQBind { bindId   = i
+                        , bindName = name
+                        , bindType = FQ.FTC FQ.boolFTyCon
+                        , bindRef  = FQ.PTrue
+                        }) name m
+    f v Nothing  = Just v
+    f _ (Just v) = Just v
 
 
 type S = State (Int, BindMap)

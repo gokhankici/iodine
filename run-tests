@@ -165,16 +165,27 @@ run_verylog() {
 		local ts
 		ts=$(date +'%s%N')
 	fi
+
+	if [[ -z "$NO_OUT" ]]; then
+		echo ${(@s/ /)cmd} $@
+	fi
+
+	local last_err
 	if [[ -z "$NO_OUT" ]]; then
 		${(@s/ /)cmd} $@
+		last_err=$?
 	else
 		${(@s/ /)cmd} $@ >/dev/null
+		last_err=$?
 	fi
+
 	if [[ -n "$TIME" ]]; then
 		local tt
 		tt=$((($(date +'%s%N') - $ts)/1000000))
 		echo "Time taken: $tt milliseconds"
 	fi
+
+	return $last_err
 }
 
 

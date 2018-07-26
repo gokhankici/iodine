@@ -13,7 +13,6 @@ import qualified Data.HashMap.Strict      as M
 
 import           Verylog.Transform.TransitionRelation
 import           Verylog.Transform.Utils as U
-import           Verylog.Transform.DFG
 import           Verylog.Language.Types
 
 import           Verylog.Solver.Common

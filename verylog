@@ -67,17 +67,14 @@ parser options:
     [[ -n "$HELP" ]] && exit 0 || exit 1
 fi
 
-FILENAME="${@[-1]}"
-shift -p 1
+FILENAME="${@[1]}"
+shift 1
 
 if [[ ! -f $FILENAME ]]; then
     echo "'$FILENAME' is not a regular file" 1>&2
     exit 1
 elif  [[ "${FILENAME:t:e}" != "v" ]]; then
     echo "'$FILENAME' does not have the verilog extension (.v)" 1>&2
-    exit 1
-elif [[ $# -ne 0 ]]; then
-    echo "unrecognized arguments: $@" 1>&2
     exit 1
 fi
 
@@ -112,7 +109,7 @@ QARMC_DEFAULT_OPTS=-get-model
 function vcgen_fp() {
 	if [[ -n "$GRAPHS" ]]; then
 		verylog-graphs $PROFILE_ARGS $FINFO $JUST_VCGEN $MINIMIZE $NO_SAVE $ABDUCTION $@
-                exit $?
+		exit $?
 	else
 		vcgen-fp $PROFILE_ARGS $FINFO $JUST_VCGEN $MINIMIZE $NO_SAVE $ABDUCTION $@
 	fi
@@ -186,7 +183,7 @@ fi
 
 # Stage 2 : IR -> Verification Conditions {{{
 
-$APP $IR_FILE $VCGEN_FILE
+$APP $IR_FILE $VCGEN_FILE $@
 last_err=$?
 echo "\n"
 
