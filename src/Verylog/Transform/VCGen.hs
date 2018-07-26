@@ -204,41 +204,52 @@ non_interference_checks :: [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
 non_interference_checks as = non_int_chk as [] []
   where
-    interfere :: RWSet -> RWSet -> Bool
-    interfere (r1,w1) (r2,w2) = notDistinct r1 w2 || notDistinct r2 w1 || notDistinct w1 w2
-
     notDistinct :: S.HashSet Id -> S.HashSet Id -> Bool
     notDistinct s1 s2 = not . null $ S.intersection s1 s2  
 
     non_int_chk :: [AlwaysBlock] -> [(RWSet,AlwaysBlock)] -> [Inv] -> [Inv]
     non_int_chk []      _checked cs = cs
     non_int_chk (a1:a1s) checked cs =
-      let f (rw2, a2) cs_prev = if   interfere rw1 rw2
-                                then (non_interference_inv a1 a2)
-                                     : (non_interference_inv a2 a1)
-                                     : cs_prev
-                                else cs_prev
-          cs'                 = foldr f cs checked
-          rw1                 = readWriteSet a1
+      let f cs_prev ((r2,w2), a2) =
+            if   notDistinct w1 w2
+            then (non_interference_inv a1 a2) : (non_interference_inv a2 a1) : cs_prev
+            else let t12 = if   notDistinct w1 r2
+                           then (non_interference_inv a1 a2) : cs_prev
+                           else cs_prev
+                 in  if   notDistinct w2 r1
+                     then (non_interference_inv a2 a1) : t12
+                     else t12
+          cs'                 = foldl' f cs checked
+          rw1@(r1,w1)         = readWriteSet a1
       in non_int_chk a1s ((rw1, a1):checked) cs'
 
 type RWSet = (S.HashSet Id, S.HashSet Id)
 
 readWriteSet :: AlwaysBlock -> RWSet
-readWriteSet a = evalState (comp (a^.aStmt) >> get) (S.empty, S.empty)
+readWriteSet a = let (r,w) = evalState (comp (a^.aStmt) >> get) ([], [])
+                     r'    = readVars r
+                     w'    = writeVars w
+                 in (r' `S.intersection` regs, w' `S.intersection` regs)
   where
     us = a^.aSt^.ufs
 
-    readVars  v = S.fromList . filterRegs a $ M.lookupDefault [v] v us
-    writeVars v = S.fromList . filterRegs a $ if M.member v us then [] else [v]
+    regs = S.fromList $ getRegisters a
+
+    -- readVars  v = S.fromList . filterRegs a $ M.lookupDefault [v] v us
+    -- writeVars v = S.fromList . filterRegs a $ if M.member v us then [] else [v]
+
+    readVars l = foldl' (\s v -> case M.lookup v us of
+                                   Nothing -> S.insert v s
+                                   Just vs -> foldl' (flip S.insert) s vs) S.empty l
+    writeVars = S.fromList
     
-    comp :: Stmt -> State RWSet ()
+    comp :: Stmt -> State ([Id],[Id]) ()
     comp (Block ss)            = sequence_ (comp <$> ss)
-    comp (BlockingAsgn{..})    = do _1 %= S.union (readVars rhs)
-                                    _2 %= S.union (writeVars lhs)
-    comp (NonBlockingAsgn{..}) = do _1 %= S.union (readVars rhs)
-                                    _2 %= S.union (writeVars lhs)
-    comp (IfStmt{..})          = do _1 %= S.union (readVars ifCond)
+    comp (BlockingAsgn{..})    = do _1 %= (:) rhs
+                                    _2 %= (:) lhs
+    comp (NonBlockingAsgn{..}) = do _1 %= (:) rhs
+                                    _2 %= (:) lhs
+    comp (IfStmt{..})          = do _1 %= (:) ifCond
                                     comp thenStmt
                                     comp elseStmt
     comp Skip                  = return ()

@@ -86,7 +86,7 @@ toFqFormat fpst =
             | r <- rs
             ]
           )
-          (FQT.PImp (eVar "x") $ FQT.POr [eVar v | v <- rs])
+          (FQT.PImp (eVar l) $ FQT.POr [eVar v | v <- rs])
           (dummyPos "")
         | (n2, prefix) <- zip ([1..] :: [Int]) ["VLT", "VRT"]
         ]
