@@ -32,17 +32,17 @@ invs :: [Id] -> [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
 invs srcs as =
   concatMap (modular_inv srcs) as
-  ++ non_interference_checks as
+  ++ non_interference_checks srcs as
   ++ concatMap (provedProperty defaultPropertyOptions) as
 
 --------------------------------------------------------------------------------
 modular_inv :: [Id] -> AlwaysBlock -> [Inv]
 --------------------------------------------------------------------------------
 modular_inv srcs a =
-  [ initial_inv srcs
-  , tag_reset_inv srcs
+  [ initial_inv
+  , tag_reset_inv
   , next_step_inv
-  ] <*> [a']
+  ] <*> [srcs] <*> [a']
   where
     a' = dbg (printf "\nalways block #%d:\n%s" (a^.aId) (show a)) a
     -- a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
@@ -87,14 +87,15 @@ tag_reset_inv srcs a =
     hsubs  = [(t, Boolean False) | t <- makeBothTags $ (getRegisters a \\ srcs)]
 
 --------------------------------------------------------------------------------
-next_step_inv :: AlwaysBlock -> Inv 
+next_step_inv :: [Id] -> AlwaysBlock -> Inv 
 --------------------------------------------------------------------------------
-next_step_inv a = Horn { hBody = body
-                       , hHead = KV { kvId   = i
-                                    , kvSubs = filterSubs a subs
-                                    }
-                       , hId   = HornId i (InvNext i)
-                       }
+next_step_inv srcs a =
+  Horn { hBody = body
+       , hHead = KV { kvId   = i
+                    , kvSubs = filterSubs a subs
+                    }
+       , hId   = HornId i (InvNext i)
+       }
   where
     i        = a ^. aId
     subs     = ul ++ ur
@@ -103,32 +104,25 @@ next_step_inv a = Horn { hBody = body
     body     = Ands [ prevKV a
                     , sanGlobs (a^.aSt^.sanitizeGlob) subs
                     , taintEqs (a^.aSt^.taintEq) subs
-                    -- , wireInputSources a
+                    , sourcesAreEqual srcs
                     , nl, nr
                     ]
 
--- -- wire input sources
--- wireInputSources :: AlwaysBlock -> Expr
--- wireInputSources a = Ands $ h <$> twoPairs (filter f srcs)
---   where
---     -- this should be ok since when there's a wire, we pull its definition
---     f s        = (Wire s) `elem` prts && notInLhs s
---     am         = assignmentMap a
---     srcs       = a ^. aSt ^. sources
---     prts       = a ^. aSt ^. ports
---     notInLhs s = M.null $ M.filter (\l -> s `elem` l) am
-
---     h (x,y)  = let fl = fmt{taggedVar=True, leftVar=True}
---                    fr = fmt{taggedVar=True, rightVar=True}
---                    xl = makeVar fl x
---                    xr = makeVar fr x
---                    yl = makeVar fl y
---                    yr = makeVar fr y
---                in  Ands [ BinOp IFF xl yr
---                         , BinOp IFF xr yl
---                         , BinOp IFF xl xr
---                         , BinOp IFF yl yr
---                         ]
+-- wire input sources
+sourcesAreEqual :: [Id] -> Expr
+sourcesAreEqual srcs = Ands $ h <$> twoPairs srcs
+  where
+    h (x,y)  = let fl = fmt{taggedVar=True, leftVar=True}
+                   fr = fmt{taggedVar=True, rightVar=True}
+                   xl = makeVar fl x
+                   xr = makeVar fr x
+                   yl = makeVar fl y
+                   yr = makeVar fr y
+               in  Ands [ BinOp IFF xl yr
+                        , BinOp IFF xr yl
+                        , BinOp IFF xl xr
+                        , BinOp IFF yl yr
+                        ]
 
 
 type Subs = [(Id,Expr)]
@@ -199,9 +193,9 @@ alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
   
   
 --------------------------------------------------------------------------------
-non_interference_checks :: [AlwaysBlock] -> [Inv]
+non_interference_checks :: [Id] -> [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
-non_interference_checks as = non_int_chk as [] []
+non_interference_checks srcs as = non_int_chk as [] []
   where
     hasCommon :: S.HashSet Id -> S.HashSet Id -> Bool
     hasCommon s1 s2 = not . null $ S.intersection s1 s2  
@@ -213,12 +207,12 @@ non_interference_checks as = non_int_chk as [] []
           rw1@(r1,w1)             = readWriteSet a1
           f cs_prev ((r2,w2), a2) =
             if   hasCommon w1 w2
-            then (non_interference_inv a1 a2) : (non_interference_inv a2 a1) : cs_prev
+            then (non_interference_inv srcs a1 a2) : (non_interference_inv srcs a2 a1) : cs_prev
             else let t12 = if   hasCommon w1 r2
-                           then (non_interference_inv a1 a2) : cs_prev
+                           then (non_interference_inv srcs a1 a2) : cs_prev
                            else cs_prev
                  in  if   hasCommon w2 r1
-                     then (non_interference_inv a2 a1) : t12
+                     then (non_interference_inv srcs a2 a1) : t12
                      else t12
       in non_int_chk a1s ((rw1, a1):checked) cs'
 
@@ -254,15 +248,16 @@ readWriteSet a = let (r,w) = evalState (comp (a^.aStmt) >> get) ([], [])
     comp Skip                  = return ()
 
 --------------------------------------------------------------------------------
-non_interference_inv :: AlwaysBlock -> AlwaysBlock -> Inv
+non_interference_inv :: [Id] -> AlwaysBlock -> AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
 -- when a1 takes a step, a2 still holds
-non_interference_inv a1 a2 = Horn { hBody = body
-                                  , hHead = KV { kvId   = a2 ^. aId
-                                               , kvSubs = filterSubs a2 updates2
-                                               }
-                                  , hId   = HornId (a2 ^. aId) (InvInter (a1 ^. aId))
-                                  }
+non_interference_inv srcs a1 a2 =
+  Horn { hBody = body
+       , hHead = KV { kvId   = a2 ^. aId
+                    , kvSubs = filterSubs a2 updates2
+                    }
+       , hId   = HornId (a2 ^. aId) (InvInter (a1 ^. aId))
+       }
   where
     (nl1,ul1) = next fmt{leftVar=True}  a1
     (nr1,ur1) = next fmt{rightVar=True} a1
@@ -291,7 +286,7 @@ non_interference_inv a1 a2 = Horn { hBody = body
                   , prevKV a2
                   , sanGlobs (merge (aSt.sanitizeGlob)) (updates1++updates2)
                   , taintEqs (merge (aSt.taintEq)) (updates1++updates2)
-                  -- , wireInputSources a1
+                  , sourcesAreEqual srcs
                   , nl1
                   , nr1
                   ]

@@ -130,8 +130,13 @@ main2 (Options{..}) = do
       (e,upds) = next fmt{leftVar=True} a
 
       Just (Var vt1) = lookup vt upds 
-
-  -- printf "%s is last updated with %s\n" vt vt1
+      prts = a ^. aSt ^. ports
+      t = case find ((==) v . varName) prts of
+            Nothing           -> "???"
+            Just (Wire _)     -> "wire"
+            Just (Register _) -> "register"
+  printf "Looking at %s (%s)\n" v t
+  putStrLn "--------------------------------------------------"
 
   let es  = h e
       es' = filter (\(BinOp{..}) -> let Var l = expL in "VLT" `isPrefixOf` l) es
@@ -143,17 +148,17 @@ main2 (Options{..}) = do
                                           Nothing -> Just s
                                           Just s' -> Just $ s' `HS.union` s) l m') HM.empty es'
 
-  sequence_ $ (print' (a ^. aSt ^. ports)) <$> (sort $ HS.toList $ findMissing vt1 m)
+  sequence_ $ (print' prts) <$> zip [1..] (sort $ HS.toList $ findMissing vt1 m)
 
   where
-    print' :: [Var] -> Id -> IO ()
-    print' prts v =
+    print' :: [Var] -> (Int, Id) -> IO ()
+    print' prts (n,v) =
       let v' = drop 1 $ dropWhile (\c -> c /= '_') v
           t  = case find ((==) v' . varName) prts of
                  Nothing           -> "???"
                  Just (Wire _)     -> "wire"
                  Just (Register _) -> "register"
-      in printf "%-30s (%s)\n" v' t
+      in printf "%3d: %-30s (%s)\n" n v' t
     
     -- returns a list of binops
     h :: Expr -> [Expr]
