@@ -13,7 +13,7 @@ import Language.Fixpoint.Types (Fixpoint(..), Loc(..), showFix, dummySpan)
 import qualified Text.PrettyPrint.HughesPJ as PP
 
 data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES | IFF
-           deriving (Show, Eq, Generic)
+           deriving (Show, Eq, Generic, Ord)
 
 data InvType = InvInit   !Int
              | InvReTag  !Int
