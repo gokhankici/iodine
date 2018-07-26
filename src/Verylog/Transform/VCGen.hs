@@ -204,23 +204,23 @@ non_interference_checks :: [AlwaysBlock] -> [Inv]
 --------------------------------------------------------------------------------
 non_interference_checks as = non_int_chk as [] []
   where
-    notDistinct :: S.HashSet Id -> S.HashSet Id -> Bool
-    notDistinct s1 s2 = not . null $ S.intersection s1 s2  
+    hasCommon :: S.HashSet Id -> S.HashSet Id -> Bool
+    hasCommon s1 s2 = not . null $ S.intersection s1 s2  
 
     non_int_chk :: [AlwaysBlock] -> [(RWSet,AlwaysBlock)] -> [Inv] -> [Inv]
     non_int_chk []      _checked cs = cs
     non_int_chk (a1:a1s) checked cs =
-      let f cs_prev ((r2,w2), a2) =
-            if   notDistinct w1 w2
+      let cs'                     = foldl' f cs checked
+          rw1@(r1,w1)             = readWriteSet a1
+          f cs_prev ((r2,w2), a2) =
+            if   hasCommon w1 w2
             then (non_interference_inv a1 a2) : (non_interference_inv a2 a1) : cs_prev
-            else let t12 = if   notDistinct w1 r2
+            else let t12 = if   hasCommon w1 r2
                            then (non_interference_inv a1 a2) : cs_prev
                            else cs_prev
-                 in  if   notDistinct w2 r1
+                 in  if   hasCommon w2 r1
                      then (non_interference_inv a2 a1) : t12
                      else t12
-          cs'                 = foldl' f cs checked
-          rw1@(r1,w1)         = readWriteSet a1
       in non_int_chk a1s ((rw1, a1):checked) cs'
 
 type RWSet = (S.HashSet Id, S.HashSet Id)
