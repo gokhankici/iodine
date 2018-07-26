@@ -159,17 +159,21 @@ fi
 
 run_verylog() {
 	local cmd
+	cmd=$THIS_DIR/verylog
 
-	if [[ -z "$TIME" ]]; then
-		cmd=$THIS_DIR/verylog
-	else
-		cmd="time -p $THIS_DIR/verylog"
+	if [[ -n "$TIME" ]]; then
+		local ts
+		ts=$(date +'%s%N')
 	fi
-
 	if [[ -z "$NO_OUT" ]]; then
 		${(@s/ /)cmd} $@
 	else
 		${(@s/ /)cmd} $@ >/dev/null
+	fi
+	if [[ -n "$TIME" ]]; then
+		local tt
+		tt=$((($(date +'%s%N') - $ts)/1000000))
+		echo "Time taken: $tt milliseconds"
 	fi
 }
 
