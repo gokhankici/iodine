@@ -20,7 +20,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet        as HS
 import           Verylog.Transform.TransitionRelation
 import           Verylog.Solver.Common
--- import           Text.Printf
+import           Text.Printf
 
 --------------------------------------------------------------------------------
 -- PARSING OPTIONS
@@ -90,7 +90,10 @@ type M = HM.HashMap Id S
 type Acc2 = (Bool, Id, S, S)
 
 findFirstAssignment :: Id -> [AlwaysBlock] -> AlwaysBlock
-findFirstAssignment v as = head $ filter (h . (view aStmt)) as
+findFirstAssignment v as = case filter (h . (view aStmt)) as of
+                             []    -> error $ printf "first assignment of %s does not exist!\n" v
+                             (a:_) -> a
+                             
   where
     h :: Stmt -> Bool
     h Skip                  = False
@@ -140,9 +143,18 @@ main2 (Options{..}) = do
                                           Nothing -> Just s
                                           Just s' -> Just $ s' `HS.union` s) l m') HM.empty es'
 
-  sequence_ $ print <$> (HS.toList $ findMissing vt1 m)
+  sequence_ $ (print' (a ^. aSt ^. ports)) <$> (sort $ HS.toList $ findMissing vt1 m)
 
   where
+    print' :: [Var] -> Id -> IO ()
+    print' prts v =
+      let v' = drop 1 $ dropWhile (\c -> c /= '_') v
+          t  = case find ((==) v' . varName) prts of
+                 Nothing           -> "???"
+                 Just (Wire _)     -> "wire"
+                 Just (Register _) -> "register"
+      in printf "%-30s (%s)\n" v' t
+    
     -- returns a list of binops
     h :: Expr -> [Expr]
     h (Ands es)     = concatMap h es
