@@ -9,6 +9,7 @@ module Verylog.Solver.FP.Types
   , BindMap
   , UFMap
   , FPQualifier(..)
+  , qualifVars
 
   , FPSt(..)
   , fpConstraints
@@ -36,7 +37,14 @@ import           Control.DeepSeq
 data FPQualifier = QualifImpl { qualifLhs  :: !Id
                               , qualifRhss :: ![Id]
                               }
+                 | QualifEqs  { qualifEqs :: ![Id]
+                              }
                  deriving (Generic, Show)
+
+
+qualifVars :: FPQualifier -> [Id]
+qualifVars (QualifImpl l rs) = l:rs
+qualifVars (QualifEqs vs)    = vs
 
 data FQBind = FQBind { bindId   :: ! Int
                      , bindName :: ! Id

@@ -86,6 +86,8 @@ data ParseIR = TopModule    { mPortNames :: [ParsePort]       -- port list (i.e.
              | PQualifier    { invLhs :: String
                              , invRhs :: [String]
                              }
+             | PQualifier2   { invEqs :: [String]
+                             }
              deriving (Show)
 
 data ParseStmt = PBlock           [ParseStmt]
@@ -233,6 +235,7 @@ collectTaint (PTaintEqMod{..})  = parseModTaintEq  %= mapOfSetInsert sModuleName
 collectTaint (TopModule{..})    = do sanitizeWires      mPorts
                                      sanitizeSubmodules mGates
 collectTaint (PQualifier{..})   = return ()
+collectTaint (PQualifier2{..})   = return ()
 
 -- wires are not sanitized automatically
 sanitizeWires       :: [ParseVar] -> State ParseSt ()
@@ -340,7 +343,8 @@ parseWithoutConversion :: FilePath -> String -> ([ParseIR], ExtraStuff)
 -- --------------------------------------------------------------------------------
 parseWithoutConversion fp s = foldr f ([],([],[])) (parseWith parseIR fp s)
   where
-    f (PQualifier{..}) = second $ second ((:) (QualifImpl invLhs invRhs))
+    f (PQualifier{..})  = second $ second ((:) (QualifImpl invLhs invRhs))
+    f (PQualifier2{..}) = second $ second ((:) (QualifEqs invEqs))
     f p@(PSource src)  = first ((:) p) >>> second (first ((:) src))
     f p                = first ((:) p)
 
@@ -413,9 +417,8 @@ parseTaint = spaceConsumer
                   <|> rWord "sanitize_glob" *> parens (PSanitizeGlob <$> identifier)
                   <|> rWord "not_sanitize"  *> parens (PNotSanitize <$> identifier <*> optionMaybe (comma *> identifier))
                   <|> rWord "sanitize"      *> parens (PSanitize <$> parseMany1 identifier comma)
-                  <|> rWord "qualifier"     *> parens (PQualifier <$>
-                                                       identifier <*>
-                                                       (comma *> list identifier))
+                  <|> rWord "qualifier2"    *> parens (PQualifier2 <$> list identifier)
+                  <|> rWord "qualifier"     *> parens (PQualifier <$> identifier <*> (comma *> list identifier))
                 )
              <* char '.' <* spaceConsumer
 

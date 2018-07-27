@@ -66,8 +66,8 @@ toFqFormat fpst =
             [ "VLT_"  , "VRT_" ]
         ]
         ++
-        concat [ custom n l rs
-               | (n, QualifImpl l rs) <- zip ([1..] :: [Int]) (fpst ^. fpQualifiers)
+        concat [ custom n q
+               | (n, q) <- zip ([1..] :: [Int]) (fpst ^. fpQualifiers)
                ]
       bindMds     = M.empty
       highOrBinds = False
@@ -76,9 +76,12 @@ toFqFormat fpst =
       axiomEnv    = AEnv [] [] M.empty
       dataDecls   = []
 
-      custom n l rs = 
+      custom n (QualifImpl l rs) = custom1 n l rs
+      custom n (QualifEqs vs)    = custom2 n vs
+
+      custom1 n l rs = 
         [ mkQual
-          (symbol $ "Custom" ++ show n ++ "_" ++ show n2)
+          (symbol $ "Custom1_" ++ show n ++ "_" ++ show n2)
           ( [ QP (symbol "v") PatNone FInt
             , QP (symbol  l ) (PatExact (symbol $ prefix ++ "_" ++ l)) (FTC boolFTyCon)
             ] ++
@@ -89,6 +92,19 @@ toFqFormat fpst =
           (FQT.PImp (eVar l) $ FQT.POr [eVar v | v <- rs])
           (dummyPos "")
         | (n2, prefix) <- zip ([1..] :: [Int]) ["VLT", "VRT"]
+        ]
+
+      custom2 n vs =
+        [ mkQual
+          (symbol $ "Custom2_" ++ show n ++ "_" ++ show n2)
+          [ QP (symbol "v") PatNone FInt
+          , QP (symbol x1) (PatExact (symbol $ prefix ++ x1)) (FTC boolFTyCon)
+          , QP (symbol x2) (PatExact (symbol $ prefix ++ x2)) (FTC boolFTyCon)
+          ]
+          (FQT.PIff (eVar x1) (eVar x2))
+          (dummyPos "")
+        | (n2,(x1,x2)) <- zip ([1..] :: [Int]) (twoPairs vs)
+        , prefix <- ["VLT_", "VRT_"]
         ]
   in  fi cns wfs binders gConsts dConsts cuts qualifiers bindMds highOrBinds highOrQuals assrts axiomEnv dataDecls 
 
@@ -121,7 +137,7 @@ makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
                         )))
          (HornId i (InvWF i))
 
-    otherBinds = makeBothTags . s $ concatMap qualifRhss (fpst ^. fpQualifiers)
+    otherBinds = makeBothTags . s $ concatMap qualifVars (fpst ^. fpQualifiers)
 
     s = HS.toList . HS.fromList
 
