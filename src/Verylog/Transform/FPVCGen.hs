@@ -23,6 +23,7 @@ toFpSt (as, (srcs,qs)) =
        , _fpBinds       = bs'
        , _fpUFs         = M.unions $ (view (aSt . ufs)) <$> as
        , _fpQualifiers  = qs
+       , _fpSources     = srcs
        }
   where
     cs   = invs srcs as

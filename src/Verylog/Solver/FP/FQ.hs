@@ -101,10 +101,11 @@ toFqFormat fpst =
           , QP (symbol x1) (PatExact (symbol $ prefix ++ x1)) (FTC boolFTyCon)
           , QP (symbol x2) (PatExact (symbol $ prefix ++ x2)) (FTC boolFTyCon)
           ]
-          (FQT.PIff (eVar x1) (eVar x2))
+          (FQT.PImp (eVar x1) (eVar x2))
           (dummyPos "")
-        | (n2,(x1,x2)) <- zip ([1..] :: [Int]) (twoPairs vs)
-        , prefix <- ["VLT_", "VRT_"]
+        | (n2',(x1',x2')) <- zip ([1,3..] :: [Int]) (twoPairs vs)
+        , (n2, (x1,x2))   <- [(n2',(x1',x2')), (n2' + 1, (x2',x1'))]
+        , prefix          <- ["VLT_", "VRT_"]
         ]
   in  fi cns wfs binders gConsts dConsts cuts qualifiers bindMds highOrBinds highOrQuals assrts axiomEnv dataDecls 
 
@@ -137,7 +138,7 @@ makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
                         )))
          (HornId i (InvWF i))
 
-    otherBinds = makeBothTags . s $ concatMap qualifVars (fpst ^. fpQualifiers)
+    otherBinds = makeBothTags . s $ concatMap qualifVars (fpst ^. fpQualifiers) ++ (fpst ^. fpSources)
 
     s = HS.toList . HS.fromList
 

@@ -17,6 +17,7 @@ module Verylog.Solver.FP.Types
   , fpBinds
   , fpUFs
   , fpQualifiers
+  , fpSources
 
   , idFromExp
   -- , argVars
@@ -70,6 +71,7 @@ data FPSt = FPSt { _fpConstraints :: ! [Inv]
                  , _fpBinds       :: ! BindMap
                  , _fpUFs         :: ! UFMap
                  , _fpQualifiers  :: ! [FPQualifier]
+                 , _fpSources     :: ! [Id]
                  }
             deriving (Generic)
 
