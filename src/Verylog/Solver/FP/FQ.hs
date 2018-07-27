@@ -14,7 +14,6 @@ import           Control.Exception
 import           Control.Lens
 import           Control.Monad.Reader
 import qualified Data.List                  as L
-import qualified Data.Set                   as S
 import qualified Data.HashSet               as HS
 import qualified Data.HashMap.Strict        as M
 import           Text.Printf
@@ -128,7 +127,7 @@ makeWFConstraints :: FPSt -> [WfC Metadata]
 makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
   where
     mwf a@(AB{..}) =
-      let allAs = s $ makeInvArgs fmt a ++ otherBinds
+      let allAs = HS.toList . HS.fromList $ makeInvArgs fmt a ++ extraEnv fpst
           ids   = getBindIds fpst (Var <$> allAs)
           i     = a ^. aId
       in wfC
@@ -137,10 +136,6 @@ makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
                         , FQT.PKVar (FQT.KV $ symbol (makeInvPred a)) (mkSubst [])
                         )))
          (HornId i (InvWF i))
-
-    otherBinds = makeBothTags . s $ concatMap qualifVars (fpst ^. fpQualifiers) ++ (fpst ^. fpSources)
-
-    s = HS.toList . HS.fromList
 
 
 makeBinders   :: M.HashMap Id FQBind -> FQT.BindEnv
@@ -193,29 +188,29 @@ convertExpr e = FQT.EVar $ FQT.symbol $ getConstantName e
 getBindIds :: FPSt -> [Expr] -> [Int]
 getBindIds fpst es = runReader (mapM getBindId ids) fpst
   where
-    ids   = S.toList idSet
-    idSet = foldr (\e s -> s `S.union` getIds e ) S.empty es
+    ids   = HS.toList idSet
+    idSet = foldr (\e s -> s `HS.union` getIds e ) HS.empty es
 
     getBindId   :: Id -> Reader FPSt Int
     getBindId v = views fpBinds (bindId . (M.lookupDefault (errMsg v) v))
 
     errMsg v = throw $ PassError $ printf "cannot find %s in binders" v
 
-    helper []      = S.empty
-    helper (e:es') = L.foldl' (\s e' -> getIds e' `S.union` s) (getIds e) es'
+    helper []      = HS.fromList $ extraEnv fpst
+    helper (e:es') = L.foldl' (\s e' -> getIds e' `HS.union` s) (getIds e) es'
 
-    getIds :: Expr -> S.Set Id
-    getIds (BinOp{..})      = getIds expL `S.union` getIds expR
+    getIds :: Expr -> HS.HashSet Id
+    getIds (BinOp{..})      = getIds expL `HS.union` getIds expR
     getIds (Ands es')       = helper es'
-    getIds (Ite{..})        = getIds cnd `S.union` getIds expThen `S.union` getIds expElse
+    getIds (Ite{..})        = getIds cnd `HS.union` getIds expThen `HS.union` getIds expElse
     getIds (KV{..})         = let (vs,es') = unzip kvSubs
-                              in S.fromList vs `S.union` helper es'
-    getIds (Var v)          = S.singleton v
+                              in HS.fromList vs `HS.union` helper es'
+    getIds (Var v)          = HS.singleton v
     getIds (UFCheck{..})    = 
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs
           (n1,n2)   = ufNames & both %~ idFromExp
-      in S.fromList $ n1:n2:as1 ++ as2
-    getIds e                = S.singleton $ getConstantName e
+      in HS.fromList $ n1:n2:as1 ++ as2
+    getIds e                = HS.singleton $ getConstantName e
 
 
 getUFGlobals :: FPSt -> SEnv Sort
@@ -230,3 +225,7 @@ getUFGlobals fpst = fromListSEnv $ snd $ M.foldrWithKey mkGlobF (0, []) (fpst^.f
       in (n+1, g:l)
     
 
+extraEnv :: FPSt -> [Id]
+extraEnv fpst = makeBothTags . s $ concatMap qualifVars (fpst ^. fpQualifiers) ++ (fpst ^. fpSources)
+  where
+    s = HS.toList . HS.fromList
