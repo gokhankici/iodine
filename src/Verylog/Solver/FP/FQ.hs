@@ -77,6 +77,7 @@ toFqFormat fpst =
 
       custom n (QualifImpl l rs) = custom1 n l rs
       custom n (QualifEqs vs)    = custom2 n vs
+      custom _ (QualifAssume _)  = []
 
       custom1 n l rs = 
         [ mkQual
@@ -111,10 +112,18 @@ toFqFormat fpst =
 makeConstraints :: FPSt -> [SubC Metadata]
 makeConstraints fpst = mc <$> zip [0..] (fpst ^. fpConstraints)
   where
+    eqs = Ands [ BinOp IFF (Var x1t) (Var x2t)
+               | q       <- fpst ^. fpQualifiers
+               , (x1,x2) <- case q of
+                              QualifAssume vs -> twoPairs vs
+                              _               -> []
+               , (x1t, x2t) <- zip (makeBothTags [x1]) (makeBothTags [x2])
+               ]
     mc (n, (Horn{..})) = helper hBody hHead n hId
     env es        = insertsIBindEnv (getBindIds fpst es) emptyIBindEnv
-    helper bdy hd n hId =
-      let x = mkSubC
+    helper bdy' hd n hId =
+      let bdy = Ands [eqs, bdy']
+          x = mkSubC
               (env [bdy,hd])
               (RR FInt (Reft (symbol "v", convertExpr bdy)))
               (RR FInt (Reft (symbol "v", convertExpr hd)))
@@ -184,6 +193,9 @@ convertExpr (UFCheck{..}) =
            , FQT.PAtom Eq (mkVar r) rSel
            ]
 convertExpr e = FQT.EVar $ FQT.symbol $ getConstantName e
+
+allBindIds :: FPSt -> [Int]
+allBindIds fpst = bindId <$> M.elems (fpst ^. fpBinds)
 
 getBindIds :: FPSt -> [Expr] -> [Int]
 getBindIds fpst es = runReader (mapM getBindId ids) fpst

@@ -25,6 +25,7 @@ import Control.Exception
 
 import Text.Printf
 import Data.Graph.Inductive.Dot
+import Debug.Trace
 
 flatten :: St -> [AlwaysBlock]
 flatten = flattenToAlways >>> removeWires
@@ -91,12 +92,14 @@ type EdgeMap = IM.IntMap IS.IntSet
 type G = Gr Int ()
 
 removeWires :: [AlwaysBlock] -> [AlwaysBlock]
-removeWires as = dbg
+removeWires as_pre = dbg
                  ( printf "individual blocks:\n%s\n\n#blocks after removing wires: %d -> %d"
                    as_str (length as) (length res)
                  )
                  res
   where
+    -- as = mergeAllNBs as_pre
+    as = as_pre
     as_str = intercalate "\n\n" (show <$> as)
     res = snd $
           foldl'
@@ -147,7 +150,44 @@ removeWires as = dbg
 
     -- max id of the always blocks
     maxId :: Int
-    maxId = fst $ IM.findMax abMap
+    maxId    = fst $ IM.findMax abMap
+
+
+-- mergeAllNBs :: [AlwaysBlock] -> [AlwaysBlock]
+-- mergeAllNBs as_pre = as_pre
+--   where
+--     maxIdPre = maximum $ (view aId) <$> as_pre
+
+--     (as_rest, as_toMerge_pos, as_toMerge_neg) = foldl' h ([],[],[]) as_pre
+--     h (r, m_pos, m_neg) a =
+--       if  allNB $ a ^. aStmt
+--       then case a ^. aEvent of
+--              Star      -> (a:r, m_pos, m_neg)
+--              PosEdge _ -> (r, a:m_pos, m_neg)
+--              NegEdge _ -> (r, m_pos, a:m_neg)
+--       else (a:r, m_pos, m_neg)
+
+--     allNB Skip                  = True
+--     allNB (NonBlockingAsgn{..}) = True
+--     allNB (BlockingAsgn{..})    = False
+--     allNB (IfStmt{..})          = allNB thenStmt && allNB elseStmt
+--     allNB (Block ss)            = all allNB ss
+
+--     as = let t1 = case {-trace (intercalate "\n" $ show <$> ((view aStmt) <$> as_toMerge_pos))-} as_toMerge_pos of
+--                     [] -> as_rest
+--                     _  -> mergeAs as_toMerge_pos (maxIdPre + 1) : as_rest
+--              t2 = case {-trc "neg:" as_toMerge_neg-} as_toMerge_neg of
+--                     [] -> t1
+--                     _  -> mergeAs as_toMerge_neg (maxIdPre + 2) : t1
+--          in t2
+  
+--     mergeAs as2 n = 
+--       AB { _aEvent = head as2 ^. aEvent
+--          , _aStmt  = Block $ (view aStmt) <$> as2
+--          , _aId    = n
+--          , _aSt    = mconcat $ (view aSt) <$> as2
+--          , _aLoc   = ("merged_module", "merged_instances")
+         -- }
 
 calcSubgraphs :: WireMap -> G -> [G]
 calcSubgraphs dupWriteMap g = concat [ pathsToLeaves (subgraph ns g) | ns <- combinedNodes ]

@@ -9,11 +9,11 @@ import           Control.Lens
 import           Data.List
 -- import qualified Data.Set as DS
 -- import           Data.Foldable
-import           Verylog.Language.Parser (parse)
+-- import           Verylog.Language.Parser (parse)
 import           Verylog.Language.Types
 import           System.Console.GetOpt
 import           System.Environment (getArgs)
-import           Verylog.Transform.DFG (stmt2Assignments)
+-- import           Verylog.Transform.DFG (stmt2Assignments)
 import           Verylog.Transform.Utils
 import           Verylog.FPGen
 import qualified Data.HashMap.Strict as HM
@@ -21,22 +21,26 @@ import qualified Data.HashSet        as HS
 import           Verylog.Transform.TransitionRelation
 import           Verylog.Solver.Common
 import           Text.Printf
+import           Verylog.Solver.FP.Types
 
 --------------------------------------------------------------------------------
 -- PARSING OPTIONS
 --------------------------------------------------------------------------------
 
-data Flag = ModuleGraph
+data Flag = Print
+          | Regs
           deriving (Show, Eq, Ord)
 
 options :: [OptDescr Flag]
 options =
-  [ Option [] ["module-graph"] (NoArg ModuleGraph) ""
+  [ Option [] ["print"] (NoArg Print) ""
+  , Option [] ["regs"]  (NoArg Regs)  ""
   ]
 
 data Options = Options { optInputFile   :: FilePath
                        , optOutputFile  :: FilePath
-                       , optModuleGraph :: Bool
+                       , optPrint       :: Bool
+                       , optRegs        :: Bool
                        , optUnknown     :: [String]
                        }
 
@@ -49,7 +53,8 @@ parseOpts = do
         let (fin : fout : unknownArgs) = rest
         in Options { optInputFile   = fin
                    , optOutputFile  = fout
-                   , optModuleGraph = ModuleGraph `elem` opts
+                   , optPrint       = Print `elem` opts
+                   , optRegs        = Regs `elem` opts
                    , optUnknown     = unknownArgs
                    }
       (_,_,errs) ->
@@ -58,7 +63,7 @@ parseOpts = do
           header = "Usage: vcgen-fp [OPTION...] files..."
 
 --------------------------------------------------------------------------------
--- ???
+-- Printing Stuff
 --------------------------------------------------------------------------------
 
 main1 :: Options -> IO ()
@@ -67,16 +72,10 @@ main1 args = do
       _fout = optOutputFile args
 
   fstr <- readFile fin
-  let st = fst $ parse fin fstr
 
-  let stmts = foldr (\ir ss -> case ir of
-                              Always{..} -> alwaysStmt : ss
-                              _          -> ss) [] (st ^. irs)
+  let fpst = pipeline fin fstr
 
-  -- rhs -> [lhs]
-  let m = stmt2Assignments (Block stmts) (st ^. ufs)
-
-  putStrLn $ show m
+  sequence_ $ print . view aStmt <$> (fpst ^. fpABs)
 
   return ()
 
@@ -181,8 +180,10 @@ main2 (Options{..}) = do
   
 main :: IO ()
 main = do
-  args <- parseOpts
-  choice args
+  parseOpts >>= choice
   where
-    choice = main2
+    choice opts@(Options{..})
+      | optPrint  = main1 opts
+      | optRegs   = main2 opts
+      | otherwise = main2 opts
     

@@ -88,6 +88,8 @@ data ParseIR = TopModule    { mPortNames :: [ParsePort]       -- port list (i.e.
                              }
              | PQualifier2   { invEqs :: [String]
                              }
+             | PQualifierA   { invAssume :: [String]
+                             }
              deriving (Show)
 
 data ParseStmt = PBlock           [ParseStmt]
@@ -235,7 +237,8 @@ collectTaint (PTaintEqMod{..})  = parseModTaintEq  %= mapOfSetInsert sModuleName
 collectTaint (TopModule{..})    = do sanitizeWires      mPorts
                                      sanitizeSubmodules mGates
 collectTaint (PQualifier{..})   = return ()
-collectTaint (PQualifier2{..})   = return ()
+collectTaint (PQualifier2{..})  = return ()
+collectTaint (PQualifierA{..})  = return ()
 
 -- wires are not sanitized automatically
 sanitizeWires       :: [ParseVar] -> State ParseSt ()
@@ -345,6 +348,7 @@ parseWithoutConversion fp s = foldr f ([],([],[])) (parseWith parseIR fp s)
   where
     f (PQualifier{..})  = second $ second ((:) (QualifImpl invLhs invRhs))
     f (PQualifier2{..}) = second $ second ((:) (QualifEqs invEqs))
+    f (PQualifierA{..}) = second $ second ((:) (QualifAssume invAssume))
     f p@(PSource src)  = first ((:) p) >>> second (first ((:) src))
     f p                = first ((:) p)
 
@@ -418,6 +422,7 @@ parseTaint = spaceConsumer
                   <|> rWord "not_sanitize"  *> parens (PNotSanitize <$> identifier <*> optionMaybe (comma *> identifier))
                   <|> rWord "sanitize"      *> parens (PSanitize <$> parseMany1 identifier comma)
                   <|> rWord "qualifier2"    *> parens (PQualifier2 <$> list identifier)
+                  <|> rWord "qualifiera"    *> parens (PQualifierA <$> list identifier)
                   <|> rWord "qualifier"     *> parens (PQualifier <$> identifier <*> (comma *> list identifier))
                 )
              <* char '.' <* spaceConsumer

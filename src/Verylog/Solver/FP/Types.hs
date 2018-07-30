@@ -40,12 +40,15 @@ data FPQualifier = QualifImpl { qualifLhs  :: !Id
                               }
                  | QualifEqs  { qualifEqs :: ![Id]
                               }
+                 | QualifAssume { qualifAssume :: ![Id]
+                                }
                  deriving (Generic, Show)
 
 
 qualifVars :: FPQualifier -> [Id]
 qualifVars (QualifImpl l rs) = l:rs
 qualifVars (QualifEqs vs)    = vs
+qualifVars (QualifAssume vs) = vs
 
 data FQBind = FQBind { bindId   :: ! Int
                      , bindName :: ! Id

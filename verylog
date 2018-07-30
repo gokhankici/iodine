@@ -199,9 +199,9 @@ if [[ -n "$VC_DEBUG" ]]; then
 fi
 
 if [[ -n "$JUST_VCGEN" ]]; then
-	if [[ -z "$NO_OUTPUT" ]]; then
-		[[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $VCGEN_FILE || cat $VCGEN_FILE
-	fi	
+    if [[ -z "$NO_OUTPUT" ]]; then
+	[[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $VCGEN_FILE || cat $VCGEN_FILE
+    fi	
     exit 0
 fi
 # }}}
