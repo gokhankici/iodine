@@ -72,8 +72,8 @@ data IR = Always     { event      :: ! Event
         deriving (Generic)
 
 data Event = Star
-           | PosEdge Id
-           | NegEdge Id
+           | PosEdge { eventVar :: Id }
+           | NegEdge { eventVar :: Id }
            | Assign
            deriving (Eq, Generic)
 

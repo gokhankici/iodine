@@ -28,7 +28,10 @@ import Data.Graph.Inductive.Dot
 -- import Debug.Trace
 
 flatten :: St -> [AlwaysBlock]
-flatten = flattenToAlways >>> mergeStars >>> mergeClocks >>> removeWires
+flatten = flattenToAlways >>>
+          mergeStars      >>>
+          mergeClocks     >>>
+          removeWires
 
 -----------------------------------------------------------------------------------
 -- | St -> [AlwaysBlock] :::: Flatten the module hierarchy
@@ -114,7 +117,7 @@ mergeStars as = stars' ++ others
 
     stars' = if   hasCycle g
              then error "stars' has a cycle"
-             else merges
+             else trc "merges:" merges merges
                   
     merges :: [AlwaysBlock]
     merges = [ let g'  = subgraph c g
@@ -175,7 +178,9 @@ mergeStars as = stars' ++ others
 -----------------------------------------------------------------------------------
 
 mergeClocks :: [AlwaysBlock] -> [AlwaysBlock]
-mergeClocks as = mergeGroup posAs ++ mergeGroup negAs ++ rest
+mergeClocks as = mergeGroup posAs 1 ++
+                 mergeGroup negAs 2 ++
+                 rest
   where
     (posAs, negAs, rest) =
       foldl' (\(ps,ns,rs) a -> case a ^. aEvent of
@@ -183,8 +188,26 @@ mergeClocks as = mergeGroup posAs ++ mergeGroup negAs ++ rest
                                  NegEdge _ -> (ps,   a:ns, rs)
                                  _         -> (ps,   ns,   a:rs)) ([],[],[]) as
 
-    mergeGroup :: [AlwaysBlock] -> [AlwaysBlock]
-    mergeGroup gs = gs
+    maxId = maximum $ (view aId) <$> as
+
+    mergeGroup gs n =
+      let (gs', rs) = partition (allNBs . view aStmt) gs
+
+          allNBs Skip                  = True
+          allNBs (BlockingAsgn{..})    = False
+          allNBs (NonBlockingAsgn{..}) = True
+          allNBs (IfStmt{..})          = all allNBs [thenStmt, elseStmt]
+          allNBs (Block{..})           = all allNBs blockStmts
+
+          a' = AB { _aEvent = head gs' ^. aEvent
+                  , _aStmt  = Block $ view aStmt <$> gs'
+                  , _aId    = n + maxId
+                  , _aSt    = mconcat $ view aSt <$> gs'
+                  , _aLoc   = ("clk join", "clk join")
+                  }
+      in case gs' of
+           [] -> gs
+           _  -> a' : rs
 
 -----------------------------------------------------------------------------------
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Merge always blocks to remove wires from invariants
