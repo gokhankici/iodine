@@ -194,8 +194,8 @@ convertExpr (UFCheck{..}) =
            ]
 convertExpr e = FQT.EVar $ FQT.symbol $ getConstantName e
 
-allBindIds :: FPSt -> [Int]
-allBindIds fpst = bindId <$> M.elems (fpst ^. fpBinds)
+-- allBindIds :: FPSt -> [Int]
+-- allBindIds fpst = bindId <$> M.elems (fpst ^. fpBinds)
 
 getBindIds :: FPSt -> [Expr] -> [Int]
 getBindIds fpst es = runReader (mapM getBindId ids) fpst

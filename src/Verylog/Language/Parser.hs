@@ -308,7 +308,7 @@ makeIntermediaryIR loc alwaysBlocks gates topSt =
   (always2IR loc <$> alwaysBlocks) ++ (gate2IR loc topSt <$> gates)
 
 gate2IR                           :: Loc -> St -> ParseGate -> IR
-gate2IR loc _ (PContAsgn l r)     = Always Star (BlockingAsgn l r) loc
+gate2IR loc _ (PContAsgn l r)     = Always Assign (BlockingAsgn l r) loc
 gate2IR _ topSt (PModuleInst{..}) = 
   ModuleInst{ modInstName = pmInstName
             , modParams   = toPort <$> pmInstPorts

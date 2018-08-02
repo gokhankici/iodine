@@ -74,6 +74,7 @@ data IR = Always     { event      :: ! Event
 data Event = Star
            | PosEdge Id
            | NegEdge Id
+           | Assign
            deriving (Eq, Generic)
 
 data Stmt = Block           { blockStmts :: ! [Stmt] }
@@ -177,6 +178,7 @@ instance PPrint Stmt where
 
 instance PPrint Event where
   toDoc Star          = text "event1(star)"
+  toDoc Assign        = text "assign"
   toDoc (PosEdge clk) = text "event2(posedge," <> text clk <> rparen
   toDoc (NegEdge clk) = text "event2(negedge," <> text clk <> rparen
 
@@ -286,3 +288,9 @@ instance FoldVariables Stmt where
 instance FoldVariables IR where
   foldVariables (Always _ s _) = foldVariables s
   foldVariables _              = throw (PassError "foldVariables called on non-always block")
+
+isClk :: Event -> Bool
+isClk Assign      = False
+isClk Star        = False
+isClk (NegEdge _) = True
+isClk (PosEdge _) = True

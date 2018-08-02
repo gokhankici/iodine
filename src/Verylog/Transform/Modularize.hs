@@ -8,7 +8,7 @@ import           Control.Arrow
 import           Control.Lens hiding (mapping)
 import           Control.Monad.State.Lazy
 import qualified Data.IntMap.Strict         as IM
-import qualified Data.HashMap.Strict        as M
+import qualified Data.HashMap.Strict        as HM
 import qualified Data.HashSet               as HS
 import qualified Data.IntSet                as IS
 import           Data.List
@@ -25,10 +25,10 @@ import Control.Exception
 
 import Text.Printf
 import Data.Graph.Inductive.Dot
-import Debug.Trace
+-- import Debug.Trace
 
 flatten :: St -> [AlwaysBlock]
-flatten = flattenToAlways >>> removeWires
+flatten = flattenToAlways >>> mergeStars >>> mergeClocks >>> removeWires
 
 -----------------------------------------------------------------------------------
 -- | St -> [AlwaysBlock] :::: Flatten the module hierarchy
@@ -56,16 +56,16 @@ m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
     filterList :: HS.HashSet Id -> [Id] -> [Id]
     filterList toKeep = filter (\x -> HS.member x toKeep)
 
-    filterMap :: HS.HashSet Id -> M.HashMap Id [Id] -> M.HashMap Id [Id]
-    filterMap toKeep = M.filterWithKey (\k _v -> HS.member k toKeep)
+    filterMap :: HS.HashSet Id -> HM.HashMap Id [Id] -> HM.HashMap Id [Id]
+    filterMap toKeep = HM.filterWithKey (\k _v -> HS.member k toKeep)
 
     filterSt :: Stmt -> St -> St
     filterSt s stt = let vars  = HS.fromList $ foldVariables s
                          st'   = over ufs      (filterMap vars)  .
                                  set irs      [] $
                                  stt
-                         vars' = vars `HS.union` (HS.fromList $ concat $ M.elems (st'^.ufs))
-                         lhss  = HS.fromList $ getLhss s
+                         vars' = vars `HS.union` (HS.fromList $ concat $ HM.elems (st'^.ufs))
+                         lhss  = getLhss s
                          st''  = over ports    (filterVars vars') .
                                  over sources  (filterList vars') .
                                  -- over sinks    (filterList vars') .
@@ -74,19 +74,123 @@ m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
                                  st'
                      in st''
 
-    
-    getLhss Skip                  = []
-    getLhss (BlockingAsgn{..})    = [lhs]
-    getLhss (NonBlockingAsgn{..}) = [lhs]
-    getLhss (IfStmt{..})          = getLhss thenStmt ++ getLhss elseStmt
-    getLhss (Block{..})           = concatMap getLhss blockStmts
+getLhss :: Stmt -> S
+getLhss s = h s
+  where
+    h Skip                  = HS.empty
+    h (BlockingAsgn{..})    = HS.singleton lhs
+    h (NonBlockingAsgn{..}) = HS.singleton lhs
+    h (IfStmt{..})          = foldMap h [thenStmt, elseStmt]
+    h (Block{..})           = foldMap h blockStmts
 
+getRhss :: HM.HashMap Id [Id] -> Stmt -> S
+getRhss us s = h s
+  where
+    h Skip                  = HS.empty
+    h (BlockingAsgn{..})    = lukap rhs
+    h (NonBlockingAsgn{..}) = lukap rhs
+    h (IfStmt{..})          = lukap ifCond <> foldMap h [thenStmt, elseStmt]
+    h (Block{..})           = foldMap h blockStmts
+
+    lukap :: Id -> S
+    lukap v = case HM.lookup v us of
+                Nothing -> HS.singleton v
+                Just vs -> HS.fromList vs
+
+
+------------------------------------------------------------------------------------
+-- | mergeStars :: [AlwaysBlock] -> [AlwaysBlock] :::: Merge always blocks with @(*)
+------------------------------------------------------------------------------------
+type S  = HS.HashSet Id
+type M  = HM.HashMap Int S
+type M2 = HM.HashMap Id IS.IntSet
+
+mergeStars :: [AlwaysBlock] -> [AlwaysBlock]
+mergeStars as = stars' ++ others
+  where
+    (stars, others) = foldl' (\(ss,os) a -> if   a ^. aEvent == Star
+                                            then (a:ss,os)
+                                            else (ss, a:os)) ([],[]) as
+
+    stars' = if   hasCycle g
+             then error "stars' has a cycle"
+             else merges
+                  
+    merges :: [AlwaysBlock]
+    merges = [ let g'  = subgraph c g
+                   ns  = topsort g'
+                   as' = (abMap IM.!) <$> ns
+               in  AB { _aEvent = Star
+                      , _aStmt  = Block $ view aStmt <$> as'
+                      , _aId    = n + maxId
+                      , _aSt    = mconcat $ view aSt <$> as'
+                      , _aLoc   = ("* join", "* join")
+                      }
+             | (n, c) <- zip [1..] (components g)
+             ]
+
+    g :: Gr () ()
+    g = mkGraph (((\n -> (n,())) . view aId) <$> stars) es
+
+    es :: [(Int, Int, ())]
+    es =
+      HM.foldlWithKey'
+      (\l n s ->
+          -- ns : all blocks that update the sensitivity list of block# n
+          let ns = IS.toList $ foldMap (\v -> HM.lookupDefault IS.empty v sensitizers) s
+          -- (n1, n2) means n1's block is before after n2 executes
+          in ((\n' -> (n',n,())) <$> ns) ++ l
+      )
+      []
+      sensitivitySets
+
+    -- block # ==> sensitivity list
+    sensitivitySets :: M
+    sensitivitySets = HM.fromList $
+                      (\a -> (a ^. aId, getRhss (a ^. aSt ^. ufs) (a ^. aStmt))) <$> stars
+
+    -- v: variable ==> {n:block k# | n updates v}
+    sensitizers :: M2
+    sensitizers =
+      let f v Nothing  = Just $ IS.singleton v
+          f v (Just s) = Just $ IS.insert v s
+      in HM.foldlWithKey'
+         (\m n s -> HS.foldl' (\m' v -> HM.alter (f n) v m') m s)
+         HM.empty
+         writeSets
+
+    -- block # ==> update list
+    writeSets :: M
+    writeSets = HM.fromList $ 
+                      (\a -> (a ^. aId, getLhss (a ^. aStmt))) <$> stars
+
+    abMap :: IM.IntMap AlwaysBlock
+    abMap = IM.fromList $ (\a -> (a^.aId, a)) <$> as
+
+    maxId :: Int
+    maxId = fst $ IM.findMax abMap
+  
+-----------------------------------------------------------------------------------
+-- | [AlwaysBlock] -> [AlwaysBlock] :::: Merge always blocks to remove wires from invariants
+-----------------------------------------------------------------------------------
+
+mergeClocks :: [AlwaysBlock] -> [AlwaysBlock]
+mergeClocks as = mergeGroup posAs ++ mergeGroup negAs ++ rest
+  where
+    (posAs, negAs, rest) =
+      foldl' (\(ps,ns,rs) a -> case a ^. aEvent of
+                                 PosEdge _ -> (a:ps, ns,   rs)
+                                 NegEdge _ -> (ps,   a:ns, rs)
+                                 _         -> (ps,   ns,   a:rs)) ([],[],[]) as
+
+    mergeGroup :: [AlwaysBlock] -> [AlwaysBlock]
+    mergeGroup gs = gs
 
 -----------------------------------------------------------------------------------
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Merge always blocks to remove wires from invariants
 -----------------------------------------------------------------------------------
 
-type WireMap = M.HashMap Id IS.IntSet
+type WireMap = HM.HashMap Id IS.IntSet
 type EdgeMap = IM.IntMap IS.IntSet
 
 type G = Gr Int ()
@@ -98,7 +202,6 @@ removeWires as_pre = dbg
                  )
                  res
   where
-    -- as = mergeAllNBs as_pre
     as = as_pre
     as_str = intercalate "\n\n" (show <$> as)
     res = snd $
@@ -138,7 +241,7 @@ removeWires as_pre = dbg
     (es, dupWriteMap) = wireUseEdges as
 
     eventCheck :: [AlwaysBlock] -> [AlwaysBlock]
-    eventCheck xs = if   all (\a -> a^.aEvent == Star) (init xs)
+    eventCheck xs = if   all (not . isClk . view aEvent) (init xs)
                     then xs
                     else error $
                          "all blocks except the last one should be always@(*)\n" ++
@@ -151,43 +254,6 @@ removeWires as_pre = dbg
     -- max id of the always blocks
     maxId :: Int
     maxId    = fst $ IM.findMax abMap
-
-
--- mergeAllNBs :: [AlwaysBlock] -> [AlwaysBlock]
--- mergeAllNBs as_pre = as_pre
---   where
---     maxIdPre = maximum $ (view aId) <$> as_pre
-
---     (as_rest, as_toMerge_pos, as_toMerge_neg) = foldl' h ([],[],[]) as_pre
---     h (r, m_pos, m_neg) a =
---       if  allNB $ a ^. aStmt
---       then case a ^. aEvent of
---              Star      -> (a:r, m_pos, m_neg)
---              PosEdge _ -> (r, a:m_pos, m_neg)
---              NegEdge _ -> (r, m_pos, a:m_neg)
---       else (a:r, m_pos, m_neg)
-
---     allNB Skip                  = True
---     allNB (NonBlockingAsgn{..}) = True
---     allNB (BlockingAsgn{..})    = False
---     allNB (IfStmt{..})          = allNB thenStmt && allNB elseStmt
---     allNB (Block ss)            = all allNB ss
-
---     as = let t1 = case {-trace (intercalate "\n" $ show <$> ((view aStmt) <$> as_toMerge_pos))-} as_toMerge_pos of
---                     [] -> as_rest
---                     _  -> mergeAs as_toMerge_pos (maxIdPre + 1) : as_rest
---              t2 = case {-trc "neg:" as_toMerge_neg-} as_toMerge_neg of
---                     [] -> t1
---                     _  -> mergeAs as_toMerge_neg (maxIdPre + 2) : t1
---          in t2
-  
---     mergeAs as2 n = 
---       AB { _aEvent = head as2 ^. aEvent
---          , _aStmt  = Block $ (view aStmt) <$> as2
---          , _aId    = n
---          , _aSt    = mconcat $ (view aSt) <$> as2
---          , _aLoc   = ("merged_module", "merged_instances")
-         -- }
 
 calcSubgraphs :: WireMap -> G -> [G]
 calcSubgraphs dupWriteMap g = concat [ pathsToLeaves (subgraph ns g) | ns <- combinedNodes ]
@@ -204,7 +270,7 @@ calcSubgraphs dupWriteMap g = concat [ pathsToLeaves (subgraph ns g) | ns <- com
 
     generateNodes :: [Node] -> [[Node]]
     generateNodes ns =
-      let allUpds  = M.foldlWithKey' (\iss w is -> if   (IS.findMin is) `elem` ns
+      let allUpds  = HM.foldlWithKey' (\iss w is -> if   (IS.findMin is) `elem` ns
                                                    then (w, IS.toList is):iss
                                                    else iss
                                      ) [] dupWriteMap
@@ -233,16 +299,23 @@ makeGraph es =
 
 checkCycles :: [AlwaysBlock] -> G -> G
 checkCycles as g =
-  if   any ((>= 2) . length) (scc g)
+  if   hasCycle g
   then throw $
-       CycleError { cycleStr      = myPrintG (nfilter (\n -> n `elem` dups) g)
-                  , cycleErrorStr = intercalate "\n\n"
-                                    (reverse $ show <$> (filter (\a -> (a ^. aId) `elem` dups) as))
+       CycleError { cycleStr      = myPrintG (nfilter (\n -> n `elem` cyc) g)
+                  , cycleErrorStr = intercalate "\n" (f <$> ns) 
                   }
   else g
   where
-    cs   = scc g
-    dups = head $ filter (\l -> length l > 1) cs -- pick the first cycle
+    f n   = let a = abmap IM.! n
+            in  show $ a^.aStmt
+    abmap = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
+    cs    = scc g
+    cyc   = head $ filter (\l -> length l > 1) cs -- pick the first cycle
+    g'    = subgraph cyc g
+    ns    = reverse $ topsort g'
+
+hasCycle :: Gr a b -> Bool
+hasCycle g = any ((>= 2) . length) (scc g)
 
 wireUseEdges :: [AlwaysBlock] -> (EdgeMap, WireMap)
 wireUseEdges as = (edgeMap, dupWriteMap)
@@ -258,14 +331,14 @@ wireUseEdges as = (edgeMap, dupWriteMap)
              ) edges1 as
 
     dupWriteMap :: WireMap
-    dupWriteMap = M.filter (\s -> IS.size s > 1) wireWriteMap
+    dupWriteMap = HM.filter (\s -> IS.size s > 1) wireWriteMap
 
     edges1 :: EdgeMap
-    edges1 = M.foldlWithKey' helper IM.empty wireWriteMap
+    edges1 = HM.foldlWithKey' helper IM.empty wireWriteMap
 
     helper :: EdgeMap -> Id -> IS.IntSet -> EdgeMap
     helper es w ws = 
-      case M.lookup w wireReadMap of
+      case HM.lookup w wireReadMap of
         Nothing -> es
         Just rs -> helper2 ws rs es
 
@@ -277,30 +350,16 @@ wireUseEdges as = (edgeMap, dupWriteMap)
                                      ) wi es'
                 ) es ws
 
-
-    -- -- all the registers that are ok to merge with
-    -- _okRegs = HS.unions $ (\a -> case a ^. aEvent of
-    --                               Star -> h (a^.aStmt)
-    --                               _    -> HS.empty
-    --                      ) <$> as
-
-    -- h ::  Stmt -> S
-    -- h Skip                  = HS.empty
-    -- h (BlockingAsgn{..})    = HS.singleton lhs
-    -- h (NonBlockingAsgn{..}) = HS.empty
-    -- h (IfStmt{..})          = HS.union (h thenStmt) (h elseStmt)
-    -- h (Block{..})           = HS.unions (h <$> blockStmts)
-
-    -- okRegs = _okRegs `deepseq` _okRegs
-
     wireReadMap, wireWriteMap :: WireMap
-    (wireReadMap, wireWriteMap) = foldl' insertWritesToVars (M.empty, M.empty) as
+    (wireReadMap, wireWriteMap) = foldl' insertWritesToVars (HM.empty, HM.empty) as
 
 
 insertWritesToVars :: (WireMap, WireMap) -> AlwaysBlock -> (WireMap, WireMap)
 insertWritesToVars (readMap, writeMap) a =
   ( updateMap readMap readSet
-  , updateMap writeMap writeSet
+  , case a ^. aEvent of
+      Assign -> updateMap writeMap writeSet -- only merge `assign` blocks
+      _      -> writeMap
   )
   where
     i :: Int
@@ -312,7 +371,7 @@ insertWritesToVars (readMap, writeMap) a =
     (readSet, writeSet) = varUpdates (a ^. aStmt)
 
     addToSet :: WireMap -> Id -> WireMap
-    addToSet m' w = M.alter alterF w m'
+    addToSet m' w = HM.alter alterF w m'
 
     alterF (Nothing) = Just $ IS.singleton i
     alterF (Just s)  = Just $ IS.insert i s
@@ -321,9 +380,10 @@ insertWritesToVars (readMap, writeMap) a =
     varUpdates :: Stmt -> (HS.HashSet Id, HS.HashSet Id)
     varUpdates (Block ss)            = let r = mconcat (varUpdates <$> ss) in seq r r
     varUpdates s@(BlockingAsgn l r)    =
-      let res = (findUsedWires r, findUsedWires l)
+      let res   = (findUsedWires r, findUsedWires l)
+          event = a ^. aEvent
       in if   isWire l
-         then if   (a^.aEvent) == Star
+         then if   not $ isClk event
               then res
               else error $
                    "assignment to wire in non-star blocking assignment" -- sanity check
@@ -342,12 +402,9 @@ insertWritesToVars (readMap, writeMap) a =
 
     isWire v = (Wire v) `elem` (a ^. aSt ^. ports)
 
-    -- isOKReg v = HS.member v okRegs
-
     findUsedWires :: Id -> HS.HashSet Id
     findUsedWires v | isWire v  = HS.singleton v
-                    --- | isOKReg v = HS.singleton v
-                    | otherwise = case  v `M.lookup` (a ^. aSt ^. ufs) of
+                    | otherwise = case  v `HM.lookup` (a ^. aSt ^. ufs) of
                                     Nothing -> HS.empty
                                     Just vs -> mconcat (findUsedWires <$> vs)
 
