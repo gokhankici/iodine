@@ -20,7 +20,7 @@ import Data.Graph.Inductive.Query hiding (trc)
 
 import           Verylog.Language.Types
 
--- import Text.Printf
+import Text.Printf
 import Debug.Trace
 
 flatten :: St -> [AlwaysBlock]
@@ -110,19 +110,24 @@ type M2 = HM.HashMap Id IS.IntSet
 mergeStars :: [AlwaysBlock] -> [AlwaysBlock]
 mergeStars as = stars' ++ others
   where
-    (stars, others) = foldl' (\(ss,os) a -> if   a ^. aEvent == Star
-                                            then (a:ss,os)
-                                            else (ss, a:os)) ([],[]) as
+    (stars, assigns, others) =
+      foldl' (\(ss,asns, os) a ->
+                case a ^. aEvent of
+                  Star   -> (a:ss, asns,   os)
+                  Assign -> (ss,   a:asns, os)
+                  _      -> (ss,   asns,   a:os))
+      ([],[],[]) as
 
     stars' = if   hasCycle g
              then error "stars' has a cycle"
              else trace ("merge stars:\n" ++ intercalate "\n\n" (show . view aStmt <$> merges)) merges
                   
     merges :: [AlwaysBlock]
-    merges = [ let g'  = subgraph c g
-                   ns  = topsort g'
-                   as' = (abMap IM.!) <$> ns
-               in  AB { _aEvent = Star
+    merges = [ let g'    = subgraph c g
+                   ns    = topsort g'
+                   as'   = (abMap IM.!) <$> ns
+                   lastA = last as' 
+               in  AB { _aEvent = lastA ^. aEvent
                       , _aStmt  = Block $ view aStmt <$> as'
                       , _aId    = n + maxId
                       , _aSt    = mconcat $ view aSt <$> as'
@@ -133,8 +138,8 @@ mergeStars as = stars' ++ others
 
     -- rs: block # ==> sensitivity list
     -- ws: block # ==> update list
-    rs = readSets  stars
-    ws = writeSets stars
+    rs = readSets  (stars ++ assigns)
+    ws = writeSets (stars ++ assigns)
 
     g :: Gr () ()
     g = makeGraphFromRWSet rs ws
@@ -177,7 +182,7 @@ mergeClocks as = mergeGroup posAs 1 ++
                  , _aSt    = mconcat $ view aSt <$> gs'
                  , _aLoc   = ("clk join", "clk join")
                  }
-          a' = a -- trace (printf "merged clocks:\n%s" (show $ a ^. aStmt)) a
+          a' = trace (printf "merged clocks:\n%s" (show $ a ^. aStmt)) a
           
       in case gs' of
            [] -> gs

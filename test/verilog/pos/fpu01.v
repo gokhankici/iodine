@@ -5,8 +5,6 @@ module test(clk, opa, opb, fpu_op, out);
    input wire clk, opa, opb, fpu_op;
 
    // @annot{taint_sink(out)}
-
-   // @annot{qualifierIff(sticky, [signa, signb])}
    output reg out;
 
    reg opa_r, opb_r, fpu_op_r;
@@ -23,12 +21,12 @@ module test(clk, opa, opb, fpu_op, out);
 
    assign adj_op_tmp = opa_r | opb_r;
 
-   // always @(*)
-   //   case(opa_r > opb_r)
-   //     00:      sticky = 1'h0;
-   //     01:      sticky =  adj_op_tmp[0]; 
-   //     default: sticky = |adj_op_tmp[26:0];
-   //   endcase
+   always @(*)
+     case(opa_r > opb_r)
+       00:      sticky = 1'h0;
+       01:      sticky =  adj_op_tmp[0]; 
+       default: sticky = |adj_op_tmp[26:0];
+     endcase
 
    assign signa            = opa_r[31];
    assign signb            = opb_r[31];
@@ -38,12 +36,6 @@ module test(clk, opa, opb, fpu_op, out);
    assign add              = !fpu_op_r[0];
 
    always @(*) begin
-      case(opa_r > opb_r)
-        00:      sticky = 1'h0;
-        01:      sticky =  adj_op_tmp[0]; 
-        default: sticky = |adj_op_tmp[26:0];
-      endcase 
-
       case({signa, signb, add})
         3'b001:  sign_d = 0;
         3'b011:  sign_d = fractb_lt_fracta;
@@ -59,5 +51,4 @@ module test(clk, opa, opb, fpu_op, out);
    always @(posedge clk)
      out <= sign_d;
    
-
 endmodule
