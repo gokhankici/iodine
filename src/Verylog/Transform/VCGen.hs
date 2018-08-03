@@ -96,7 +96,7 @@ src_reset_inv srcs a =
        , hHead = KV { kvId   = i
                     , kvSubs = [ (v, Boolean False) | v <- makeBothTags srcs]
                     }
-       , hId   = HornId i (InvReTag i)
+       , hId   = HornId i (InvSrcReset i)
        }
   where
     i      = a ^. aId
