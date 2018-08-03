@@ -9,6 +9,8 @@ module test(clk, in1, in2, out);
    // @annot{taint_source(in1)}
    // @annot{taint_source(in2)}
    // @annot{taint_sink(out)}
+
+   // @annot{qualifier(temp1, [in1, in2])}
    
    assign fast = (in1 | in2) == 0;
    
@@ -22,5 +24,5 @@ module test(clk, in1, in2, out);
       else
         out <= temp1;
    end
-endmodule                   
+endmodule
 
