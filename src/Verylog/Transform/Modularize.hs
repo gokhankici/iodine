@@ -21,7 +21,7 @@ import Data.Graph.Inductive.Query hiding (trc)
 import           Verylog.Language.Types
 
 -- import Text.Printf
--- import Debug.Trace
+import Debug.Trace
 
 flatten :: St -> [AlwaysBlock]
 flatten st =
@@ -116,7 +116,7 @@ mergeStars as = stars' ++ others
 
     stars' = if   hasCycle g
              then error "stars' has a cycle"
-             else merges -- trace ("merge stars:\n" ++ show merges) merges
+             else trace ("merge stars:\n" ++ intercalate "\n\n" (show . view aStmt <$> merges)) merges
                   
     merges :: [AlwaysBlock]
     merges = [ let g'  = subgraph c g

@@ -38,6 +38,9 @@ import           Control.DeepSeq
 data FPQualifier = QualifImpl { qualifLhs  :: !Id
                               , qualifRhss :: ![Id]
                               }
+                 | QualifIff  { qualifLhs  :: !Id
+                              , qualifRhss :: ![Id]
+                              }
                  | QualifEqs  { qualifEqs :: ![Id]
                               }
                  | QualifAssume { qualifAssume :: ![Id]
@@ -47,6 +50,7 @@ data FPQualifier = QualifImpl { qualifLhs  :: !Id
 
 qualifVars :: FPQualifier -> [Id]
 qualifVars (QualifImpl l rs) = l:rs
+qualifVars (QualifIff l rs) = l:rs
 qualifVars (QualifEqs vs)    = vs
 qualifVars (QualifAssume vs) = vs
 

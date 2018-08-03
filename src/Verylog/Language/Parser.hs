@@ -86,6 +86,9 @@ data ParseIR = TopModule    { mPortNames :: [ParsePort]       -- port list (i.e.
              | PQualifier    { invLhs :: String
                              , invRhs :: [String]
                              }
+             | PQualifierI   { invLhs :: String
+                             , invRhs :: [String]
+                             }
              | PQualifier2   { invEqs :: [String]
                              }
              | PQualifierA   { invAssume :: [String]
@@ -237,6 +240,7 @@ collectTaint (PTaintEqMod{..})  = parseModTaintEq  %= mapOfSetInsert sModuleName
 collectTaint (TopModule{..})    = do sanitizeWires      mPorts
                                      sanitizeSubmodules mGates
 collectTaint (PQualifier{..})   = return ()
+collectTaint (PQualifierI{..})  = return ()
 collectTaint (PQualifier2{..})  = return ()
 collectTaint (PQualifierA{..})  = return ()
 
@@ -347,6 +351,7 @@ parseWithoutConversion :: FilePath -> String -> ([ParseIR], ExtraStuff)
 parseWithoutConversion fp s = foldr f ([],([],[])) (parseWith parseIR fp s)
   where
     f (PQualifier{..})  = second $ second ((:) (QualifImpl invLhs invRhs))
+    f (PQualifierI{..}) = second $ second ((:) (QualifIff  invLhs invRhs))
     f (PQualifier2{..}) = second $ second ((:) (QualifEqs invEqs))
     f (PQualifierA{..}) = second $ second ((:) (QualifAssume invAssume))
     f p@(PSource src)  = first ((:) p) >>> second (first ((:) src))
@@ -421,9 +426,11 @@ parseTaint = spaceConsumer
                   <|> rWord "sanitize_glob" *> parens (PSanitizeGlob <$> identifier)
                   <|> rWord "not_sanitize"  *> parens (PNotSanitize <$> identifier <*> optionMaybe (comma *> identifier))
                   <|> rWord "sanitize"      *> parens (PSanitize <$> parseMany1 identifier comma)
-                  <|> rWord "qualifier2"    *> parens (PQualifier2 <$> list identifier)
-                  <|> rWord "qualifiera"    *> parens (PQualifierA <$> list identifier)
-                  <|> rWord "qualifier"     *> parens (PQualifier <$> identifier <*> (comma *> list identifier))
+
+                  <|> rWord "qualifierPairs"  *> parens (PQualifier2 <$> list identifier)
+                  <|> rWord "qualifierAssume" *> parens (PQualifierA <$> list identifier)
+                  <|> rWord "qualifierIff"    *> parens (PQualifierI <$> identifier <*> (comma *> list identifier))
+                  <|> rWord "qualifierImp"    *> parens (PQualifier  <$> identifier <*> (comma *> list identifier))
                 )
              <* char '.' <* spaceConsumer
 

@@ -77,6 +77,7 @@ toFqFormat fpst =
 
       custom n (QualifImpl l rs) = custom1 n l rs
       custom n (QualifEqs vs)    = custom2 n vs
+      custom n (QualifIff l rs)  = custom3 n l rs
       custom _ (QualifAssume _)  = []
 
       custom1 n l rs = 
@@ -106,6 +107,21 @@ toFqFormat fpst =
         | (n2',(x1',x2')) <- zip ([1,3..] :: [Int]) (twoPairs vs)
         , (n2, (x1,x2))   <- [(n2',(x1',x2')), (n2' + 1, (x2',x1'))]
         , prefix          <- ["VLT_", "VRT_"]
+        ]
+
+      custom3 n l rs =
+        [ mkQual
+          (symbol $ "Custom3_" ++ show n ++ "_" ++ show n2)
+          ( [ QP (symbol "v") PatNone FInt
+            , QP (symbol  l ) (PatExact (symbol $ prefix ++ "_" ++ l)) (FTC boolFTyCon)
+            ] ++
+            [ QP (symbol r) (PatExact (symbol $ prefix ++ "_" ++ r)) (FTC boolFTyCon)
+            | r <- rs
+            ]
+          )
+          (FQT.PIff (eVar l) $ FQT.POr [eVar v | v <- rs])
+          (dummyPos "")
+        | (n2, prefix) <- zip ([1..] :: [Int]) ["VLT", "VRT"]
         ]
   in  fi cns wfs binders gConsts dConsts cuts qualifiers bindMds highOrBinds highOrQuals assrts axiomEnv dataDecls 
 

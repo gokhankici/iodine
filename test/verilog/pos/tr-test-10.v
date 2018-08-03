@@ -7,8 +7,8 @@ module test(clk, i1, i2, o);
    output reg o;
    reg cond;
 
-   // @annot{qualifier(i1,[i2])}
-   // @annot{qualifier(i2,[i1])}
+   // @annot{qualifierImp(i1,[i2])}
+   // @annot{qualifierImp(i2,[i1])}
 
    always @(posedge clk)
      if (cond)
