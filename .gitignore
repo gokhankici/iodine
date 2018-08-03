@@ -3,6 +3,7 @@
 /verylog-hs.cabal
 configuration.sh
 .*.pl
+.*.preproc.v
 .*.smt2
 .log*
 flycheck_*

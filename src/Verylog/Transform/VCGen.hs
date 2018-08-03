@@ -41,6 +41,7 @@ modular_inv :: [Id] -> AlwaysBlock -> [Inv]
 modular_inv srcs a =
   [ initial_inv
   , tag_reset_inv
+  , src_reset_inv
   , next_step_inv
   ] <*> [srcs] <*> [a']
   where
@@ -85,6 +86,20 @@ tag_reset_inv srcs a =
   where
     i      = a ^. aId
     hsubs  = [(t, Boolean False) | t <- makeBothTags $ (getRegisters a \\ srcs)]
+
+
+--------------------------------------------------------------------------------
+src_reset_inv :: [Id] -> AlwaysBlock -> Inv
+--------------------------------------------------------------------------------
+src_reset_inv srcs a =
+  Horn { hBody =  prevKV a
+       , hHead = KV { kvId   = i
+                    , kvSubs = [ (v, Boolean False) | v <- makeBothTags srcs]
+                    }
+       , hId   = HornId i (InvReTag i)
+       }
+  where
+    i      = a ^. aId
 
 --------------------------------------------------------------------------------
 next_step_inv :: [Id] -> AlwaysBlock -> Inv 

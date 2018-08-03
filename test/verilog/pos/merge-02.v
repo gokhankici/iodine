@@ -7,7 +7,7 @@ module test(clk, opa, opb, out);
    // @annot{taint_sink(out)}
    output reg [31:0] out;
 
-   // @annot{qualifier(sticky, [opa, opb])}
+   // @annot{qualifier(sticky, [opa_r, opb_r])}
    // @annot{qualifier(opa_r, [opa])}
    // @annot{qualifier(opb_r, [opb])}
 
@@ -21,8 +21,8 @@ module test(clk, opa, opb, out);
    always @(posedge clk)
      opb_r <= opb;
 
-   assign signa = opa[31];
-   assign signb = opb[31];
+   assign signa = opa_r[31];
+   assign signb = opb_r[31];
 
    always @(*) begin
       sticky = opa_r + opb_r;

@@ -41,7 +41,6 @@ SIMPLE_TESTS=( \
 	"01 - 08 - secverilog-01" "-M test          $THIS_DIR/test/verilog/pos/secverilog-01.v" \
 	"01 - 09 - tr-test-9"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-9.v" \
 	"01 - 10 - tr-test-10"    "-M test          $THIS_DIR/test/verilog/pos/tr-test-10.v" \
-	"01 - 11 - merge-01"      "-M test          $THIS_DIR/test/verilog/pos/merge-01.v"   \
 	"01 - 12 - merge-02"      "-M test          $THIS_DIR/test/verilog/pos/merge-02.v"   \
 	)
 

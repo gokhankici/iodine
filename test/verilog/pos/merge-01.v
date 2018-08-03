@@ -15,8 +15,8 @@ module test(clk, opa, opb, fast, out);
    assign w1a = opa[31];
    assign w1b = opb[31];
 
-   assign w2a = opa[30];
-   assign w2b = opb[30];
+   assign w2a = opa_r[30];
+   assign w2b = opb_r[30];
    
    always @(*) begin
      x = w1a + w1b;
