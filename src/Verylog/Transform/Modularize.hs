@@ -25,7 +25,10 @@ import Debug.Trace
 
 flatten :: St -> [AlwaysBlock]
 flatten st =
-  let res = flattenToAlways >>> mergeStars >>> mergeClocks >>> removeWires $ st
+  let res = flattenToAlways >>>
+            mergeStars >>>
+            -- mergeClocks >>>
+            removeWires $ st
       s   = intercalate "\n\n" $ show . view aStmt <$> res
   in  trace (printf "as(#%d):\n%s" (length res) s) res
 
@@ -211,11 +214,12 @@ removeWires as = [ mkAB (n+maxId) g' | (n,g') <- zip [1..] (invertedTrees global
             }
 
     invertedTrees :: G -> [G]
-    invertedTrees gr = [ parentG r | r <- roots ]
+    invertedTrees gr = [ parentG r | r <- roots, isNonAssign r ]
       where
-        rootG     = gfiltermap (\c -> if suc' c == [] then Just c else Nothing) gr
-        roots     = fst <$> labNodes rootG
-        parentG r = subgraph (rdfs [r] gr) gr
+        rootG         = gfiltermap (\c -> if suc' c == [] then Just c else Nothing) gr
+        roots         = fst <$> labNodes rootG
+        parentG r     = subgraph (rdfs [r] gr) gr
+        isNonAssign n = (aMap IM.! n) ^. aEvent /= Assign
 
 hasCycle :: Gr a b -> Bool
 hasCycle g = any ((>= 2) . length) (scc g)
