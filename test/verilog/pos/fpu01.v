@@ -1,6 +1,7 @@
 module test(clk, opa, opb, fpu_op, out);
    // @annot{taint_source(opa)}
    // @annot{taint_source(opb)}
+   // @annot{taint_source(fpu_op)}
    input wire clk, opa, opb, fpu_op;
 
    // @annot{taint_sink(out)}
