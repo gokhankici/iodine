@@ -10,15 +10,10 @@ import           Control.Monad.State.Lazy
 import qualified Data.IntMap.Strict         as IM
 import qualified Data.HashMap.Strict        as HM
 import qualified Data.HashSet               as HS
-import qualified Data.IntSet                as IS
 import           Data.List
-import           Data.Monoid
-
-import Data.Graph.Inductive.Graph
-import Data.Graph.Inductive.PatriciaTree
-import Data.Graph.Inductive.Query hiding (trc)
 
 import           Verylog.Language.Types
+import           Verylog.Transform.DFG
 
 import Text.Printf
 import Debug.Trace
@@ -28,9 +23,15 @@ flatten st =
   let res = flattenToAlways >>>
             mergeStars >>>
             mergeClocks >>>
-            removeWires $ st
-      s   = intercalate "\n\n" $ show . view aStmt <$> res
-  in  res -- trace (printf "as(#%d):\n%s" (length res) s) res
+            removeAssigns $ st
+      s   = intercalate "\n\n" $
+            (\a -> printf
+                   "block #%d:\n%s\n%s"
+                   (a^.aId)
+                   (show $ sort $ HM.toList (a^.aSt^.ufs))
+                   (show (a^.aStmt))) <$>
+            res
+  in  trace (printf "as(#%d):\n%s" (length res) s) res
 
 -----------------------------------------------------------------------------------
 -- | St -> [AlwaysBlock] :::: Flatten the module hierarchy
@@ -76,39 +77,12 @@ m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
                                  st'
                      in st''
 
-getLhss :: Stmt -> S
-getLhss s = h s
-  where
-    h Skip                  = HS.empty
-    h (BlockingAsgn{..})    = HS.singleton lhs
-    h (NonBlockingAsgn{..}) = HS.singleton lhs
-    h (IfStmt{..})          = foldMap h [thenStmt, elseStmt]
-    h (Block{..})           = foldMap h blockStmts
-
-getRhss :: HM.HashMap Id [Id] -> Stmt -> S
-getRhss us s = h s
-  where
-    h Skip                  = HS.empty
-    h (BlockingAsgn{..})    = lukap rhs
-    h (NonBlockingAsgn{..}) = lukap rhs
-    h (IfStmt{..})          = lukap ifCond <> foldMap h [thenStmt, elseStmt]
-    h (Block{..})           = foldMap h blockStmts
-
-    lukap :: Id -> S
-    lukap v = case HM.lookup v us of
-                Nothing -> HS.singleton v
-                Just vs -> HS.fromList vs
-
 
 ------------------------------------------------------------------------------------
 -- | mergeStars :: [AlwaysBlock] -> [AlwaysBlock] :::: Merge always blocks with @(*)
 ------------------------------------------------------------------------------------
-type S  = HS.HashSet Id
-type M  = IM.IntMap S
-type M2 = HM.HashMap Id IS.IntSet
-
 mergeStars :: [AlwaysBlock] -> [AlwaysBlock]
-mergeStars as = stars' ++ others
+mergeStars as = stars' ++ assigns ++ others
   where
     (stars, assigns, others) =
       foldl' (\(ss,asns, os) a ->
@@ -118,33 +92,34 @@ mergeStars as = stars' ++ others
                   _      -> (ss,   asns,   a:os))
       ([],[],[]) as
 
-    stars' = if   hasCycle g
-             then error "stars' has a cycle"
-             else trace ("merge stars:\n" ++ intercalate "\n\n" (show . view aStmt <$> merges)) merges
-                  
-    merges :: [AlwaysBlock]
-    merges = [ let g'    = subgraph c g
-                   ns    = topsort g'
-                   as'   = (abMap IM.!) <$> ns
-                   lastA = last as' 
-               in  AB { _aEvent = lastA ^. aEvent
-                      , _aStmt  = Block $ view aStmt <$> as'
-                      , _aId    = n + maxId
-                      , _aSt    = mconcat $ view aSt <$> as'
-                      , _aLoc   = ("* join", "* join")
-                      }
-             | (n, c) <- zip [1..] (components g)
-             ]
+    stars' = trace ("merge stars:\n" ++ intercalate "\n\n" (show . view aStmt <$> merges)) merges
+
+    merges   :: [AlwaysBlock]
+    merges =
+      mconcat
+      [ let as2               = (abMap IM.!) <$> ns
+            (_, as3) = span ((== Assign) . view aEvent) $ reverse as2
+            as'               = reverse as3
+
+            a' = AB { _aEvent = Star
+                    , _aStmt  = Block $ view aStmt <$> as'
+                    , _aId    = n + maxId
+                    , _aSt    = mconcat $ view aSt <$> as'
+                    , _aLoc   = ("* join", "* join")
+                    }
+
+            hasStar    = not . null $ filter ((== Star).(view aEvent)) as'
+
+        in if   hasStar then [a'] else []
+      | (n, ns) <- zip [1..] (pathsToNonAssigns abMap rs ws)
+      ]
 
     -- rs: block # ==> sensitivity list
     -- ws: block # ==> update list
     rs = readSets  (stars ++ assigns)
     ws = writeSets (stars ++ assigns)
 
-    g :: Gr () ()
-    g = makeGraphFromRWSet rs ws
-
-    abMap :: IM.IntMap AlwaysBlock
+    abMap :: AM
     abMap = IM.fromList $ (\a -> (a^.aId, a)) <$> as
 
     maxId :: Int
@@ -191,76 +166,32 @@ mergeClocks as = mergeGroup posAs 1 ++
 -----------------------------------------------------------------------------------
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Merge always blocks to remove wires from invariants
 -----------------------------------------------------------------------------------
+removeAssigns :: [AlwaysBlock] -> [AlwaysBlock]
+removeAssigns = filter ((/= Assign) . (view aEvent))
 
-type G = Gr () ()
+-- removeWires :: [AlwaysBlock] -> [AlwaysBlock]
+-- removeWires as = [ mkAB (n+maxId) ns | (n,ns) <- zip [1..] (pathsToNonAssigns globalG) ]
+--   where
+--     assigns = filter ((== Assign).(view aEvent)) as
 
-removeWires :: [AlwaysBlock] -> [AlwaysBlock]
-removeWires as = [ mkAB (n+maxId) g' | (n,g') <- zip [1..] (invertedTrees globalG) ]
-  where
-    assigns = filter ((== Assign).(view aEvent)) as
+--     aMap :: AM
+--     aMap = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
 
-    aMap = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
-    maxId = fst $ IM.findMax aMap
+--     maxId = fst $ IM.findMax aMap
     
-    readsMap  = readSets as
-    writesMap = writeSets assigns
+--     readsMap  = readSets as
+--     writesMap = writeSets assigns
 
-    globalG = makeGraphFromRWSet readsMap writesMap
+--     globalG = makeGraphFromRWSet aMap readsMap writesMap
   
-    mkAB n g = 
-      let is       = topsort g
-          mergedAs = (aMap IM.!) <$> is
-          lastA    = last mergedAs
-      in AB { _aEvent = lastA ^. aEvent
-            , _aStmt  = Block $ view aStmt <$> mergedAs
-            , _aId    = n
-            , _aSt    = mconcat $ view aSt <$> mergedAs
-            , _aLoc   = ("clk join", "clk join")
-            }
+--     mkAB :: Int -> [Int] -> AlwaysBlock
+--     mkAB n is = 
+--       let mergedAs = (aMap IM.!) <$> is
+--           lastA    = last mergedAs
+--       in AB { _aEvent = lastA ^. aEvent
+--             , _aStmt  = Block $ view aStmt <$> mergedAs
+--             , _aId    = n
+--             , _aSt    = mconcat $ view aSt <$> mergedAs
+--             , _aLoc   = ("clk join", "clk join")
+--             }
 
-    invertedTrees :: G -> [G]
-    invertedTrees gr = [ parentG r | r <- roots, isNonAssign r ]
-      where
-        rootG         = gfiltermap (\c -> if suc' c == [] then Just c else Nothing) gr
-        roots         = fst <$> labNodes rootG
-        parentG r     = subgraph (rdfs [r] gr) gr
-        isNonAssign n = (aMap IM.! n) ^. aEvent /= Assign
-
-hasCycle :: Gr a b -> Bool
-hasCycle g = any ((>= 2) . length) (scc g)
-
-readSets :: [AlwaysBlock] -> M
-readSets as = IM.fromList $ (\a -> (a ^. aId, getRhss (a ^. aSt ^. ufs) (a ^. aStmt))) <$> as
-
-writeSets :: [AlwaysBlock] -> M
-writeSets as = IM.fromList $ (\a -> (a ^. aId, getLhss (a ^. aStmt))) <$> as
-
-makeGraphFromRWSet :: M -> M -> Gr () ()
-makeGraphFromRWSet rs ws = mkGraph allNs es
-  where
-    allNs = 
-      fmap (\n -> (n, ())) $
-      IS.toList $
-      IM.keysSet rs `IS.union` IM.keysSet ws
-
-    es :: [(Int, Int, ())]
-    es =
-      IM.foldlWithKey'
-      (\l n s ->
-          -- ns : all blocks that update the sensitivity list of block# n
-          let ns = IS.toList $ foldMap (\v -> HM.lookupDefault IS.empty v sensitizers) s
-          -- (n1, n2) means n1's block is before after n2 executes
-          in ((\n' -> (n',n,())) <$> ns) ++ l
-      )
-      []
-      rs
-
-    -- v: variable ==> {n:block k# | n updates v}
-    sensitizers :: M2
-    sensitizers =
-      let f v Nothing  = Just $ IS.singleton v
-          f v (Just s) = Just $ IS.insert v s
-      in IM.foldlWithKey'
-         (\m n s -> HS.foldl' (\m' v -> HM.alter (f n) v m') m s)
-         HM.empty
-         ws

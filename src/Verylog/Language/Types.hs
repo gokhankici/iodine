@@ -294,3 +294,9 @@ isClk Assign      = False
 isClk Star        = False
 isClk (NegEdge _) = True
 isClk (PosEdge _) = True
+
+instance Hashable AlwaysBlock where
+  hashWithSalt n (AB{..}) = hashWithSalt n _aId
+
+instance Eq AlwaysBlock where
+  a1 == a2 = (a1 ^. aId) == (a2 ^. aId)

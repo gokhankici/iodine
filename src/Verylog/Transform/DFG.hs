@@ -2,16 +2,31 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Verylog.Transform.DFG ( wireTaints
-                             , assignmentMap
-                             , stmt2Assignments
-                             ) where
+module Verylog.Transform.DFG
+  ( wireTaints
+  , assignmentMap
+  , stmt2Assignments
+  
+  , AM
+  , hasCycle
+  , readSets
+  , writeSets
+  , pathsToNonAssigns
+  , getLhss
+  ) where
 
 import           Control.Lens            hiding (mapping)
 import qualified Data.HashSet            as HS
 import qualified Data.HashMap.Strict     as HM
+import qualified Data.IntMap.Strict      as IM
+import qualified Data.IntSet             as IS
 import           Text.Printf
 import           Verylog.Language.Types
+import           Data.Monoid 
+
+import Data.Graph.Inductive.Graph
+import Data.Graph.Inductive.PatriciaTree
+import Data.Graph.Inductive.Query hiding (trc)
 
 --------------------------------------------------------------------------------
 wireTaints :: AlwaysBlock -> [Id] -> [Id]
@@ -86,3 +101,78 @@ type M = HM.HashMap Id S
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
+
+type G  = Gr Bool ()
+type AM = IM.IntMap AlwaysBlock
+type M2 = HM.HashMap Id IS.IntSet
+
+hasCycle :: Gr a b -> Bool
+hasCycle g = any ((>= 2) . length) (scc g)
+
+readSets :: [AlwaysBlock] -> IM.IntMap S
+readSets as = IM.fromList $ (\a -> (a ^. aId, getRhss (a ^. aSt ^. ufs) (a ^. aStmt))) <$> as
+
+writeSets :: [AlwaysBlock] -> IM.IntMap S
+writeSets as = IM.fromList $ (\a -> (a ^. aId, getLhss (a ^. aStmt))) <$> as
+
+pathsToNonAssigns :: AM -> IM.IntMap S -> IM.IntMap S -> [[Node]]
+pathsToNonAssigns _gr = undefined
+  -- where
+  --   foo           = [ parentG r | r <- roots ] 
+  --   rootG         = gfiltermap (\c -> if suc' c == [] then Just c else Nothing) gr
+  --   roots         = fst <$> labNodes rootG
+  --   parentG r     = subgraph (rdfs [r] gr) gr
+
+
+makeGraphFromRWSet :: AM -> IM.IntMap S -> IM.IntMap S -> G
+makeGraphFromRWSet abMap rs ws = mkGraph allNs es
+  where
+    allNs = 
+      fmap (\n -> (n, (abMap IM.! n) ^. aEvent /= Assign)) $
+      IS.toList $
+      IM.keysSet rs `IS.union` IM.keysSet ws
+
+    es :: [(Int, Int, ())]
+    es =
+      IM.foldlWithKey'
+      (\l n s ->
+          -- ns : all blocks that update the sensitivity list of block# n
+          let ns = IS.toList $ foldMap (\v -> HM.lookupDefault IS.empty v sensitizers) s
+          -- (n1, n2) means n1's block is ***after*** after n2 executes
+          in ((\n' -> (n,n',())) <$> ns) ++ l
+      )
+      []
+      rs
+
+    -- v: variable ==> {n:block k# | n updates v}
+    sensitizers :: M2
+    sensitizers =
+      let f v Nothing  = Just $ IS.singleton v
+          f v (Just s) = Just $ IS.insert v s
+      in IM.foldlWithKey'
+         (\m n s -> HS.foldl' (\m' v -> HM.alter (f n) v m') m s)
+         HM.empty
+         ws
+
+getLhss :: Stmt -> S
+getLhss s = h s
+  where
+    h Skip                  = HS.empty
+    h (BlockingAsgn{..})    = HS.singleton lhs
+    h (NonBlockingAsgn{..}) = HS.singleton lhs
+    h (IfStmt{..})          = foldMap h [thenStmt, elseStmt]
+    h (Block{..})           = foldMap h blockStmts
+
+getRhss :: HM.HashMap Id [Id] -> Stmt -> S
+getRhss us s = h s
+  where
+    h Skip                  = HS.empty
+    h (BlockingAsgn{..})    = lukap rhs
+    h (NonBlockingAsgn{..}) = lukap rhs
+    h (IfStmt{..})          = lukap ifCond <> foldMap h [thenStmt, elseStmt]
+    h (Block{..})           = foldMap h blockStmts
+
+    lukap :: Id -> S
+    lukap v = case HM.lookup v us of
+                Nothing -> HS.singleton v
+                Just vs -> HS.fromList vs
