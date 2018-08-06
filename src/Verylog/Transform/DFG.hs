@@ -8,6 +8,8 @@ module Verylog.Transform.DFG
   , stmt2Assignments
   
   , AM
+  , RWS
+  , AssignType(..)
   , hasCycle
   , readSets
   , writeSets
@@ -23,6 +25,7 @@ import qualified Data.IntSet             as IS
 import           Text.Printf
 import           Verylog.Language.Types
 import           Data.Monoid 
+import           Debug.Trace
 
 import Data.Graph.Inductive.Graph
 import Data.Graph.Inductive.PatriciaTree
@@ -99,38 +102,72 @@ stmt2Assignments s unintFuncs = h [] s
 type S = HS.HashSet Id
 type M = HM.HashMap Id S
 
+type RWS = IM.IntMap S
+
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-type G  = Gr Bool ()
+data AssignType = Continuous
+                | Blocking
+                | NonBlocking
+                deriving (Show, Eq)
+
+type G  = Gr AssignType ()
 type AM = IM.IntMap AlwaysBlock
 type M2 = HM.HashMap Id IS.IntSet
 
 hasCycle :: Gr a b -> Bool
 hasCycle g = any ((>= 2) . length) (scc g)
 
-readSets :: [AlwaysBlock] -> IM.IntMap S
+readSets :: [AlwaysBlock] -> RWS
 readSets as = IM.fromList $ (\a -> (a ^. aId, getRhss (a ^. aSt ^. ufs) (a ^. aStmt))) <$> as
 
-writeSets :: [AlwaysBlock] -> IM.IntMap S
+writeSets :: [AlwaysBlock] -> RWS
 writeSets as = IM.fromList $ (\a -> (a ^. aId, getLhss (a ^. aStmt))) <$> as
 
-pathsToNonAssigns :: AM -> IM.IntMap S -> IM.IntMap S -> [[Node]]
-pathsToNonAssigns _gr = undefined
-  -- where
-  --   foo           = [ parentG r | r <- roots ] 
-  --   rootG         = gfiltermap (\c -> if suc' c == [] then Just c else Nothing) gr
-  --   roots         = fst <$> labNodes rootG
-  --   parentG r     = subgraph (rdfs [r] gr) gr
+pathsToNonAssigns :: AM -> RWS -> RWS -> [[Node]]
+pathsToNonAssigns abMap rs ws =
+  [ let g'' = subgraph c g'
+    in  reverse $ topsort g''
+  | c <- components g'
+  ]
+  where
+    g = let res = makeGraphFromRWSet abMap rs ws
+        in  if   hasCycle res
+            then error "pathsToNonAssigns: graph has a cycle !"
+            else res
 
+    g' = removeAssignRoots g
 
-makeGraphFromRWSet :: AM -> IM.IntMap S -> IM.IntMap S -> G
+    remIfAsgnRoot ctx@(inEdges, _n, asgnT, _outEdges) =
+      if   inEdges == [] && asgnT == Continuous -- is an cont. assign root
+      then Nothing
+      else Just ctx
+
+    removeAssignRoots gr =
+      let nNodes        = order gr
+          gAfterRemoval = gfiltermap remIfAsgnRoot gr
+          nNodes'       = order gAfterRemoval
+      in if   nNodes == nNodes'
+         then gr
+         else removeAssignRoots gAfterRemoval
+  
+makeGraphFromRWSet :: AM -> RWS -> RWS -> G
 makeGraphFromRWSet abMap rs ws = mkGraph allNs es
   where
     allNs = 
-      fmap (\n -> (n, (abMap IM.! n) ^. aEvent /= Assign)) $
+      fmap h $
       IS.toList $
       IM.keysSet rs `IS.union` IM.keysSet ws
+
+    h n =
+      let res = (n, aId2AsgnT n) 
+          a   = abMap IM.! n
+      in  trace (show (n,  a ^. aStmt)) res
+
+    aId2AsgnT :: Int -> AssignType
+    aId2AsgnT n = let a = abMap IM.! n
+                  in  eventToAssignType (a ^. aEvent)
 
     es :: [(Int, Int, ())]
     es =
@@ -176,3 +213,9 @@ getRhss us s = h s
     lukap v = case HM.lookup v us of
                 Nothing -> HS.singleton v
                 Just vs -> HS.fromList vs
+
+eventToAssignType             :: Event -> AssignType
+eventToAssignType Assign      = Continuous
+eventToAssignType Star        = Blocking
+eventToAssignType (PosEdge _) = NonBlocking
+eventToAssignType (NegEdge _) = NonBlocking
