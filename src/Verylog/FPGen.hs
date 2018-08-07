@@ -5,6 +5,7 @@ import Control.Arrow
 import Verylog.Language.Parser
 import Verylog.Language.Types
 import Verylog.Transform.Modularize
+import Verylog.Transform.Merge
 import Verylog.Transform.SanityCheck
 import Verylog.Transform.FPVCGen
 import Verylog.Solver.FP.Types
@@ -15,6 +16,7 @@ pipeline :: FilePath -> String -> FPSt
 pipeline f = parse f
              >>> first flatten
              >>> first sanityCheck
+             >>> first merge
              >>> toFpSt
 
   
@@ -25,3 +27,4 @@ pipeline' f = parse f
               >>> arr fst
               >>> flatten
               >>> sanityCheck
+              >>> merge

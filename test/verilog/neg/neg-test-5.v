@@ -9,7 +9,7 @@ module test(clk, in_eq, in_neq);
 
    reg   x; // @annot{sanitize(x)}
    reg   y; // @annot{sanitize(y)}
-   reg out; // @annot{taint_source(x)}
+   reg out; 
 
    reg cond1; // @annot{sanitize(cond1)}
    reg cond2; // @annot{sanitize(cond2)}

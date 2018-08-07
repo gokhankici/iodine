@@ -10,7 +10,7 @@ module test(clk, in1, in2, out);
    // @annot{taint_source(in2)}
    // @annot{taint_sink(out)}
 
-   // @annot{qualifier(temp1, [in1, in2])}
+   // @annot{qualifierImp(temp1, [in1, in2])}
    
    assign fast = (in1 | in2) == 0;
    

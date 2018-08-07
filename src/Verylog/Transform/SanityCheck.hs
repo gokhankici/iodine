@@ -4,7 +4,6 @@
 module Verylog.Transform.SanityCheck ( sanityCheck
                                      ) where
 
-import           Control.Arrow
 import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Lazy
@@ -12,7 +11,6 @@ import qualified Data.HashMap.Strict        as M
 import           Text.Printf
 
 import Verylog.Language.Types
-import Verylog.Transform.Utils
 
 data PassSt = PassSt { _bas    :: M.HashMap Id Int
                      , _nbas   :: M.HashMap Id Int
@@ -29,7 +27,7 @@ freshKeepErrs = bas .= M.empty >> nbas .= M.empty
 --------------------------------------------------------------------------------
 sanityCheck :: [AlwaysBlock] -> [AlwaysBlock]  
 --------------------------------------------------------------------------------
-sanityCheck = check1 >>> filterNoRegs -- hasRegs 
+sanityCheck = check1
 
 --------------------------------------------------------------------------------
 check1    :: [AlwaysBlock] -> [AlwaysBlock]
@@ -60,10 +58,6 @@ checkAssignments as = freshKeepErrs >> mapM_ (checkStmt . view aStmt) as
 
     checkStmt (NonBlockingAsgn{..}) = do
       nbas %= incr lhs
-      -- FIXME
-      -- uses nbas ((> 1) . M.lookupDefault 0 lhs)
-      --   >>= flip when
-      --   (addError $ printf "multiple non-blocking assignments to %s" lhs)
 
     checkStmt (IfStmt{..}) = do
       oldBAs  <- use bas
@@ -101,20 +95,6 @@ checkAssignments as = freshKeepErrs >> mapM_ (checkStmt . view aStmt) as
 
       bas  .= M.unionWith max thBAs  elBAs
       nbas .= M.unionWith max thNBAs elNBAs
-
---------------------------------------------------------------------------------
-filterNoRegs    :: [AlwaysBlock] -> [AlwaysBlock]
---------------------------------------------------------------------------------
-filterNoRegs as = filter f as
-  where
-    f a = let vars = a ^. aSt ^. ports
-              check = foldr (\p b -> b ||
-                                     case p of
-                                       Register _ -> True
-                                       _          -> False) False vars
-          in if check
-             then True
-             else dbg ("removed unnecessary block:\n" ++ show a) False
 
 
 --------------------------------------------------------------------------------

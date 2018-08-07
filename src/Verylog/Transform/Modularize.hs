@@ -4,7 +4,6 @@
 
 module Verylog.Transform.Modularize (flatten) where
 
-import           Control.Arrow
 import           Control.Lens hiding (mapping)
 import           Control.Monad.State.Lazy
 import qualified Data.HashMap.Strict        as HM
@@ -13,21 +12,12 @@ import           Data.List
 
 import           Verylog.Language.Types
 import           Verylog.Transform.DFG
-import           Verylog.Transform.Merging
 
 import Text.Printf
 --import Debug.Trace
 
 flatten :: St -> [AlwaysBlock]
-flatten = flattenToAlways >>> merge
-
--- flatten st =
---   let res = flattenToAlways
---             >>> merge
---             $ st
---       s   = intercalate "\n\n" $
---             printA <$> res
---   in  trace (printf "as(#%d):\n%s" (length res) s) res
+flatten = flattenToAlways
 
 -----------------------------------------------------------------------------------
 -- | St -> [AlwaysBlock] :::: Flatten the module hierarchy
