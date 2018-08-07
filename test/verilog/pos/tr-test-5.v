@@ -6,8 +6,8 @@ module test(clk);
    reg   z;                     // @annot{taint_sink(z)}
 
    always @(posedge clk) begin
-      y = x;
-      z = y;
+      y <= x;
+      z <= y;
    end
    
 endmodule

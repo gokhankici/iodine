@@ -4,6 +4,7 @@
 module Verylog.Transform.SanityCheck ( sanityCheck
                                      ) where
 
+import           Control.Arrow
 import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Lazy
@@ -27,7 +28,7 @@ freshKeepErrs = bas .= M.empty >> nbas .= M.empty
 --------------------------------------------------------------------------------
 sanityCheck :: [AlwaysBlock] -> [AlwaysBlock]  
 --------------------------------------------------------------------------------
-sanityCheck = check1
+sanityCheck = check1 >>> checkAssignmentTypes
 
 --------------------------------------------------------------------------------
 check1    :: [AlwaysBlock] -> [AlwaysBlock]
@@ -95,6 +96,36 @@ checkAssignments as = freshKeepErrs >> mapM_ (checkStmt . view aStmt) as
 
       bas  .= M.unionWith max thBAs  elBAs
       nbas .= M.unionWith max thNBAs elNBAs
+
+
+--------------------------------------------------------------------------------
+checkAssignmentTypes :: [AlwaysBlock] -> [AlwaysBlock]
+--------------------------------------------------------------------------------
+checkAssignmentTypes as =
+  if   all rightAsgn as
+  then as
+  else throw $ PassError "checkAssignmentTypes failed"
+
+  where
+    rightAsgn :: AlwaysBlock -> Bool
+    rightAsgn a =
+      let s = a ^. aStmt
+      in case a ^. aEvent of
+           Star       -> h (not . isNonBlockingAsgn) s
+           Assign     -> True
+           NegEdge _  -> h isNonBlockingAsgn s
+           PosEdge _  -> h isNonBlockingAsgn s
+
+    isNonBlockingAsgn :: Stmt -> Bool
+    isNonBlockingAsgn (NonBlockingAsgn{..}) = True
+    isNonBlockingAsgn (BlockingAsgn{..})    = False
+    isNonBlockingAsgn s                     = error $ "isBlockingAsgn called with " ++ show s
+
+    h :: (Stmt -> Bool) -> Stmt -> Bool
+    h _ Skip         = True
+    h f (IfStmt{..}) = h f thenStmt && h f elseStmt
+    h f (Block ss)   = all (h f) ss
+    h f s            = f s
 
 
 --------------------------------------------------------------------------------
