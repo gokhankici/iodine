@@ -124,17 +124,18 @@ mergeAll as = res
     g2 = let r = breakLoops g
          in  debug (show r) r
 
-    g'  =
-      if   hasCycle g2 then error "mergeAll: has a cycle" else g2
+    g' = if hasCycle g2 then error "mergeAll: has a cycle" else g2
     
+    -- try to break loops by removing edges going into @(clock)
     breakLoops :: G -> G
     breakLoops gr =
       let gf (inEdges, n, a, outEdges) =
-            let outEdges' = filter gf_o outEdges
-                gf_o      = (NonBlocking /=) . eventToAssignType . (view aEvent) . (abMap IM.!) . snd
-                inEdges'  = case a of
-                              NonBlocking -> []
-                              _           -> inEdges
+            let (inEdges', outEdges') =
+                  case a of
+                    NonBlocking -> ([], outEdges)                  -- remove incoming edges to clocks
+                    _           -> (inEdges, filter gf_o outEdges) -- remove edges going into clocks
+                gf_o      = h (NonBlocking /=)
+                h f       = f . eventToAssignType . (view aEvent) . (abMap IM.!) . snd
             in Just (inEdges', n, a, outEdges')
       in gfiltermap gf gr
 

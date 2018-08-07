@@ -159,7 +159,7 @@ removeAssignRoots gr =
     remIfAsgnRoot ctx@(_, n, asgnT, _) =
       let inEdges = pre gr n
       in if   inEdges == [] && asgnT == Continuous -- is an cont. assign root
-         then trace ("removed:" ++ show ctx) Nothing
+         then debug ("removed:" ++ show ctx) Nothing
          else Just ctx
   
 
@@ -175,7 +175,7 @@ makeGraphFromRWSet abMap rs ws = mkGraph allNs es
     h n =
       let res = (n, aId2AsgnT n) 
           a   = abMap IM.! n
-      in  trace (show (n,  a ^. aStmt)) res
+      in  debug (show (n,  a ^. aStmt)) res
 
     aId2AsgnT :: Int -> AssignType
     aId2AsgnT n = let a = abMap IM.! n
@@ -232,3 +232,7 @@ eventToAssignType Assign      = Continuous
 eventToAssignType Star        = Blocking
 eventToAssignType (PosEdge _) = NonBlocking
 eventToAssignType (NegEdge _) = NonBlocking
+
+debug :: String -> a -> a
+-- debug = trace
+debug _str a = a

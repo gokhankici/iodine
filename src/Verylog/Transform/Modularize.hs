@@ -16,16 +16,18 @@ import           Verylog.Transform.DFG
 import           Verylog.Transform.Merging
 
 import Text.Printf
-import Debug.Trace
+--import Debug.Trace
 
 flatten :: St -> [AlwaysBlock]
-flatten st =
-  let res = flattenToAlways
-            >>> merge
-            $ st
-      s   = intercalate "\n\n" $
-            printA <$> res
-  in  trace (printf "as(#%d):\n%s" (length res) s) res
+flatten = flattenToAlways >>> merge
+
+-- flatten st =
+--   let res = flattenToAlways
+--             >>> merge
+--             $ st
+--       s   = intercalate "\n\n" $
+--             printA <$> res
+--   in  trace (printf "as(#%d):\n%s" (length res) s) res
 
 -----------------------------------------------------------------------------------
 -- | St -> [AlwaysBlock] :::: Flatten the module hierarchy
