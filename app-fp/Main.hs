@@ -88,7 +88,7 @@ main  = do
   fpst <- do
     res <- try $ evaluate $ pipeline optInputFile fileContents
     case res of
-      Left (PassError msg)  -> putStrLn msg >> exitFailure
+      Left (PassError msg)  -> hPutStrLn stderr msg >> exitFailure
       Left (CycleError{..}) -> do
         let dotFileName = optInputFile <.> "dot"
         writeFile dotFileName cycleStr

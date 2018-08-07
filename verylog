@@ -28,6 +28,7 @@ zparseopts -D -E -- \
            -emacs=EMACS \
            -abduction=ABDUCTION \
 		   -graphs=GRAPHS \
+		   -time=TIME \
            h=HELP -help=HELP
 
 if [[ $# -eq 0 || -n "$HELP" ]]; then
@@ -138,6 +139,20 @@ fi
 # }}}
 
 # Stage 1 : Verilog -> IR {{{
+
+if [[ -n "$TIME" ]]; then
+	local ts
+	ts=$(date +'%s%N')
+fi
+
+print_time() {
+	if [[ -n "$TIME" ]]; then
+		local tt
+		tt=$((($(date +'%s%N') - $ts)/1000000))
+		echo "Time taken: $tt milliseconds" >&2
+	fi
+}
+
 # output of this function is redirected to the IR_FILE
 print_IR() {
     cat <<EOF
@@ -177,6 +192,7 @@ if [[ -n "$JUST_IR" ]]; then
 	if [[ -z "$NO_OUTPUT" ]]; then
 		[[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $IR_FILE || cat $IR_FILE
 	fi
+	print_time
     exit 0
 fi
 # }}}
@@ -191,10 +207,12 @@ if [[ $last_err -ne 0 ]]; then
 	[[ -z "$NO_OUTPUT" && -f "$FQOUT_FILE" ]] && cat $FQOUT_FILE
     echo "\n"
     red "UNSAFE"
+	print_time
     exit $last_err
 fi
 
 if [[ -n "$VC_DEBUG" ]]; then
+	print_time
     exit 0
 fi
 
@@ -202,6 +220,7 @@ if [[ -n "$JUST_VCGEN" ]]; then
     if [[ -z "$NO_OUTPUT" ]]; then
 	[[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $VCGEN_FILE || cat $VCGEN_FILE
     fi	
+	print_time
     exit 0
 fi
 # }}}
@@ -210,6 +229,8 @@ fi
 [[ -f "$FQOUT_FILE" ]] && cat $FQOUT_FILE
 echo "\n"
 green "SAFE"
+
+print_time
 
 # echo
 # echo '--------------------------------------------------------------------------------'

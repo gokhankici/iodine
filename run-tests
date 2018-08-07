@@ -9,14 +9,13 @@ zparseopts -D -E -- \
 	u=UNIT -unit=UNIT \
 	-continue=CONTINUE \
 	-no-output=NO_OUT \
-	-time=TIME \
 	-times:=TIMES \
 	n:=NAME -name:=NAME \
 	h=HELP -help=HELP
 
 if [[ -n "$HELP" ]]; then
 	echo "${0:t} options:"
-	echo "    (u)nit, continue, no-output, time, times <N>, (n)ame <S>, (h)elp"
+	echo "    (u)nit, continue, no-output, times <N>, (n)ame <S>, (h)elp"
 	exit 0
 fi
 
@@ -161,11 +160,6 @@ run_verylog() {
 	local cmd
 	cmd=$THIS_DIR/verylog
 
-	if [[ -n "$TIME" ]]; then
-		local ts
-		ts=$(date +'%s%N')
-	fi
-
 	if [[ -z "$NO_OUT" ]]; then
 		echo ${(@s/ /)cmd} $@
 	fi
@@ -177,12 +171,6 @@ run_verylog() {
 	else
 		${(@s/ /)cmd} $@ >/dev/null
 		last_err=$?
-	fi
-
-	if [[ -n "$TIME" ]]; then
-		local tt
-		tt=$((($(date +'%s%N') - $ts)/1000000))
-		echo "Time taken: $tt milliseconds"
 	fi
 
 	return $last_err
