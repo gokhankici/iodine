@@ -68,92 +68,6 @@ filterNoRegs as = filter f as
              then True
              else debug ("removed unnecessary block:\n" ++ show a) False
 
-
-------------------------------------------------------------------------------------
--- | mergeStars :: [AlwaysBlock] -> [AlwaysBlock] :::: Merge always blocks with @(*)
-------------------------------------------------------------------------------------
-
--- mergeStars :: [AlwaysBlock] -> [AlwaysBlock]
--- mergeStars as = stars' ++ assigns ++ others
---   where
---     (stars, assigns, others) =
---       foldl' (\(ss,asns, os) a ->
---                 case a ^. aEvent of
---                   Star   -> (a:ss, asns,   os)
---                   Assign -> (ss,   a:asns, os)
---                   _      -> (ss,   asns,   a:os))
---       ([],[],[]) as
-
---     stars' = debug ("merge stars:\n" ++ intercalate "\n\n" (show . view aStmt <$> merges)) merges
-
---     merges =
---       mergeBlocks abMap (rs,ws)
---       where
---         rw_as = stars ++ assigns
---         rs    = readSets  rw_as
---         ws    = writeSets rw_as
-
---     abMap :: AM
---     abMap = IM.fromList $ (\a -> (a^.aId, a)) <$> as
-  
------------------------------------------------------------------------------------
--- | [AlwaysBlock] -> [AlwaysBlock] :::: Merge always blocks with @(clock)
------------------------------------------------------------------------------------
-
--- mergeClocks :: [AlwaysBlock] -> [AlwaysBlock]
--- mergeClocks as = groups ++ assigns ++ rest
---   where
---     groups = mergeGroup posAs 1 ++ mergeGroup negAs 2
-
---     (posAs, negAs, assigns, rest) =
---       foldl' (\(ps,ns, asns, rs) a ->
---                  case a ^. aEvent of
---                    PosEdge _ -> (a:ps, ns,   asns,   rs)
---                    NegEdge _ -> (ps,   a:ns, asns,   rs)
---                    Assign    -> (ps,   ns,   a:asns, rs)
---                    Star      -> (ps,   ns,   asns,   a:rs))
---       ([],[],[],[]) as
-
---     maxId = maximum $ (view aId) <$> as
-
---     -- as'   = groups ++ assigns ++ rest
---     -- abMap = IM.fromList $ (\a -> (a^.aId, a)) <$> as'
-
---     -- clocks' = debug ("merge clocks:\n" ++ intercalate "\n\n" (show . view aStmt <$> merges)) merges
---     -- merges  =
---     --   mergeBlocks abMap (rs,ws)
---     --   where
---     --     rs    = readSets  (groups ++ assigns)
---     --     ws    = writeSets assigns
-      
---     mergeGroup gs n =
---       let (gs', rs) = partition (allNBs . view aStmt) gs
-
---           allNBs Skip                  = True
---           allNBs (BlockingAsgn{..})    = False
---           allNBs (NonBlockingAsgn{..}) = True
---           allNBs (IfStmt{..})          = all allNBs [thenStmt, elseStmt]
---           allNBs (Block{..})           = all allNBs blockStmts
-
---           a = AB { _aEvent = head gs' ^. aEvent
---                  , _aStmt  = Block $ view aStmt <$> gs'
---                  , _aId    = n + maxId
---                  , _aSt    = mconcat $ view aSt <$> gs'
---                  , _aLoc   = ("clk join", "clk join")
---                  }
---           a' = debug (printf "merged clocks:\n%s" (show $ a ^. aStmt)) a
-          
---       in case gs' of
---            [] -> gs
---            _  -> a' : rs
-
-
------------------------------------------------------------------------------------
--- | [AlwaysBlock] -> [AlwaysBlock] :::: Filter out continuous assignments
------------------------------------------------------------------------------------
--- removeAssigns :: [AlwaysBlock] -> [AlwaysBlock]
--- removeAssigns = filter ((/= Assign) . (view aEvent))
-
 -----------------------------------------------------------------------------------
 -- Helper functions
 -----------------------------------------------------------------------------------
@@ -174,11 +88,6 @@ _mergeBlocks abMap nss =
   where
     maxId = fst $ IM.findMax abMap
 
-
--- mergeBlocks :: AM -> (RWS, RWS) -> [AlwaysBlock]
--- mergeBlocks abMap (rs,ws) = _mergeBlocks abMap nss
---   where
---     nss   = pathsToNonAssigns abMap rs ws
 
 mergeBlocksG :: AM -> G -> [AlwaysBlock]
 mergeBlocksG abMap g = _mergeBlocks abMap (pathsToNonAssignsG g)
