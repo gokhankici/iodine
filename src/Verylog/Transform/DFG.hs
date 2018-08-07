@@ -9,15 +9,19 @@ module Verylog.Transform.DFG
   
   , AM
   , RWS
+  , G
   , AssignType(..)
   , hasCycle
   , readSets
   , writeSets
   , pathsToNonAssigns
+  , pathsToNonAssignsG
+  , makeGraphFromRWSet
   , getLhss
+  , eventToAssignType
   ) where
 
-import           Control.Lens            hiding (mapping)
+import           Control.Lens            hiding (mapping, pre)
 import qualified Data.HashSet            as HS
 import qualified Data.HashMap.Strict     as HM
 import qualified Data.IntMap.Strict      as IM
@@ -125,33 +129,41 @@ readSets as = IM.fromList $ (\a -> (a ^. aId, getRhss (a ^. aSt ^. ufs) (a ^. aS
 writeSets :: [AlwaysBlock] -> RWS
 writeSets as = IM.fromList $ (\a -> (a ^. aId, getLhss (a ^. aStmt))) <$> as
 
-pathsToNonAssigns :: AM -> RWS -> RWS -> [[Node]]
-pathsToNonAssigns abMap rs ws =
+pathsToNonAssignsG :: G -> [[Node]]
+pathsToNonAssignsG g =
   [ let g'' = subgraph c g'
     in  reverse $ topsort g''
   | c <- components g'
   ]
+  where
+    g' = removeAssignRoots g
+
+pathsToNonAssigns :: AM -> RWS -> RWS -> [[Node]]
+pathsToNonAssigns abMap rs ws = pathsToNonAssignsG g
   where
     g = let res = makeGraphFromRWSet abMap rs ws
         in  if   hasCycle res
             then error "pathsToNonAssigns: graph has a cycle !"
             else res
 
-    g' = removeAssignRoots g
+removeAssignRoots :: G -> G
+removeAssignRoots gr =
+  let nNodes        = order gr
+      gAfterRemoval = gfiltermap remIfAsgnRoot gr
+      nNodes'       = order gAfterRemoval
+  in if   nNodes == nNodes'
+     then gr
+     else removeAssignRoots gAfterRemoval
 
-    remIfAsgnRoot ctx@(inEdges, _n, asgnT, _outEdges) =
-      if   inEdges == [] && asgnT == Continuous -- is an cont. assign root
-      then Nothing
-      else Just ctx
-
-    removeAssignRoots gr =
-      let nNodes        = order gr
-          gAfterRemoval = gfiltermap remIfAsgnRoot gr
-          nNodes'       = order gAfterRemoval
-      in if   nNodes == nNodes'
-         then gr
-         else removeAssignRoots gAfterRemoval
+  where
+    remIfAsgnRoot ctx@(_, n, asgnT, _) =
+      let inEdges = pre gr n
+      in if   inEdges == [] && asgnT == Continuous -- is an cont. assign root
+         then trace ("removed:" ++ show ctx) Nothing
+         else Just ctx
   
+
+-- | (n1, n2) \in edges means n1 reads from a variable that n2 writes to
 makeGraphFromRWSet :: AM -> RWS -> RWS -> G
 makeGraphFromRWSet abMap rs ws = mkGraph allNs es
   where
@@ -174,9 +186,10 @@ makeGraphFromRWSet abMap rs ws = mkGraph allNs es
       IM.foldlWithKey'
       (\l n s ->
           -- ns : all blocks that update the sensitivity list of block# n
-          let ns = IS.toList $ foldMap (\v -> HM.lookupDefault IS.empty v sensitizers) s
+          let ns  = IS.toList $ foldMap (\v -> HM.lookupDefault IS.empty v sensitizers) s
+              ns' = filter (n /=) ns
           -- (n1, n2) means n1's block is ***after*** after n2 executes
-          in ((\n' -> (n,n',())) <$> ns) ++ l
+          in ((\n' -> (n,n',())) <$> ns') ++ l
       )
       []
       rs

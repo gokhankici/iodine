@@ -7,7 +7,6 @@ module Verylog.Transform.Modularize (flatten) where
 import           Control.Arrow
 import           Control.Lens hiding (mapping)
 import           Control.Monad.State.Lazy
-import qualified Data.IntMap.Strict         as IM
 import qualified Data.HashMap.Strict        as HM
 import qualified Data.HashSet               as HS
 import           Data.List
