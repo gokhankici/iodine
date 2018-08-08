@@ -24,7 +24,7 @@ module test(clk);
    reg_file REG_FILE(clk, 0, Stall_wire);
 
    always @(*) begin
-     Stall <= Stall_wire;
+     Stall = Stall_wire;
    end
 
 endmodule

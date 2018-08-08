@@ -41,6 +41,8 @@ SIMPLE_TESTS=( \
 	"01 - 09 - tr-test-9"     "-M test          $THIS_DIR/test/verilog/pos/tr-test-9.v" \
 	"01 - 10 - tr-test-10"    "-M test          $THIS_DIR/test/verilog/pos/tr-test-10.v" \
 	"01 - 12 - merge-02"      "-M test          $THIS_DIR/test/verilog/pos/merge-02.v"   \
+	"01 - 13 - merge-03"      "-M test          $THIS_DIR/test/verilog/pos/merge03.v"   \
+	"01 - 14 - merge-04"      "-M test          $THIS_DIR/test/verilog/pos/merge04.v"   \
 	)
 
 # --name mips-stub

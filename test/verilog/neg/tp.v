@@ -11,6 +11,7 @@ module test(clk, in1, in2, out);
    // @annot{taint_sink(out)}
 
    // @annot{qualifierImp(temp1, [in1, in2])}
+   // @annot{qualifierPairs([temp1, fast])}
    
    assign fast = (in1 | in2) == 0;
    

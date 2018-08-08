@@ -7,8 +7,8 @@ module test(clk, sel, opa, opb, out);
    // @annot{taint_sink(out)}
    output reg [31:0] out;
 
-   // @annot{qualifier2([opa_r, opb_r])}
-   // @annot{qualifier2([r1, r2])}
+   // @annot{qualifierPairs([opa_r, opb_r])}
+   // @annot{qualifierPairs([r1, r2])}
 
    reg opa_r, opb_r;
    
