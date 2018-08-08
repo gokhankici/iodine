@@ -9,6 +9,7 @@ import           Control.Lens hiding (mapping)
 import qualified Data.IntMap.Strict         as IM
 import           Data.List
 import           Data.Graph.Inductive.Graph hiding ((&))
+import           Control.Exception
 
 import           Verylog.Language.Types
 import           Verylog.Transform.DFG
@@ -59,7 +60,10 @@ mergeClocks as = groups ++ assigns ++ rest
           allNBs (IfStmt{..})          = all allNBs [thenStmt, elseStmt]
           allNBs (Block{..})           = all allNBs blockStmts
 
-          a = AB { _aEvent = head gs' ^. aEvent
+          event' = let e = head gs' ^. aEvent
+                   in  assert (e /= Assign) e
+
+          a = AB { _aEvent = event'
                  , _aStmt  = Block $ view aStmt <$> gs'
                  , _aId    = n + maxId
                  , _aSt    = mconcat $ view aSt <$> gs'
