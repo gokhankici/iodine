@@ -17,9 +17,11 @@ module Verylog.Transform.DFG
   , pathsToNonAssigns
   , pathsToNonAssignsG
   , makeGraphFromRWSet
-  , getLhss
   , eventToAssignType
   ) where
+
+import           Verylog.Language.Types
+import           Verylog.Transform.Utils
 
 import           Control.Lens            hiding (mapping, pre)
 import qualified Data.HashSet            as HS
@@ -27,9 +29,7 @@ import qualified Data.HashMap.Strict     as HM
 import qualified Data.IntMap.Strict      as IM
 import qualified Data.IntSet             as IS
 import           Text.Printf
-import           Verylog.Language.Types
 import           Data.Monoid 
-import           Debug.Trace
 
 import Data.Graph.Inductive.Graph
 import Data.Graph.Inductive.PatriciaTree
@@ -203,15 +203,6 @@ makeGraphFromRWSet abMap rs ws = mkGraph allNs es
          (\m n s -> HS.foldl' (\m' v -> HM.alter (f n) v m') m s)
          HM.empty
          ws
-
-getLhss :: Stmt -> S
-getLhss s = h s
-  where
-    h Skip                  = HS.empty
-    h (BlockingAsgn{..})    = HS.singleton lhs
-    h (NonBlockingAsgn{..}) = HS.singleton lhs
-    h (IfStmt{..})          = foldMap h [thenStmt, elseStmt]
-    h (Block{..})           = foldMap h blockStmts
 
 getRhss :: HM.HashMap Id [Id] -> Stmt -> S
 getRhss us s = h s

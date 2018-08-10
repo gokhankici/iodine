@@ -133,7 +133,7 @@ printResult fpst (Result{..}) =
           findAB i = fromJust $ find (\a -> (a^.aId) == i) (fpst ^. fpABs)
       sequence_ $ (flip map) (M.assocs m) $ \(aid, cids) -> do
         withColor Blue $ printf "Failed constraint ids: %s\n" (show $ S.toList cids)
-        print $ findAB aid
+        print $ view aStmt $ findAB aid
     _          -> return ()
   where
     errMap cids = foldr (\(cid,hid) m ->

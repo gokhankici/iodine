@@ -2,14 +2,15 @@
 
 module Verylog.Transform.Utils where
 
+import           Verylog.Language.Types
+import           Verylog.Solver.Common
+
 import           Control.Lens
 import           Control.Exception
 import           Text.Printf
 import           Debug.Trace
 import           Data.List
-
-import           Verylog.Language.Types
-import           Verylog.Solver.Common
+import qualified Data.HashSet            as HS
 
 data VarFormat = VarFormat { taggedVar   :: Bool
                            -- , primedVar   :: Bool
@@ -104,3 +105,12 @@ dbg str a = if verbose then trace str a else a
 twoPairs :: [a] -> [(a,a)]
 twoPairs []     = []
 twoPairs (x:xs) = [ (x,x') | x' <- xs ] ++ twoPairs xs
+
+getLhss :: Stmt -> HS.HashSet Id
+getLhss s = h s
+  where
+    h Skip                  = HS.empty
+    h (BlockingAsgn{..})    = HS.singleton lhs
+    h (NonBlockingAsgn{..}) = HS.singleton lhs
+    h (IfStmt{..})          = foldMap h [thenStmt, elseStmt]
+    h (Block{..})           = foldMap h blockStmts

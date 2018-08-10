@@ -4,20 +4,26 @@
 
 module Verylog.Transform.Merge (merge) where
 
-import           Control.Arrow
-import           Control.Lens hiding (mapping)
-import qualified Data.IntMap.Strict         as IM
-import           Data.List
-import           Data.Graph.Inductive.Graph hiding ((&))
-import           Control.Exception
-
 import           Verylog.Language.Types
 import           Verylog.Transform.DFG
 
-import Debug.Trace
+import           Control.Arrow
+import           Control.Lens hiding (mapping)
+import qualified Data.IntMap.Strict         as IM
+-- import qualified Data.HashMap.Strict        as HM
+import           Data.List
+import           Data.Graph.Inductive.Graph hiding ((&))
+import           Control.Exception
+import           Text.Printf
+import           Debug.Trace
 
 merge :: [AlwaysBlock] -> [AlwaysBlock]
-merge = mergeClocks >>> mergeAll
+merge =
+  mergeClocks
+  >>>
+  mergeAll
+  -- >>>
+  -- printBlocks
 
 -----------------------------------------------------------------------------------
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Filter out continuous assignments
@@ -51,29 +57,30 @@ mergeClocks as = groups ++ assigns ++ rest
 
     maxId = maximum $ (view aId) <$> as
 
-    mergeGroup gs n =
-      let (gs', rs) = partition (allNBs . view aStmt) gs
+    mergeGroup gs n = if null gs then [] else [a]
+      where
+        event' = let e = head gs ^. aEvent
+                 in  assert (e /= Assign) e
 
-          allNBs Skip                  = True
-          allNBs (BlockingAsgn{..})    = False
-          allNBs (NonBlockingAsgn{..}) = True
-          allNBs (IfStmt{..})          = all allNBs [thenStmt, elseStmt]
-          allNBs (Block{..})           = all allNBs blockStmts
+        a = AB { _aEvent = event'
+               , _aStmt  = Block $ view aStmt <$> gs
+               , _aId    = n + maxId
+               , _aSt    = mconcat $ view aSt <$> gs
+               , _aLoc   = ("clk join", "clk join")
+               }
 
-          event' = let e = head gs' ^. aEvent
-                   in  assert (e /= Assign) e
+printBlocks :: [AlwaysBlock] -> [AlwaysBlock]
+printBlocks as = f <$> as
+  where
+    f a = trace (printA a) a
 
-          a = AB { _aEvent = event'
-                 , _aStmt  = Block $ view aStmt <$> gs'
-                 , _aId    = n + maxId
-                 , _aSt    = mconcat $ view aSt <$> gs'
-                 , _aLoc   = ("clk join", "clk join")
-                 }
-          
-      in case gs' of
-           [] -> gs
-           _  -> a : rs
-
+    printA :: AlwaysBlock -> String
+    printA a = printf
+               -- "block #%d [%s]:\n%s\n%s"
+               "block #%d [%s]:\n%s"
+               (a^.aId) (show $ a^.aEvent)
+               -- (show $ sort $ HM.toList (a^.aSt^.ufs))
+               (show (a^.aStmt))
 
 -----------------------------------------------------------------------------------
 -- Helper functions
@@ -105,3 +112,4 @@ debug str n = if   enabled
               else n
   where
     enabled = False
+

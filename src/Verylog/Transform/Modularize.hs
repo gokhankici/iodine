@@ -8,13 +8,9 @@ import           Control.Lens hiding (mapping)
 import           Control.Monad.State.Lazy
 import qualified Data.HashMap.Strict        as HM
 import qualified Data.HashSet               as HS
-import           Data.List
 
 import           Verylog.Language.Types
-import           Verylog.Transform.DFG
-
-import Text.Printf
---import Debug.Trace
+import           Verylog.Transform.Utils
 
 flatten :: St -> [AlwaysBlock]
 flatten = flattenToAlways
@@ -63,10 +59,3 @@ m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
                                  st'
                      in st''
 
-
-printA :: AlwaysBlock -> String
-printA a = printf
-           "block #%d [%s]:\n%s\n%s"
-           (a^.aId) (show $ a^.aEvent)
-           (show $ sort $ HM.toList (a^.aSt^.ufs))
-           (show (a^.aStmt))

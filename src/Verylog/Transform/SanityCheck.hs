@@ -8,13 +8,18 @@ import           Control.Arrow
 import           Control.Exception
 import           Control.Lens
 import           Control.Monad.State.Lazy
-import qualified Data.HashMap.Strict        as M
+import qualified Data.HashMap.Strict        as HM
+import qualified Data.HashSet               as HS
+import qualified Data.IntSet                as IS
+import           Data.List
 import           Text.Printf
+-- import           Debug.Trace
 
 import Verylog.Language.Types
+import Verylog.Transform.Utils
 
-data PassSt = PassSt { _bas    :: M.HashMap Id Int
-                     , _nbas   :: M.HashMap Id Int
+data PassSt = PassSt { _bas    :: HM.HashMap Id Int
+                     , _nbas   :: HM.HashMap Id Int
                      , _errors :: [PassError]
                      }
 
@@ -23,18 +28,21 @@ makeLenses ''PassSt
 type S = State PassSt
 
 freshKeepErrs :: S ()
-freshKeepErrs = bas .= M.empty >> nbas .= M.empty
+freshKeepErrs = bas .= HM.empty >> nbas .= HM.empty
 
 --------------------------------------------------------------------------------
 sanityCheck :: [AlwaysBlock] -> [AlwaysBlock]  
 --------------------------------------------------------------------------------
-sanityCheck = check1 >>> checkAssignmentTypes
+sanityCheck =
+  check1 >>>
+  checkAssignmentTypes >>>
+  varSingleUpdate
 
 --------------------------------------------------------------------------------
 check1    :: [AlwaysBlock] -> [AlwaysBlock]
 --------------------------------------------------------------------------------
-check1 as = evalState comp (PassSt { _bas    = M.empty
-                                   , _nbas   = M.empty
+check1 as = evalState comp (PassSt { _bas    = HM.empty
+                                   , _nbas   = HM.empty
                                    , _errors = []
                                    })
   where
@@ -78,24 +86,24 @@ checkAssignments as = freshKeepErrs >> mapM_ (checkStmt . view aStmt) as
 
       let keepNew this old = if this > old then Just this else Nothing
 
-      let newThBAs  = M.differenceWith keepNew thBAs oldBAs
-      let newElBAs  = M.differenceWith keepNew elBAs oldBAs
-      let newThNBAs = M.differenceWith keepNew thNBAs oldNBAs
-      let newElNBAs = M.differenceWith keepNew elNBAs oldNBAs
+      let newThBAs  = HM.differenceWith keepNew thBAs oldBAs
+      let newElBAs  = HM.differenceWith keepNew elBAs oldBAs
+      let newThNBAs = HM.differenceWith keepNew thNBAs oldNBAs
+      let newElNBAs = HM.differenceWith keepNew elNBAs oldNBAs
 
-      let d1 = M.intersection newThBAs  newElNBAs
-      let d2 = M.intersection newThNBAs newElBAs
+      let d1 = HM.intersection newThBAs  newElNBAs
+      let d2 = HM.intersection newThNBAs newElBAs
 
-      let pickFirstKey = fst . head . M.toList 
+      let pickFirstKey = fst . head . HM.toList 
 
-      when (not $ M.null d1) $
+      when (not $ HM.null d1) $
         addError $ printf "different types of assignments to %s" (pickFirstKey d1)
 
-      when (not $ M.null d2) $ 
+      when (not $ HM.null d2) $ 
         addError $ printf "different types of assignments to %s" (pickFirstKey d2)
 
-      bas  .= M.unionWith max thBAs  elBAs
-      nbas .= M.unionWith max thNBAs elNBAs
+      bas  .= HM.unionWith max thBAs  elBAs
+      nbas .= HM.unionWith max thNBAs elNBAs
 
 
 --------------------------------------------------------------------------------
@@ -127,12 +135,28 @@ checkAssignmentTypes as =
     h f (Block ss)   = all (h f) ss
     h f s            = f s
 
+--------------------------------------------------------------------------------
+varSingleUpdate :: [AlwaysBlock] -> [AlwaysBlock]
+--------------------------------------------------------------------------------
+varSingleUpdate as =
+  case duplicateUpdates of
+    []   -> as
+    dups -> throw . PassError $
+            "sanity check fail: varSingleUpdate\n" ++
+            show dups
+  where
+    duplicateUpdates = filter ((/=) 1 . IS.size . snd) (HM.toList updateMap)
 
+    updateMap :: HM.HashMap Id IS.IntSet
+    updateMap = foldl' (HM.unionWith IS.union) HM.empty (h2 <$> as)
+
+    h2 a = HM.fromList [ (l, IS.singleton (a^.aId)) | l <- HS.toList $ getLhss (a^.aStmt) ]
+  
 --------------------------------------------------------------------------------
 -- Helper functions
 --------------------------------------------------------------------------------
-incr     :: Id -> M.HashMap Id Int -> M.HashMap Id Int
-incr v m = M.alter f v m
+incr     :: Id -> HM.HashMap Id Int -> HM.HashMap Id Int
+incr v m = HM.alter f v m
   where 
     f Nothing = Just 1
     f n       = (+1) <$> n
