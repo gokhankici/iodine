@@ -39,7 +39,10 @@ dependencies:
 library:
   source-dirs:           src
   ghc-options:
-  - -Wall -Wno-missing-signatures -Wno-orphans -Wno-name-shadowing -O2
+  - -Wall -Wcompat 
+  - -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+  - -Wno-missing-signatures -Wno-orphans -Wno-name-shadowing 
+  - -O2 
   exposed-modules:
   - Verylog.MainCommon
   - Verylog.FPGen

@@ -18,16 +18,16 @@ module test(clk, in1, in2, in3, out);
      in1_r <= in1;
 
    always @(posedge clk)
-     in1_r2 <= in1_r;
-
-   always @(posedge clk)
      in2_r <= in2;
 
    always @(posedge clk)
-     in2_r2 <= in2_r;
-   
-   always @(posedge clk)
      in3_r <= in3;
+
+   always @(posedge clk)
+     in1_r2 <= in1_r;
+
+   always @(posedge clk)
+     in2_r2 <= in2_r;
 
    always @(posedge clk)
      in3_r2 <= in3_r;

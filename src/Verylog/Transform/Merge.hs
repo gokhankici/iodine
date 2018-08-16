@@ -1,33 +1,71 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Verylog.Transform.Merge (merge) where
 
 import           Verylog.Language.Types
 import           Verylog.Transform.DFG
+import           Verylog.Solver.FP.Types           (FPQualifier(..))
 
 import           Control.Arrow
-import           Control.Lens hiding (mapping)
+import           Control.Lens               hiding (mapping)
 import qualified Data.IntMap.Strict         as IM
--- import qualified Data.HashMap.Strict        as HM
+import qualified Data.HashSet               as HS
 import           Data.List
 import           Data.Graph.Inductive.Graph hiding ((&))
 import           Control.Exception
 import           Text.Printf
 import           Debug.Trace
 
-merge :: [AlwaysBlock] -> [AlwaysBlock]
+type Annots = ([Id], [FPQualifier])
+type ABS    = [AlwaysBlock]
+
+merge :: (ABS, Annots) -> (ABS, Annots)
 merge =
-  mergeClocks
+  mergeEquals
   >>>
-  mergeAll
-  -- >>>
-  -- printBlocks
+  disable (first mergeClocks)
+  -- first mergeClocks
+  >>>
+  first mergeAll
+  >>>
+  disable (first printBlocks)
+  -- first printBlocks
+  where
+    disable _arrow = id
 
 -----------------------------------------------------------------------------------
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Filter out continuous assignments
 -----------------------------------------------------------------------------------
+mergeEquals :: (ABS, Annots) -> (ABS, Annots)
+mergeEquals (as, annots) = (as', annots)
+  where
+    as' = rest ++ newclocks1 ++ newclocks2
+    (_, qualifiers) = annots
+
+    (clocks, rest) = partition ((==) NonBlocking . eventToAssignType . view aEvent) as
+
+    newclocks1 = mergeBlocks abMap iss
+    newclocks2 = let toRemove = concat iss
+                 in  filter (not . flip elem toRemove . view aId) clocks
+
+    ws  = writeSets clocks
+    vss = foldl' (\acc -> \case
+                     QualifEqs vs -> vs:acc
+                     _            -> acc) [] qualifiers
+
+    abMap = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
+    iss =
+      let iss1 =
+            [ IM.foldMapWithKey
+              (\i s -> if any (flip HS.member s) vs then [i] else [])
+              ws
+            | vs <- vss
+            ]
+      in  filter ((> 1) . length) iss1
+                     
 mergeAll :: [AlwaysBlock] -> [AlwaysBlock]
 mergeAll as = res
   where
@@ -85,8 +123,8 @@ printBlocks as = f <$> as
 -----------------------------------------------------------------------------------
 -- Helper functions
 -----------------------------------------------------------------------------------
-_mergeBlocks :: AM -> [[Node]] -> [AlwaysBlock]
-_mergeBlocks abMap nss = 
+mergeBlocks :: AM -> [[Node]] -> [AlwaysBlock]
+mergeBlocks abMap nss = 
   [ let as2      = (abMap IM.!) <$> ns
         a' = AB { _aEvent = (last as2) ^. aEvent
                 , _aStmt  = Block $ view aStmt <$> as2
@@ -104,7 +142,7 @@ _mergeBlocks abMap nss =
 
 
 mergeBlocksG :: AM -> G -> [AlwaysBlock]
-mergeBlocksG abMap g = _mergeBlocks abMap (pathsToNonAssignsG g)
+mergeBlocksG abMap g = mergeBlocks abMap (pathsToNonAssignsG g)
 
 debug :: String -> a -> a
 debug str n = if   enabled

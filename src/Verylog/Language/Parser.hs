@@ -29,6 +29,7 @@ import           Text.Printf
 import           Verylog.Language.Types
 import           Verylog.Language.Utils
 import           Verylog.Solver.FP.Types
+
 -----------------------------------------------------------------------------------
 -- | Verylog IR
 -----------------------------------------------------------------------------------
@@ -134,6 +135,37 @@ emptyParseSt = ParseSt { _parseSources      = S.empty
                        }
 
 makeLenses ''ParseSt
+
+-----------------------------------------------------------------------------------
+-- | Exported functions
+-----------------------------------------------------------------------------------
+
+type Parser = Parsec SourcePos String
+type Annots = ([Id], [FPQualifier])
+
+-- --------------------------------------------------------------------------------
+parse :: FilePath -> String -> (St, Annots)
+-- --------------------------------------------------------------------------------
+parse f = parseWithoutConversion f >>> first makeState
+
+-- --------------------------------------------------------------------------------
+parseWithoutConversion :: FilePath -> String -> ([ParseIR], Annots)
+-- --------------------------------------------------------------------------------
+parseWithoutConversion fp s = foldr f ([],([],[])) (parseWith parseIR fp s)
+  where
+    f (PQualifier{..})  = second $ second ((:) (QualifImpl invLhs invRhs))
+    f (PQualifierI{..}) = second $ second ((:) (QualifIff  invLhs invRhs))
+    f (PQualifier2{..}) = second $ second ((:) (QualifEqs invEqs))
+    f (PQualifierA{..}) = second $ second ((:) (QualifAssume invAssume))
+    f p@(PSource src)  = first ((:) p) >>> second (first ((:) src))
+    f p                = first ((:) p)
+
+parseWith  :: Parser a -> FilePath -> String -> a
+parseWith p f s =
+  case runParser (whole p) f s of
+    Left err -> throw (IRParseError (parseErrorPretty err) (NE.head . errorPos $ err))
+    Right e  -> e
+
 
 -----------------------------------------------------------------------------------
 -- | ParseIR -> St
@@ -337,35 +369,6 @@ makeStmt (PBlockingAsgn l r)    = BlockingAsgn l r
 makeStmt (PNonBlockingAsgn l r) = NonBlockingAsgn l r
 makeStmt (PIfStmt cond th el)   = IfStmt cond (makeStmt th) (makeStmt el)
 makeStmt  PSkip                 = Skip
-
--- --------------------------------------------------------------------------------
--- | PARSING
--- --------------------------------------------------------------------------------
-        
-type Parser = Parsec SourcePos String
-type ExtraStuff = ([Id], [FPQualifier])
-
--- --------------------------------------------------------------------------------
-parseWithoutConversion :: FilePath -> String -> ([ParseIR], ExtraStuff)
--- --------------------------------------------------------------------------------
-parseWithoutConversion fp s = foldr f ([],([],[])) (parseWith parseIR fp s)
-  where
-    f (PQualifier{..})  = second $ second ((:) (QualifImpl invLhs invRhs))
-    f (PQualifierI{..}) = second $ second ((:) (QualifIff  invLhs invRhs))
-    f (PQualifier2{..}) = second $ second ((:) (QualifEqs invEqs))
-    f (PQualifierA{..}) = second $ second ((:) (QualifAssume invAssume))
-    f p@(PSource src)  = first ((:) p) >>> second (first ((:) src))
-    f p                = first ((:) p)
-
--- --------------------------------------------------------------------------------
-parse :: FilePath -> String -> (St, ExtraStuff)
--- --------------------------------------------------------------------------------
-parse f = parseWithoutConversion f >>> first makeState
-
-parseWith  :: Parser a -> FilePath -> String -> a
-parseWith p f s = case runParser (whole p) f s of
-                    Left err -> throw (IRParseError (parseErrorPretty err) (NE.head . errorPos $ err))
-                    Right e  -> e
 
 --------------------------------------------------------------------------------
 -- | Top-Level Expression Parser

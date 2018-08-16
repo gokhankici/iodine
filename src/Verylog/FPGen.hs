@@ -14,9 +14,8 @@ import Verylog.Solver.FP.Types
 pipeline :: FilePath -> String -> FPSt
 --------------------------------------------------------------------------------
 pipeline f = parse f
-             >>> first flatten
-             >>> first sanityCheck
-             >>> first merge
+             >>> first ( flatten >>>  sanityCheck )
+             >>> merge
              >>> toFpSt
 
   
@@ -24,7 +23,6 @@ pipeline f = parse f
 pipeline' :: FilePath -> String -> [AlwaysBlock]
 --------------------------------------------------------------------------------
 pipeline' f = parse f
-              >>> arr fst
-              >>> flatten
-              >>> sanityCheck
+              >>> first ( flatten >>> sanityCheck )
               >>> merge
+              >>> arr fst
