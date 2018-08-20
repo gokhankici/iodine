@@ -26,15 +26,18 @@ merge :: (ABS, Annots) -> (ABS, Annots)
 merge =
   mergeEquals
   >>>
-  disable (first mergeClocks)
-  -- first mergeClocks
-  >>>
-  first mergeAll
-  >>>
-  disable (first printBlocks)
-  -- first printBlocks
+  first
+  (
+    disable mergeClocks
+    >>>
+    disable mergeAll
+    >>>
+    mergeAssigns
+    >>>
+    printBlocks
+  )
   where
-    disable _arrow = id
+    disable _ = id
 
 -----------------------------------------------------------------------------------
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Filter out continuous assignments
@@ -107,6 +110,18 @@ mergeClocks as = groups ++ assigns ++ rest
                , _aLoc   = ("clk join", "clk join")
                }
 
+mergeAssigns :: [AlwaysBlock] -> [AlwaysBlock]
+mergeAssigns as = as'
+  where
+    assigns = filter ((==) Continuous . eventToAssignType . view aEvent) as
+    rs      = readSets as
+    ws      = writeSets assigns
+    abMap   = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
+    g       = makeGraphFromRWSet abMap rs ws
+    g'      = if hasCycle g then error "mergeAll: has a cycle" else g
+    as'     = mergeBlocksG abMap g'
+  
+
 printBlocks :: [AlwaysBlock] -> [AlwaysBlock]
 printBlocks as = f <$> as
   where
@@ -115,7 +130,7 @@ printBlocks as = f <$> as
     printA :: AlwaysBlock -> String
     printA a = printf
                -- "block #%d [%s]:\n%s\n%s"
-               "block #%d [%s]:\n%s"
+               "block #%d [%s]:\n%s\n"
                (a^.aId) (show $ a^.aEvent)
                -- (show $ sort $ HM.toList (a^.aSt^.ufs))
                (show (a^.aStmt))
@@ -130,7 +145,7 @@ mergeBlocks abMap nss =
                 , _aStmt  = Block $ view aStmt <$> as2
                 , _aId    = n + maxId
                 , _aSt    = mconcat $ view aSt <$> as2
-                , _aLoc   = ("* join", "* join")
+                , _aLoc   = ("mergeBlocks", "mergeBlocks")
                 }
         ns = debug (show ns') ns'
 

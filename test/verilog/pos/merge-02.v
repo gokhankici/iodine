@@ -7,10 +7,6 @@ module test(clk, opa, opb, out);
    // @annot{taint_sink(out)}
    output reg [31:0] out;
 
-   // @annot{qualifierImp(sticky, [opa_r, opb_r])}
-   // @annot{qualifierImp(opa_r, [opa])}
-   // @annot{qualifierImp(opb_r, [opb])}
-
    reg opa_r, opb_r;
    reg sticky;
    reg y;
