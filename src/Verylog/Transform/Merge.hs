@@ -3,7 +3,9 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Verylog.Transform.Merge (merge) where
+module Verylog.Transform.Merge ( merge
+                               , Annots
+                               ) where
 
 import           Verylog.Language.Types
 import           Verylog.Transform.DFG
@@ -30,11 +32,11 @@ merge =
   (
     disable mergeClocks
     >>>
-    disable mergeAll
+    mergeAssignsAndStars
     >>>
-    mergeAssigns
+    disable mergeAssigns
     >>>
-    printBlocks
+    disable printBlocks
   )
   where
     disable _ = id
@@ -69,8 +71,8 @@ mergeEquals (as, annots) = (as', annots)
             ]
       in  filter ((> 1) . length) iss1
                      
-mergeAll :: [AlwaysBlock] -> [AlwaysBlock]
-mergeAll as = res
+mergeAssignsAndStars :: [AlwaysBlock] -> [AlwaysBlock]
+mergeAssignsAndStars as = res
   where
     _res = mergeBlocksG abMap g'
     res  = debug ("merge all:\n" ++ intercalate "\n\n" (show . view aStmt <$> _res)) _res
@@ -80,7 +82,7 @@ mergeAll as = res
     ws    = writeSets $ filter ((/=) NonBlocking . eventToAssignType . view aEvent) as
     g     = makeGraphFromRWSet abMap rs ws
 
-    g' = if hasCycle g then error "mergeAll: has a cycle" else g
+    g' = if hasCycle g then error "mergeAssignsAndStars: has a cycle" else g
 
 mergeClocks :: [AlwaysBlock] -> [AlwaysBlock]
 mergeClocks as = groups ++ assigns ++ rest
@@ -118,7 +120,7 @@ mergeAssigns as = as'
     ws      = writeSets assigns
     abMap   = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
     g       = makeGraphFromRWSet abMap rs ws
-    g'      = if hasCycle g then error "mergeAll: has a cycle" else g
+    g'      = if hasCycle g then error "mergeAssigns: has a cycle" else g
     as'     = mergeBlocksG abMap g'
   
 

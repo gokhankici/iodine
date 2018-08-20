@@ -1,4 +1,6 @@
-module Verylog.FPGen ( pipeline, pipeline' ) where
+module Verylog.FPGen ( pipeline
+                     , pipeline'
+                     ) where
 
 import Control.Arrow
 
@@ -13,16 +15,15 @@ import Verylog.Solver.FP.Types
 --------------------------------------------------------------------------------
 pipeline :: FilePath -> String -> FPSt
 --------------------------------------------------------------------------------
-pipeline f = parse f
-             >>> first ( flatten >>>  sanityCheck )
-             >>> merge
-             >>> toFpSt
+pipeline f = common f >>> toFpSt
 
   
 --------------------------------------------------------------------------------
 pipeline' :: FilePath -> String -> [AlwaysBlock]
 --------------------------------------------------------------------------------
-pipeline' f = parse f
-              >>> first ( flatten >>> sanityCheck )
-              >>> merge
-              >>> arr fst
+pipeline' f = common f >>> arr fst
+
+common :: FilePath -> String -> ([AlwaysBlock], Annots)
+common f = parse f
+           >>> first ( flatten >>> sanityCheck )
+           >>> merge

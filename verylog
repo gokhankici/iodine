@@ -29,6 +29,7 @@ zparseopts -D -E -- \
            -abduction=ABDUCTION \
 		   -graphs=GRAPHS \
 		   -time=TIME \
+		   f=FAST -fast=FAST \
            h=HELP -help=HELP
 
 if [[ $# -eq 0 || -n "$HELP" ]]; then
@@ -84,6 +85,12 @@ VCGEN_TARGET='fp'
 if [[ -n "$PROF" ]]; then
 	local -a PROFILE_ARGS
 	PROFILE_ARGS=('+RTS' '-p' '-RTS')
+fi
+
+if [[ -n "$FAST" ]]; then
+	NO_OUTPUT="--no-output"
+	NO_SAVE="--no-save"
+	TIME="--time"
 fi
 
 # }}}
