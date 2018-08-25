@@ -41,15 +41,15 @@ m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
     filterList :: HS.HashSet Id -> [Id] -> [Id]
     filterList toKeep = filter (\x -> HS.member x toKeep)
 
-    filterMap :: HS.HashSet Id -> HM.HashMap Id [Id] -> HM.HashMap Id [Id]
-    filterMap toKeep = HM.filterWithKey (\k _v -> HS.member k toKeep)
+    filterMap :: HS.HashSet Id -> UFMap -> UFMap
+    filterMap toKeep = HM.filterWithKey (\k _ -> HS.member k toKeep)
 
     filterSt :: Stmt -> St -> St
     filterSt s stt = let vars  = HS.fromList $ foldVariables s
                          st'   = over ufs      (filterMap vars)  .
                                  set irs      [] $
                                  stt
-                         vars' = vars `HS.union` (HS.fromList $ concat $ HM.elems (st'^.ufs))
+                         vars' = vars `HS.union` (HS.fromList $ concat $ snd <$> HM.elems (st'^.ufs))
                          lhss  = getLhss s
                          st''  = over ports    (filterVars vars') .
                                  over sources  (filterList vars') .

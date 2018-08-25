@@ -200,8 +200,9 @@ nextAsgn a l r = do es1 <- uf_eq r
                 ts2 <- (uses ifConds S.toList) >>= mapM (getLastVarRHS fmt')
                 case ts2 of
                   [] -> return ts1 
-                  _  -> let (es1:ess) = nub $ plusVars (ts1:ts2) -- add each unique operand only once
-                        in return $ foldr (BinOp OR) es1 ess
+                  _  -> case nub $ plusVars (ts1:ts2) of -- add each unique operand only once
+                          []        -> error "TransitionRelation.tagRhs : this is weird"
+                          (es1:ess) -> return $ foldr (BinOp OR) es1 ess
                 
     plusVars :: [Expr] -> [Expr]
     plusVars es = concatMap f es
@@ -229,7 +230,7 @@ varDeps :: Id -> S [Id]
 -- the returned list only contain ports
 varDeps v = do c <- isUF v
                if c
-                 then uses (trSt.ufs) (M.lookupDefault err v)
+                 then snd <$> uses (trSt.ufs) (M.lookupDefault err v)
                  else return [v]
   where
     err = throw (PassError $ "could not find " ++ v ++ " in ufs")
@@ -249,22 +250,23 @@ ufAtomsRHS fmt u = do c <- isUF u
 ----------------------------------------
 uf_eq :: Id -> S [Expr]
 ----------------------------------------
-uf_eq u = do c <- isUF u
-             if c
-               then do fmt <- use trFmt
-                       let fmtL = fmt{leftVar=True,  rightVar=False}
-                           fmtR = fmt{leftVar=False, rightVar=True}
+uf_eq u = do c <- uses (trSt . ufs) (M.lookup u)
+             case c of
+               Nothing      -> return []
+               Just (fn, _) ->
+                 do fmt <- use trFmt
+                    let fmtL = fmt{leftVar=True,  rightVar=False}
+                        fmtR = fmt{leftVar=False, rightVar=True}
 
-                       varsL <- ufAtomsRHS fmtL u
-                       varsR <- ufAtomsRHS fmtR u
+                    varsL <- ufAtomsRHS fmtL u
+                    varsR <- ufAtomsRHS fmtR u
 
-                       let lhs = zip varsL varsR
-                           rhs = (makeVar fmtL u, makeVar fmtR u)
-                       return [UFCheck { ufFunc  = u
-                                       , ufArgs  = lhs
-                                       , ufNames = rhs
-                                       }]
-               else return []
+                    let lhs = zip varsL varsR
+                        rhs = (makeVar fmtL u, makeVar fmtR u)
+                    return [UFCheck { ufFunc  = fn
+                                    , ufArgs  = lhs
+                                    , ufNames = rhs
+                                    }]
                     
 --------------------------------------------------------------------------------
 -- helper functions

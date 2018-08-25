@@ -79,7 +79,7 @@ worklist a assignments wl = h (wl, HS.empty, HS.empty)
                             _          -> s)
            HS.empty (a ^. aSt ^. ports)
 
-stmt2Assignments :: Stmt -> HM.HashMap Id [Id] -> M
+stmt2Assignments :: Stmt -> UFMap -> M
 stmt2Assignments s unintFuncs = h [] s
   where
     h :: [Id] -> Stmt -> M
@@ -99,8 +99,8 @@ stmt2Assignments s unintFuncs = h [] s
 
     l2ls   :: Id -> [Id]
     l2ls l = case HM.lookup l unintFuncs of
-               Nothing -> [l]
-               Just ls -> ls
+               Nothing     -> [l]
+               Just (_,ls) -> ls
 
 
 type S = HS.HashSet Id
@@ -204,7 +204,7 @@ makeGraphFromRWSet abMap rs ws = mkGraph allNs es
          HM.empty
          ws
 
-getRhss :: HM.HashMap Id [Id] -> Stmt -> S
+getRhss :: UFMap -> Stmt -> S
 getRhss us s = h s
   where
     h Skip                  = HS.empty
@@ -215,8 +215,8 @@ getRhss us s = h s
 
     lukap :: Id -> S
     lukap v = case HM.lookup v us of
-                Nothing -> HS.singleton v
-                Just vs -> HS.fromList vs
+                Nothing     -> HS.singleton v
+                Just (_,vs) -> HS.fromList vs
 
 eventToAssignType             :: Event -> AssignType
 eventToAssignType Assign      = Continuous

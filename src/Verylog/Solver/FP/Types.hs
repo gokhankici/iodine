@@ -71,7 +71,6 @@ data UFConst = UFConst { ufConstName  :: ! Id
                        }
  
 type BindMap = M.HashMap Id FQBind
-type UFMap   = M.HashMap Id [Id]
 
 data FPSt = FPSt { _fpConstraints :: ! [Inv]
                  , _fpABs         :: ! [AlwaysBlock]

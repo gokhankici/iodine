@@ -247,8 +247,8 @@ readWriteSet a = let (r,w) = evalState (comp (a^.aStmt) >> get) ([], [])
     -- writeVars v = S.fromList . filterRegs a $ if M.member v us then [] else [v]
 
     readVars l = foldl' (\s v -> case M.lookup v us of
-                                   Nothing -> S.insert v s
-                                   Just vs -> foldl' (flip S.insert) s vs) S.empty l
+                                   Nothing     -> S.insert v s
+                                   Just (_,vs) -> foldl' (flip S.insert) s vs) S.empty l
     writeVars = S.fromList
     
     comp :: Stmt -> State ([Id],[Id]) ()

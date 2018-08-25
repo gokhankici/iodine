@@ -13,6 +13,7 @@ import qualified Data.HashSet             as S
 import           Data.Typeable
 import           Text.PrettyPrint hiding (sep)
 import           Data.List
+import qualified Data.Semigroup as SG
 import           Data.Hashable
 import qualified Data.Monoid as Mo
 import           GHC.Generics hiding (to)
@@ -91,8 +92,10 @@ data Stmt = Block           { blockStmts :: ! [Stmt] }
           | Skip
           deriving (Generic)
 
+type UFMap = M.HashMap Id (Id, [Id])
+
 data St = St { _ports        :: ! [Var]
-             , _ufs          :: M.HashMap Id [Id]
+             , _ufs          :: ! UFMap
              , _sources      :: ! [Id]
              , _sinks        :: ! [Id]
              , _taintEq      :: ! [Id]
@@ -221,14 +224,14 @@ instance PPrint AlwaysBlock where
 printList :: [String] -> Doc
 printList = brackets . text . (intercalate ", ")
 
-printMap :: M.HashMap String [String] -> Doc
+printMap :: UFMap -> Doc
 printMap = brackets
            . text
            . (intercalate ", ")
            . (map mapKV)
            . M.toList
   where
-    mapKV (k,l) = "(" ++ k ++ ", [" ++ (intercalate ", " l) ++ "])"
+    mapKV (k,(f, l)) = "(" ++ k ++ ", " ++ f ++ ", [" ++ (intercalate ", " l) ++ "])"
 
 instance Show IR where
   show = pprint
@@ -249,9 +252,8 @@ instance NFData IR
 instance NFData St
 instance NFData AlwaysBlock
 
-instance Mo.Monoid St where
-  mempty        = emptySt
-  mappend m1 m2 =
+instance SG.Semigroup St where
+  m1 <> m2 = 
     St { _ports        = jn_list ports
        , _ufs          = (m1 ^. ufs) Mo.<> (m2 ^. ufs)
        , _sources      = jn_list sources
@@ -266,6 +268,10 @@ instance Mo.Monoid St where
         S.toList $
         S.fromList (m1 ^. fld) Mo.<> 
         S.fromList (m2 ^. fld)
+
+instance Mo.Monoid St where
+  mempty  = emptySt
+  mappend = (SG.<>)
 
 getRegisters :: AlwaysBlock -> [Id]
 getRegisters a =

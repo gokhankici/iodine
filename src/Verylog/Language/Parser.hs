@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Verylog.Language.Parser ( parse
                                , parseWithoutConversion
@@ -34,89 +35,93 @@ import           Verylog.Solver.FP.Types
 -- | Verylog IR
 -----------------------------------------------------------------------------------
 
-data ParsePort = PInput  String
-               | POutput String
+data ParsePort = PInput  ! String
+               | POutput ! String
                deriving (Eq, Show)
 
-data ParseVar = PRegister String
-              | PWire     String
+data ParseVar = PRegister ! String
+              | PWire     ! String
               deriving (Eq, Show)
 
-data ParseBehavior = PAlways ParseEvent ParseStmt
+data ParseBehavior = PAlways ! ParseEvent ! ParseStmt
                    deriving (Show)
 
 data ParseEvent = PStar
-                | PPosEdge String
-                | PNegEdge String
+                | PPosEdge ! String
+                | PNegEdge ! String
                 deriving (Show)
 
-data ParseUF = PUF String [String]
+data ParseUF = PUF  String [String]
+             | PUF2 { ufVarName  :: ! String
+                    , ufFuncName :: ! String
+                    , ufArgs     :: ! [String]
+                    }
                deriving (Show)
 
 data ParseGate = PContAsgn String String
-               | PModuleInst { pmModuleName    :: String
-                             , pmInstName      :: String            -- name of the module
-                             , pmInstPorts     :: [ParsePort]       -- port list (i.e. formal parameters)
-                             , pmInstVars      :: [ParseVar]        -- wires or registers used
-                             , pmInstGates     :: [ParseGate]       -- assign or module instantiations
-                             , pmInstBehaviors :: [ParseBehavior]   -- always blocks
-                             , pmInstUFs       :: [ParseUF]         -- uninterpreted functions
+               | PModuleInst { pmModuleName    :: ! String
+                             , pmInstName      :: ! String            -- name of the module
+                             , pmInstPorts     :: ! [ParsePort]       -- port list (i.e. formal parameters)
+                             , pmInstVars      :: ! [ParseVar]        -- wires or registers used
+                             , pmInstGates     :: ! [ParseGate]       -- assign or module instantiations
+                             , pmInstBehaviors :: ! [ParseBehavior]   -- always blocks
+                             , pmInstUFs       :: ! [ParseUF]         -- uninterpreted functions
                              }
                deriving (Show)
                          
-data ParseIR = TopModule    { mPortNames :: [ParsePort]       -- port list (i.e. formal parameters)
-                            , mPorts     :: [ParseVar]        -- wires os registers used
-                            , mGates     :: [ParseGate]       -- assign or module instantiations
-                            , mBehaviors :: [ParseBehavior]   -- always blocks
-                            , mUFs       :: [ParseUF]         -- uninterpreted functions
+data ParseIR = TopModule    { mPortNames :: ! [ParsePort]       -- port list (i.e. formal parameters)
+                            , mPorts     :: ! [ParseVar]        -- wires os registers used
+                            , mGates     :: ! [ParseGate]       -- assign or module instantiations
+                            , mBehaviors :: ! [ParseBehavior]   -- always blocks
+                            , mUFs       :: ! [ParseUF]         -- uninterpreted functions
                             }
-             | PSource      String
-             | PSink        String
-             | PSanitize    [String]
-             | PNotSanitize { nsPortName   :: String
-                            , nsModuleName :: Maybe String
+             | PSource      ! String
+             | PSink        ! String
+             | PSanitize    ! [String]
+             | PNotSanitize { nsPortName   :: ! String
+                            , nsModuleName :: ! (Maybe String)
                             }
-             | PSanitizeMod { sModuleName :: String
-                            , sVarName    :: String
+             | PSanitizeMod { sModuleName :: ! String
+                            , sVarName    :: ! String
                             }
-             | PTaintEqMod  { sModuleName :: String
-                            , sVarName    :: String
+             | PTaintEqMod  { sModuleName :: ! String
+                            , sVarName    :: ! String
                             }
-             | PSanitizeGlob String
-             | PTaintEq      String
-             | PQualifier    { invLhs :: String
-                             , invRhs :: [String]
+             | PSanitizeGlob ! String
+             | PTaintEq      ! String
+             | PQualifier    { invLhs :: ! String
+                             , invRhs :: ! [String]
                              }
-             | PQualifierI   { invLhs :: String
-                             , invRhs :: [String]
+             | PQualifierI   { invLhs :: ! String
+                             , invRhs :: ! [String]
                              }
-             | PQualifier2   { invEqs :: [String]
+             | PQualifier2   { invEqs :: ! [String]
                              }
-             | PQualifierA   { invAssume :: [String]
+             | PQualifierA   { invAssume :: ! [String]
                              }
              deriving (Show)
 
-data ParseStmt = PBlock           [ParseStmt]
-               | PBlockingAsgn    String
-                                  String
-               | PNonBlockingAsgn String
-                                  String
-               | PIfStmt          String
-                                  ParseStmt
-                                  ParseStmt
+data ParseStmt = PBlock           ! [ParseStmt]
+               | PBlockingAsgn    ! String
+                                  ! String
+               | PNonBlockingAsgn ! String
+                                  ! String
+               | PIfStmt          ! String
+                                  ! ParseStmt
+                                  ! ParseStmt
                | PSkip
                deriving (Show)
 
-data ParseSt = ParseSt { _parseSources      :: S.HashSet Id
-                       , _parseSinks        :: S.HashSet Id
-                       , _parsePorts        :: S.HashSet Var
-                       , _parseSanitize     :: S.HashSet Id
-                       , _parseNotSanitize  :: M.HashMap Id (S.HashSet Id)
-                       , _parseSanitizeGlob :: S.HashSet Id
-                       , _parseTaintEq      :: S.HashSet Id
-                       , _parseModSanitize  :: M.HashMap Id (S.HashSet Id)
-                       , _parseModTaintEq   :: M.HashMap Id (S.HashSet Id)
-                       , _parseUFs          :: M.HashMap Id [Id]
+data ParseSt = ParseSt { _parseSources      :: ! (S.HashSet Id)
+                       , _parseSinks        :: ! (S.HashSet Id)
+                       , _parsePorts        :: ! (S.HashSet Var)
+                       , _parseSanitize     :: ! (S.HashSet Id)
+                       , _parseNotSanitize  :: ! (M.HashMap Id (S.HashSet Id))
+                       , _parseSanitizeGlob :: ! (S.HashSet Id)
+                       , _parseTaintEq      :: ! (S.HashSet Id)
+                       , _parseModSanitize  :: ! (M.HashMap Id (S.HashSet Id))
+                       , _parseModTaintEq   :: ! (M.HashMap Id (S.HashSet Id))
+                       , _parseUFs          :: ! UFMap
                        , _st                :: ! St
                        }
 
@@ -178,11 +183,12 @@ makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultSta
   where
     resultState = evalState comp emptyParseSt
   
-    flattenUFs   :: M.HashMap Id [Id] -> M.HashMap Id [Id]
-    flattenUFs m = let varDeps v = case M.lookup v m of
-                                     Nothing -> [v]
-                                     Just as -> concatMap varDeps as
-                   in M.mapWithKey (\k _ -> varDeps k) m
+    flattenUFs   :: UFMap -> UFMap
+    flattenUFs m = let varDeps :: Id -> [Id]
+                       varDeps v = case M.lookup v m of
+                                     Nothing      -> [v]
+                                     Just (_, as) -> concatMap varDeps as
+                   in M.mapWithKey (\k (f, _) -> (f, varDeps k)) m
 
     loc = ("TOPLEVEL", "TOPLEVEL")
 
@@ -325,7 +331,11 @@ collectNonTaint _               = error "collectNonTaint is called without top m
 collectPortAndUFs :: [ParseVar] -> [ParseGate] -> [ParseUF] -> State ParseSt ()
 collectPortAndUFs vs gs us = do
   sequence_ $ (\v          -> parsePorts %= S.insert (toVar v)) <$> vs
-  sequence_ $ (\(PUF u as) -> parseUFs   %= M.insert u as)      <$> us
+  sequence_ $
+    (\case
+        PUF u as -> parseUFs %= M.insert u (u, as)
+        PUF2{..} -> parseUFs %= M.insert ufVarName (ufFuncName, ufArgs)
+    )      <$> us
   sequence_ $ handleGate                                        <$> gs
   where
     handleGate (PModuleInst{..}) = collectPortAndUFs pmInstVars pmInstGates pmInstUFs 
@@ -391,7 +401,14 @@ parseEvent = rWord "event1(star)" *> return PStar
              <|> rWord "event2(negedge" *> comma *> (PNegEdge <$> identifier) <* rWord ")"
 
 parseUF :: Parser ParseUF
-parseUF = rWord "link" *> parens (PUF <$> identifier <*> (comma *> list identifier))
+parseUF =
+      rWord "linkF" *> parens (PUF2
+                               <$> identifier
+                               <*> (comma *> identifier)
+                               <*> (comma *> list identifier))
+  <|> rWord "link" *> parens (PUF
+                              <$> identifier
+                              <*> (comma *> list identifier))
 
 parseGate :: Parser ParseGate
 parseGate = rWord "asn" *> parens (PContAsgn <$> identifier <*> (comma *> identifier))
