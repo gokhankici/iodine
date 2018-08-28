@@ -73,12 +73,12 @@ MIPS_MODULE_TESTS=( \
 # --name major
 typeset -A MAJOR_NAMES
 MAJOR_NAMES=( \
-	"mips"   "10 - 01 - mips full"    \
-	"yarvi"  "10 - 02 - yarvi"        \
-	"sha256" "10 - 03 - sha256"       \
-	"fpu"    "10 - 04 - fpu"          \
-	"fpu2"   "10 - 05 - fpu2/divider" \
-	"modexp" "10 - 06 - ModExp"       \
+	"mips"    "10 - 01 - mips full"    \
+	"yarvi"   "10 - 02 - yarvi"        \
+	"sha256"  "10 - 03 - sha256"       \
+	"fpu"     "10 - 04 - fpu"          \
+	"fpu-div" "10 - 05 - fpu-divider"  \
+	"modexp"  "10 - 06 - ModExp"       \
 	)
 
 typeset -A MAJOR_TESTS
@@ -91,7 +91,7 @@ MAJOR_TESTS=( \
 
 typeset -A MAJOR_NEG_TESTS
 MAJOR_NEG_TESTS=( \
-	"10 - 05 - fpu2/divider" "-M divider       $BMKS_DIR/fpu2/divider/divider.v" \
+	"10 - 05 - fpu-divider"  "-M divider       $BMKS_DIR/fpu2/divider/divider.v" \
 	"10 - 06 - ModExp"       "-M ModExp        $CRYPTO_DIR/RSA4096/ModExp2/ModExp.v"\
 	)
 
