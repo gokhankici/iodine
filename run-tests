@@ -150,7 +150,10 @@ if [[ -z "$SINGLE" ]]; then
 			)
 
 		typeset -A NEG_TESTS
-		NEG_TESTS=( ${(kv)NEG_TESTS_SIMPLE} )
+		NEG_TESTS=( \
+			${(kv)NEG_TESTS_MAJOR} \
+			${(kv)MAJOR_NEG_TESTS} \
+			)
 	else
 		echo "unrecognized --name argument: $NAME[2]" >&2
 		exit 1
