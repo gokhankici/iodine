@@ -34,10 +34,9 @@ freshKeepErrs = bas .= HM.empty >> nbas .= HM.empty
 sanityCheck :: [AlwaysBlock] -> [AlwaysBlock]  
 --------------------------------------------------------------------------------
 sanityCheck =
-  id
-  -- check1 >>>
-  -- checkAssignmentTypes >>>
-  -- varSingleUpdate
+  check1 >>>
+  checkAssignmentTypes >>>
+  varSingleUpdate
 
 --------------------------------------------------------------------------------
 check1    :: [AlwaysBlock] -> [AlwaysBlock]

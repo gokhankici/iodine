@@ -53,7 +53,7 @@ m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
                          lhss  = getLhss s
                          st''  = over ports    (filterVars vars') .
                                  over sources  (filterList vars') .
-                                 -- over sinks    (filterList vars') .
+                                 over assertEq (filterList vars') .
                                  over sinks    (filterList lhss) .
                                  over sanitize (filterList vars') $
                                  st'

@@ -44,6 +44,7 @@ SIMPLE_TESTS=( \
 	"01 - 12 - merge-02"      "-M test          $THIS_DIR/test/verilog/pos/merge-02.v"   \
 	"01 - 13 - merge-03"      "-M test          $THIS_DIR/test/verilog/pos/merge03.v"   \
 	"01 - 14 - merge-04"      "-M test          $THIS_DIR/test/verilog/pos/merge04.v"   \
+	"01 - 15 - tr-test-11"    "-M test          $THIS_DIR/test/verilog/pos/tr-test-11.v" \
 	)
 
 # --name mips-stub
@@ -105,6 +106,7 @@ NEG_TESTS_SIMPLE=( \
 	"-01 - 05 - neg-test-5"    "-M test $THIS_DIR/test/verilog/neg/neg-test-5.v" \
 	"-01 - 06 - tp"            "-M test $THIS_DIR/test/verilog/neg/tp.v" \
 	"-01 - 07 - neg-merge-01"  "-M test $THIS_DIR/test/verilog/neg/neg-merge-01.v" \
+	"-01 - 08 - neg-test-11"   "-M test $THIS_DIR/test/verilog/neg/neg-test-11.v" \
 
 	"-02 - 01 - secver-neg-01" "-M test $THIS_DIR/test/verilog/neg/secverilog-neg-01.v" \
 	"-02 - 02 - secver-neg-02" "-M test $THIS_DIR/test/verilog/neg/secverilog-neg-02.v" \
@@ -138,7 +140,10 @@ if [[ -z "$SINGLE" ]]; then
 
 	elif [[ "$NAME[2]" == "neg" ]]; then
 		typeset -A NEG_TESTS
-		NEG_TESTS=( ${(kv)NEG_TESTS_SIMPLE} )
+		NEG_TESTS=( \
+			${(kv)NEG_TESTS_SIMPLE} \
+			${(kv)MAJOR_NEG_TESTS} \
+			)
 
 	elif [[ -z "$NAME" ]]; then
 		typeset -A TESTS
@@ -151,7 +156,7 @@ if [[ -z "$SINGLE" ]]; then
 
 		typeset -A NEG_TESTS
 		NEG_TESTS=( \
-			${(kv)NEG_TESTS_MAJOR} \
+			${(kv)NEG_TESTS_SIMPLE} \
 			${(kv)MAJOR_NEG_TESTS} \
 			)
 	else

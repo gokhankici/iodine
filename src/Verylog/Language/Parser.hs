@@ -89,6 +89,7 @@ data ParseIR = TopModule    { mPortNames :: ! [ParsePort]       -- port list (i.
                             }
              | PSanitizeGlob ! String
              | PTaintEq      ! String
+             | PAssertEq     ! String
              | PQualifier    { invLhs :: ! String
                              , invRhs :: ! [String]
                              }
@@ -119,6 +120,7 @@ data ParseSt = ParseSt { _parseSources      :: ! (S.HashSet Id)
                        , _parseNotSanitize  :: ! (M.HashMap Id (S.HashSet Id))
                        , _parseSanitizeGlob :: ! (S.HashSet Id)
                        , _parseTaintEq      :: ! (S.HashSet Id)
+                       , _parseAssertEq     :: ! (S.HashSet Id)
                        , _parseModSanitize  :: ! (M.HashMap Id (S.HashSet Id))
                        , _parseModTaintEq   :: ! (M.HashMap Id (S.HashSet Id))
                        , _parseUFs          :: ! UFMap
@@ -133,6 +135,7 @@ emptyParseSt = ParseSt { _parseSources      = S.empty
                        , _parseNotSanitize  = M.empty
                        , _parseSanitizeGlob = S.empty
                        , _parseTaintEq      = S.empty
+                       , _parseAssertEq     = S.empty
                        , _parseModSanitize  = M.empty
                        , _parseModTaintEq   = M.empty
                        , _parseUFs          = M.empty
@@ -213,6 +216,7 @@ makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultSta
       st . sources      <~ uses parseSources      S.toList
       st . sinks        <~ uses parseSinks        S.toList
       st . taintEq      <~ uses parseTaintEq      S.toList
+      st . assertEq     <~ uses parseAssertEq     S.toList
       st . sanitize     <~ uses parseSanitize     S.toList
       st . sanitizeGlob <~ uses parseSanitizeGlob S.toList
 
@@ -267,6 +271,7 @@ collectTaint :: ParseIR -> State ParseSt ()
 collectTaint (PSource s)        = parseSources      %= S.insert s
 collectTaint (PSink s)          = parseSinks        %= S.insert s
 collectTaint (PTaintEq s)       = parseTaintEq      %= S.insert s
+collectTaint (PAssertEq s)      = parseAssertEq     %= S.insert s
 collectTaint (PSanitize s)      = parseSanitize     %= S.union (S.fromList s)
 collectTaint (PNotSanitize{..}) = case nsModuleName of
                                     Nothing -> parseNotSanitize %= mapOfSetInsert "" nsPortName
@@ -442,6 +447,7 @@ parseTaint = spaceConsumer
                   <|> rWord "taint_sink"    *> parens (PSink <$> identifier)
                   <|> rWord "taint_eq_mod"  *> parens (PTaintEqMod <$> identifier <*> (comma *> identifier))
                   <|> rWord "taint_eq"      *> parens (PTaintEq <$> identifier)
+                  <|> rWord "assert_eq"     *> parens (PAssertEq <$> identifier)
                   <|> rWord "sanitize_mod"  *> parens (PSanitizeMod <$> identifier <*> (comma *> identifier))
                   <|> rWord "sanitize_glob" *> parens (PSanitizeGlob <$> identifier)
                   <|> rWord "not_sanitize"  *> parens (PNotSanitize <$> identifier <*> optionMaybe (comma *> identifier))

@@ -308,8 +308,9 @@ non_interference_inv srcs a1 a2 =
 
 provedProperty :: PropertyOptions -> AlwaysBlock -> [Inv]
 provedProperty (PropertyOptions{..}) a = 
-  if checkTagEq then tagEq else [] ++
-  if checkValEq then valEq else []
+  (if checkTagEq then tagEq else []) ++
+  (if checkValEq then valEq else []) ++
+  assertEqs
   where
     i     = a ^. aId
     tagEq = [ Horn { hHead = BinOp IFF (ltvar s) (rtvar s)
@@ -333,6 +334,18 @@ provedProperty (PropertyOptions{..}) a =
                    }
             | s <- filterRegs a $ a^.aSt^.sinks
             ]
+    assertEqs =
+      [ Horn { hHead =  BinOp EQU (lvar s) (rvar s)
+             , hBody = Ands [ KV { kvId   = i
+                                 , kvSubs = [ (n_lvar s, lvar s)
+                                            , (n_rvar s, rvar s)
+                                            ]
+                                 }
+                            ]
+             , hId   = HornId i (InvOther "left var = right var")
+             }
+      | s <- filterRegs a $ a^.aSt^.assertEq
+      ]
 
 -------------------------------------------------------------------------------- 
 -- Helper functions

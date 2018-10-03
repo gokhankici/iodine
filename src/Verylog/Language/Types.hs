@@ -99,6 +99,7 @@ data St = St { _ports        :: ! [Var]
              , _sources      :: ! [Id]
              , _sinks        :: ! [Id]
              , _taintEq      :: ! [Id]
+             , _assertEq     :: ! [Id]
              , _sanitize     :: ! [Id]
              , _sanitizeGlob :: ! [Id]
              , _irs          :: ! [IR]
@@ -110,6 +111,7 @@ emptySt = St { _ports        = []
              , _ufs          = M.empty
              , _sources      = []
              , _sinks        = []
+             , _assertEq     = []
              , _taintEq      = []
              , _sanitize     = []
              , _sanitizeGlob = []
@@ -215,6 +217,7 @@ instance PPrint AlwaysBlock where
                                    , comment "sanitize " <+> printList (a^.aSt^.sanitize)     <> comma
                                    , comment "san. glob" <+> printList (a^.aSt^.sanitizeGlob) <> comma
                                    , comment "taint eq." <+> printList (a^.aSt^.taintEq)      <> comma
+                                   , comment "asrt. eq"  <+> printList (a^.aSt^.assertEq)     <> comma
                                    , toDoc (a^.aEvent)                                        <> comma
                                    , toDoc (a^.aStmt)
                                    ] <> text ")."
@@ -259,6 +262,7 @@ instance SG.Semigroup St where
        , _sources      = jn_list sources
        , _sinks        = jn_list sinks
        , _taintEq      = jn_list taintEq
+       , _assertEq     = jn_list assertEq
        , _sanitize     = jn_list sanitize
        , _sanitizeGlob = jn_list sanitizeGlob
        , _irs          = (m1 ^. irs) Mo.<> (m2 ^. irs)
