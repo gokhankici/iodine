@@ -21,7 +21,7 @@ popd
 
 echo "number of annots:"
 
-grep '@annot' $FILENAME | wc -l
+grep '@annot{' $FILENAME | wc -l
 
 # ------------------------------------------------------------------------------
 

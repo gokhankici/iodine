@@ -117,14 +117,14 @@ QARMC_DEFAULT_OPTS=-get-model
 function vcgen_fp() {
 	if [[ -n "$GRAPHS" ]]; then
 		verylog-graphs $PROFILE_ARGS $FINFO $JUST_VCGEN $MINIMIZE $NO_SAVE $ABDUCTION $@
-		exit $?
+		return $?
 	else
 		local rc
 		pushd $THIS_DIR
 		stack exec vcgen-fp -- $PROFILE_ARGS $FINFO $JUST_VCGEN $MINIMIZE $NO_SAVE $ABDUCTION $@
 		rc="$?"
 		popd
-		exit $rc
+		return $rc
 	fi
 }
 

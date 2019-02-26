@@ -254,15 +254,25 @@ sanityChecks = do
   when (not $ all f (srcs ++ snks)) $
     throw (PassError "Source or sink taint is an unknown variable")
 
-  -- -- check if source and sink variables actually exist, and
-  -- -- make sure source or sink variables are registers
-  -- rs  <- uses (st . ports) (map varName . filter isRegister)
+  taintEqs      <- use parseTaintEq
+  assertEqs     <- use parseAssertEq
+  sanitizes     <- use parseSanitize
+  sanitizeGlobs <- use parseSanitizeGlob
+  let allOtherAnnots = taintEqs `S.union` assertEqs `S.union` sanitizes `S.union` sanitizeGlobs
+      allOtherAnnotsDiff = allOtherAnnots `S.difference` (S.map varName prts)
+  when (allOtherAnnotsDiff /= S.empty) $
+    throw (PassError $ printf "Annotation has an unknown variable: %s" (show allOtherAnnotsDiff))
+
+  -- check if source and sink variables actually exist, and
+  -- make sure source or sink variables are registers
+  rs  <- uses (st . ports) (map varName . filter isRegister)
   -- let src_dif = srcs Li.\\ rs
-  -- let snk_dif = snks Li.\\ rs
   -- when (src_dif /= [] || snk_dif /= []) $
-  --   error $
-  --   printf "Taint variable is not a register !\n  sources: %s\n  sinks: %s\n"
-  --   (show src_dif) (show snk_dif)
+  let snk_dif = snks Li.\\ rs
+  when (snk_dif /= []) $
+    error $
+    printf "Taint variable is not a register !\n  sinks: %s\n"
+    (show snk_dif)
 
 
 -----------------------------------------------------------------------------------
@@ -335,7 +345,7 @@ collectNonTaint _               = error "collectNonTaint is called without top m
 -- collect ports and ufs
 collectPortAndUFs :: [ParseVar] -> [ParseGate] -> [ParseUF] -> State ParseSt ()
 collectPortAndUFs vs gs us = do
-  sequence_ $ (\v          -> parsePorts %= S.insert (toVar v)) <$> vs
+  sequence_ $ (\v -> parsePorts %= S.insert (toVar v)) <$> vs
   sequence_ $
     (\case
         PUF u as -> parseUFs %= M.insert u (u, as)

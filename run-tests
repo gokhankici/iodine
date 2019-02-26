@@ -80,14 +80,16 @@ MAJOR_NAMES=( \
 	"fpu"     "10 - 04 - fpu"          \
 	"fpu-div" "10 - 05 - fpu-divider"  \
 	"modexp"  "10 - 06 - ModExp"       \
+	"ctalu"   "10 - 07 - CTALU"        \
 	)
 
 typeset -A MAJOR_TESTS
 MAJOR_TESTS=( \
-	"10 - 01 - mips full"    "-M mips_pipeline $MIPS_DIR/mips_pipeline.v" \
-	"10 - 02 - yarvi"        "-M yarvi         $BMKS_DIR/yarvi/shared/yarvi.v" \
-	"10 - 03 - sha256"       "-M sha256        $CRYPTO_DIR/sha_core/trunk/rtl/sha256.v" \
-	"10 - 04 - fpu"          "-M fpu           $BMKS_DIR/fpu/verilog/fpu.v" \
+	"10 - 01 - mips full"    "-M mips_pipeline  $MIPS_DIR/mips_pipeline.v" \
+	"10 - 02 - yarvi"        "-M yarvi          $BMKS_DIR/yarvi/shared/yarvi.v" \
+	"10 - 03 - sha256"       "-M sha256         $CRYPTO_DIR/sha_core/trunk/rtl/sha256.v" \
+	"10 - 04 - fpu"          "-M fpu            $BMKS_DIR/fpu/verilog/fpu.v" \
+	"10 - 07 - CTALU"        "-M scarv_cop_palu $BMKS_DIR/xcrypto-ref/rtl/coprocessor/scarv_cop_palu.v" \
 	)
 
 typeset -A MAJOR_NEG_TESTS
@@ -168,7 +170,7 @@ else
 	local major_name="${MAJOR_NAMES[$test_name]}"
 
 	case "$test_name" in
-		mips|yarvi|sha256|fpu)
+		mips|yarvi|sha256|fpu|ctalu)
 			local major_args="${MAJOR_TESTS[$major_name]}"
 
 			if [[ -z "$major_args" ]]; then

@@ -66,10 +66,10 @@ next fmt a = evalState comp initSt
               -- set the primed vars for the untouched variables
               let up2 = concat [ [ (,)
                                    (makeVarName fmt{taggedVar=True} v)
-                                   (makeVar     fmt{taggedVar=True} v) -- vt' = vt'
+                                   (makeVar     fmt{taggedVar=True} v) -- vt' = vt
                                  , (,)
                                    (makeVarName fmt v)
-                                   (makeVar     fmt v) -- v' = v'
+                                   (makeVar     fmt v) -- v' = v
                                  ]
                                | v <- ps \\ M.keys as -- not updated variables
                                ]

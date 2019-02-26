@@ -38,6 +38,9 @@ sanityCheck =
   checkAssignmentTypes >>>
   varSingleUpdate
 
+  -- where
+  --   printCount as = trace (printf "# blocks before merge: %d" (length as)) as
+
 --------------------------------------------------------------------------------
 check1    :: [AlwaysBlock] -> [AlwaysBlock]
 --------------------------------------------------------------------------------
