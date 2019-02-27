@@ -246,6 +246,7 @@ readWriteSet a = let (r,w) = evalState (comp (a^.aStmt) >> get) ([], [])
     -- readVars  v = S.fromList . filterRegs a $ M.lookupDefault [v] v us
     -- writeVars v = S.fromList . filterRegs a $ if M.member v us then [] else [v]
 
+    readVars, writeVars :: [Id] -> S.HashSet Id
     readVars l = foldl' (\s v -> case M.lookup v us of
                                    Nothing     -> S.insert v s
                                    Just (_,vs) -> foldl' (flip S.insert) s vs) S.empty l

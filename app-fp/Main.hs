@@ -64,7 +64,9 @@ parseOpts = do
   return $
     case getOpt Permute options args of
       (opts,rest,[]) ->
-        let [fin, fout] = rest
+        let (fin, fout) = case rest of
+                            [a,b] -> (a,b)
+                            _     -> error $ "expected 2 arguments, got these: " ++ show rest
         in Options { optInputFile  = fin
                    , optOutputFile = fout
                    , optVCGen      = VCGen      `elem` opts
@@ -119,9 +121,8 @@ main  = do
       | optAbduction  -> abduction cfg{save=False} fpst
       | otherwise     -> do
           res <- solve cfg finfo
-          let statStr = render . resultDoc . fmap fst
           let stat = resStatus res
-          colorStrLn (getColor stat) (statStr stat)
+          colorStrLn (getColor stat) (render $ resultDoc $ fmap fst stat)
           printResult fpst res
           exitWith (resultExit stat)
 

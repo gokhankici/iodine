@@ -139,14 +139,13 @@ makeConstraints fpst = mc <$> zip [0..] (fpst ^. fpConstraints)
     env es        = insertsIBindEnv (getBindIds fpst es) emptyIBindEnv
     helper bdy' hd n hId =
       let bdy = Ands [eqs, bdy']
-          x = mkSubC
-              (env [bdy,hd])
-              (RR FInt (Reft (symbol "v", convertExpr bdy)))
-              (RR FInt (Reft (symbol "v", convertExpr hd)))
-              (Just n)          -- id
-              []                -- tags
-              hId               -- metadata
-      in x -- trace (show x) x
+      in  mkSubC
+          (env [bdy,hd])
+          (RR FInt (Reft (symbol "v", convertExpr bdy)))
+          (RR FInt (Reft (symbol "v", convertExpr hd)))
+          (Just n)          -- id
+          []                -- tags
+          hId               -- metadata
 
 makeWFConstraints :: FPSt -> [WfC Metadata]
 makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
@@ -255,6 +254,6 @@ getUFGlobals fpst = fromListSEnv $ snd $ M.foldr mkGlobF (0, []) (fpst^.fpUFs)
     
 
 extraEnv :: FPSt -> [Id]
-extraEnv fpst = makeBothTags . s $ concatMap qualifVars (fpst ^. fpQualifiers) ++ (fpst ^. fpSources)
-  where
-    s = HS.toList . HS.fromList
+extraEnv fpst =
+  makeBothTags . HS.toList . HS.fromList $
+  concatMap qualifVars (fpst ^. fpQualifiers) ++ (fpst ^. fpSources)

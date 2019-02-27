@@ -39,10 +39,20 @@ dependencies:
 library:
   source-dirs:           src
   ghc-options:
-  - -Wall -Wcompat 
-  - -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
-  - -Wno-missing-signatures -Wno-orphans -Wno-name-shadowing 
-  - -O2 
+  - -Werror
+  - -O2
+  - -fdefer-type-errors
+  - -fwarn-incomplete-patterns
+  - -fwarn-incomplete-record-updates
+  - -fwarn-incomplete-uni-patterns
+  - -fwarn-missing-signatures
+  - -fwarn-monomorphism-restriction
+  - -fwarn-name-shadowing
+  - -fwarn-orphans
+  - -fwarn-overlapping-patterns
+  - -fwarn-redundant-constraints
+  - -fwarn-tabs
+  - -fwarn-unused-imports
   exposed-modules:
   - Verylog.MainCommon
   - Verylog.FPGen
@@ -65,8 +75,21 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wall 
+    - -Wall
     - -O2
+    - -Werror
+    - -fdefer-type-errors
+    - -fwarn-incomplete-patterns
+    - -fwarn-incomplete-record-updates
+    - -fwarn-incomplete-uni-patterns
+    - -fwarn-missing-signatures
+    - -fwarn-monomorphism-restriction
+    - -fwarn-name-shadowing
+    - -fwarn-orphans
+    - -fwarn-overlapping-patterns
+    - -fwarn-redundant-constraints
+    - -fwarn-tabs
+    - -fwarn-unused-imports
     dependencies:
     - verylog-hs
   verylog-graphs:
@@ -76,7 +99,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wall 
+    - -Wall
     - -O2
     dependencies:
     - verylog-hs
@@ -89,7 +112,7 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wall 
+    - -Wall
     - -O2
     dependencies:
     - verylog-hs

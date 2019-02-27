@@ -6,7 +6,7 @@ module Verylog.Transform.DFG
   ( wireTaints
   , assignmentMap
   , stmt2Assignments
-  
+
   , AM
   , RWS
   , G
@@ -29,7 +29,7 @@ import qualified Data.HashMap.Strict     as HM
 import qualified Data.IntMap.Strict      as IM
 import qualified Data.IntSet             as IS
 import           Text.Printf
-import           Data.Monoid 
+import           Data.Monoid
 
 import Data.Graph.Inductive.Graph
 import Data.Graph.Inductive.PatriciaTree
@@ -84,8 +84,8 @@ stmt2Assignments s unintFuncs = h [] s
   where
     h :: [Id] -> Stmt -> M
     h _ Skip                  = HM.empty
-    h l (BlockingAsgn{..})    = h2 (l2ls rhs ++ l) lhs HM.empty 
-    h l (NonBlockingAsgn{..}) = h2 (l2ls rhs ++ l) lhs HM.empty 
+    h l (BlockingAsgn{..})    = h2 (l2ls rhs ++ l) lhs HM.empty
+    h l (NonBlockingAsgn{..}) = h2 (l2ls rhs ++ l) lhs HM.empty
     h l (IfStmt{..})          = HM.unionWith HS.union
                                 (h (l2ls ifCond ++ l) thenStmt)
                                 (h (l2ls ifCond ++ l) elseStmt)
@@ -161,21 +161,20 @@ removeAssignRoots gr =
       in if   inEdges == [] && asgnT == Continuous -- is an cont. assign root
          then debug ("removed:" ++ show ctx) Nothing
          else Just ctx
-  
+
 
 -- | (n1, n2) \in edges means n1 reads from a variable that n2 writes to
 makeGraphFromRWSet :: AM -> RWS -> RWS -> G
 makeGraphFromRWSet abMap rs ws = mkGraph allNs es
   where
-    allNs = 
+    allNs =
       fmap h $
       IS.toList $
       IM.keysSet rs `IS.union` IM.keysSet ws
 
     h n =
-      let res = (n, aId2AsgnT n) 
-          a   = abMap IM.! n
-      in  debug (show (n,  a ^. aStmt)) res
+      let a = abMap IM.! n
+      in  debug (show (n,  a ^. aStmt)) $ (n, aId2AsgnT n)
 
     aId2AsgnT :: Int -> AssignType
     aId2AsgnT n = let a = abMap IM.! n

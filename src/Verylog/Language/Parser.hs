@@ -20,7 +20,7 @@ import           Data.Hashable
 import qualified Data.HashMap.Strict        as M
 import qualified Data.HashSet               as S
 import qualified Data.List                  as Li
-import qualified Data.List.NonEmpty         as NE
+-- import qualified Data.List.NonEmpty         as NE
 import           Data.Typeable
 import           Text.Megaparsec            as MP hiding (parse, State(..))
 import           Text.Megaparsec.Char
@@ -68,7 +68,7 @@ data ParseGate = PContAsgn String String
                              , pmInstUFs       :: ! [ParseUF]         -- uninterpreted functions
                              }
                deriving (Show)
-                         
+
 data ParseIR = TopModule    { mPortNames :: ! [ParsePort]       -- port list (i.e. formal parameters)
                             , mPorts     :: ! [ParseVar]        -- wires os registers used
                             , mGates     :: ! [ParseGate]       -- assign or module instantiations
@@ -171,9 +171,8 @@ parseWithoutConversion fp s = foldr f ([],([],[])) (parseWith parseIR fp s)
 parseWith  :: Parser a -> FilePath -> String -> a
 parseWith p f s =
   case runParser (whole p) f s of
-    Left err -> throw (IRParseError (parseErrorPretty err) (NE.head . errorPos $ err))
-    Right e  -> e
-
+    Right e     -> e
+    Left bundle -> throw (IRParseError (myParseErrorPretty bundle))
 
 -----------------------------------------------------------------------------------
 -- | ParseIR -> St
@@ -185,7 +184,7 @@ makeState :: [ParseIR] -> St
 makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultState^.sanitize)) resultState
   where
     resultState = evalState comp emptyParseSt
-  
+
     flattenUFs   :: UFMap -> UFMap
     flattenUFs m = let varDeps :: Id -> [Id]
                        varDeps v = case M.lookup v m of
@@ -243,14 +242,13 @@ makeState _ = throw (PassError "First ir is not a toplevel module !")
 sanityChecks :: State ParseSt ()
 sanityChecks = do
   -- make sure we have at least one source and a sink
-  let isEmpty = (== 0) . length
   srcs <- uses parseSources S.toList
   snks <- uses parseSinks   S.toList
-  when (isEmpty srcs || isEmpty snks) $
+  when (null srcs || null snks) $
     throw (PassError "Source or sink taint information is missing")
 
   prts <- use parsePorts
-  let f p = S.member (Register p) prts || S.member (Wire p) prts 
+  let f p = S.member (Register p) prts || S.member (Wire p) prts
   when (not $ all f (srcs ++ snks)) $
     throw (PassError "Source or sink taint is an unknown variable")
 
@@ -353,7 +351,7 @@ collectPortAndUFs vs gs us = do
     )      <$> us
   sequence_ $ handleGate                                        <$> gs
   where
-    handleGate (PModuleInst{..}) = collectPortAndUFs pmInstVars pmInstGates pmInstUFs 
+    handleGate (PModuleInst{..}) = collectPortAndUFs pmInstVars pmInstGates pmInstUFs
     handleGate (PContAsgn _ _ )  = return ()
 
     toVar (PWire w)     = Wire w
@@ -370,7 +368,7 @@ makeIntermediaryIR loc alwaysBlocks gates topSt =
 
 gate2IR                           :: Loc -> St -> ParseGate -> IR
 gate2IR loc _ (PContAsgn l r)     = Always Assign (BlockingAsgn l r) loc
-gate2IR _ topSt (PModuleInst{..}) = 
+gate2IR _ topSt (PModuleInst{..}) =
   ModuleInst{ modInstName = pmInstName
             , modParams   = toPort <$> pmInstPorts
             , modInstSt   = set irs (makeIntermediaryIR loc' pmInstBehaviors pmInstGates topSt) topSt
@@ -451,7 +449,7 @@ parseTopModule = spaceConsumer
                              <*> (comma *> list parseUF))
                  <* char '.' <* spaceConsumer
 
-parseTaint :: Parser ParseIR  
+parseTaint :: Parser ParseIR
 parseTaint = spaceConsumer
              *> (     rWord "taint_source"  *> parens (PSource <$> identifier)
                   <|> rWord "taint_sink"    *> parens (PSink <$> identifier)
@@ -470,7 +468,7 @@ parseTaint = spaceConsumer
                 )
              <* char '.' <* spaceConsumer
 
-parseStmt :: Parser ParseStmt  
+parseStmt :: Parser ParseStmt
 parseStmt =     rWord "block"  *> parens (PBlock           <$> list parseStmt)
             <|> rWord "b_asn"  *> parens (PBlockingAsgn    <$> identifier <*> (comma *> identifier))
             <|> rWord "nb_asn" *> parens (PNonBlockingAsgn <$> identifier <*> (comma *> identifier))
@@ -490,9 +488,10 @@ whole p = spaceConsumer *> p <* eof
 
 spaceConsumer :: Parser ()
 spaceConsumer = (L.space (void spaceChar) lineCmnt blockCmnt) -- *> (L.space (void spaceChar) prologDecl blockCmnt)
-  where blockCmnt    = L.skipBlockComment "/*" "*/"
-        lineCmnt     = L.skipLineComment "%"
-        -- prologDecl   = L.skipLineComment ":-"
+  where
+    blockCmnt, lineCmnt :: Parser ()
+    blockCmnt = L.skipBlockComment "/*" "*/"
+    lineCmnt  = L.skipLineComment "%"
 
 -- | `symbol s` parses just the string s (and trailing whitespace)
 symbol :: String -> Parser String
@@ -511,7 +510,7 @@ list p = betweenS "[" "]" lp
     lp = (:) <$> p <*> many (comma *> p)
          <|> return []
 
--- parseSep :: Parser a -> 
+-- parseSep :: Parser a ->
 
 betweenS :: String -> String -> Parser a -> Parser a
 betweenS l r = between (symbol l) (symbol r)
@@ -536,14 +535,18 @@ keywords =
 identifier :: Parser String
 identifier = lexeme (p >>= check)
   where
-    p            = (:) <$> letterChar <*> many nonFirstChar
+    p :: Parser String
+    p = (:) <$> letterChar <*> many nonFirstChar
+
+    nonFirstChar :: Parser Char
     nonFirstChar = satisfy (\a -> isDigit a || isLetter a || a == '_')
-    check x      = if x `elem` keywords
-                   then fail $ "keyword " ++ show x ++ " cannot be an identifier"
-                   else return x
+
+    check x = if x `elem` keywords
+              then fail $ "keyword " ++ show x ++ " cannot be an identifier"
+              else return x
 
 parseMany1 :: Parser a -> Parser b -> Parser [a]
-parseMany1 elemP sepP = 
+parseMany1 elemP sepP =
     (:) <$> elemP <*> many (sepP *> elemP)
 
 --------------------------------------------------------------------------------
@@ -558,7 +561,7 @@ getPos pos = getSpanSingle (unPos $ sourceLine pos) (unPos $ sourceColumn pos)
 
 getSpanSingle :: Int -> Int -> String -> String
 getSpanSingle l c
-  = highlight l c 
+  = highlight l c
   . safeHead ""
   . getRange l l
   . lines
@@ -579,20 +582,11 @@ lineString n = replicate (10 - nD) ' ' ++ nS
     nD       = Li.length nS
 
 renderError :: IRParseError -> IO String
-renderError e = do
-  let pos = ePos e
-      msg = eMsg e
-  snippet <- readFilePos pos
-  return $ printf "%s%s" snippet msg
+renderError = return . eMsg
 
-instance ShowErrorComponent SourcePos where
-  showErrorComponent pos = "parse error in file " ++ (MP.sourceName pos)
-
-data IRParseError = IRParseError
-  { eMsg :: !String
-  , ePos :: !MP.SourcePos
-  }
-  deriving (Show, Typeable)
+data IRParseError = IRParseError { eMsg :: !String
+                                 }
+                  deriving (Show, Typeable)
 
 instance Exception IRParseError
 
@@ -603,3 +597,16 @@ instance Hashable ParseVar where
 
 optionMaybe   :: Parser a -> Parser (Maybe a)
 optionMaybe p = Just <$> p <|> return Nothing
+
+myParseErrorPretty :: (Stream s) => ParseErrorBundle s e -> String
+myParseErrorPretty (ParseErrorBundle errs posSt) =
+  errorBundlePretty $
+  ParseErrorBundle
+  ((\(e,pos) -> mapParseError (const (SP pos)) e) <$> (fst $ attachSourcePos errorOffset errs posSt))
+  posSt
+
+newtype SP = SP SourcePos
+           deriving (Eq, Ord)
+
+instance ShowErrorComponent SP where
+  showErrorComponent (SP pos) = "parse error in file " ++ (MP.sourceName pos)
