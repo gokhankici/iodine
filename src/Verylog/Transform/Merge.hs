@@ -45,10 +45,10 @@ merge =
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Filter out continuous assignments
 -----------------------------------------------------------------------------------
 mergeEquals :: (ABS, Annots) -> (ABS, Annots)
-mergeEquals (as, annots) = (as', annots)
+mergeEquals (as, annotations) = (as', annotations)
   where
     as' = rest ++ newclocks1 ++ newclocks2
-    (_, qualifiers) = annots
+    (_, qualifiers) = annotations
 
     (clocks, rest) = partition ((==) NonBlocking . eventToAssignType . view aEvent) as
 
@@ -58,8 +58,8 @@ mergeEquals (as, annots) = (as', annots)
 
     ws  = writeSets clocks
     vss = foldl' (\acc -> \case
-                     QualifEqs vs -> vs:acc
-                     _            -> acc) [] qualifiers
+                     QualifPairs vs -> vs:acc
+                     _              -> acc) [] qualifiers
 
     abMap = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
     iss =

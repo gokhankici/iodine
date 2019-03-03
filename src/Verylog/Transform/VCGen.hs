@@ -66,7 +66,7 @@ initial_inv srcs a =
     st   = a ^. aSt
     sub1 = [ (n_lvar sntz, rvar sntz)
            | sntz <- S.toList . S.fromList $
-                     st ^. sanitize
+                     st ^. annots ^. sanitize
            ]
     sub2 = [ (t, Boolean False)
            | t <- makeInvTags fmt a
@@ -117,8 +117,8 @@ next_step_inv srcs a =
     (nl,ul)  = next fmt{leftVar=True}  a
     (nr,ur)  = next fmt{rightVar=True} a
     body     = Ands [ prevKV a
-                    , sanGlobs (a^.aSt^.sanitizeGlob) subs
-                    , taintEqs (a^.aSt^.taintEq) subs
+                    , sanGlobs (a^.aSt^.annots^.sanitizeGlob) subs
+                    , taintEqs (a^.aSt^.annots^.taintEq) subs
                     , sourcesAreEqual srcs
                     , nl, nr
                     ]
@@ -300,8 +300,8 @@ non_interference_inv srcs a1 a2 =
     merge f = S.toList $ (S.fromList (view f a1)) `S.union` (S.fromList (view f a2))
     body   = Ands [ prevKV a1
                   , prevKV a2
-                  , sanGlobs (merge (aSt.sanitizeGlob)) (updates1++updates2)
-                  , taintEqs (merge (aSt.taintEq)) (updates1++updates2)
+                  , sanGlobs (merge (aSt.annots.sanitizeGlob)) (updates1++updates2)
+                  , taintEqs (merge (aSt.annots.taintEq)) (updates1++updates2)
                   , sourcesAreEqual srcs
                   , nl1
                   , nr1
@@ -322,7 +322,7 @@ provedProperty (PropertyOptions{..}) a =
                                 }
                    , hId   = HornId i (InvTagEq i)
                    }
-            | s <- filterRegs a $ a^.aSt^.sinks
+            | s <- filterRegs a $ a^.aSt^.annots^.sinks
             ]
     valEq = [ Horn { hHead =  BinOp EQU (lvar s) (rvar s)
                    , hBody = Ands [ KV { kvId   = i
@@ -333,7 +333,7 @@ provedProperty (PropertyOptions{..}) a =
                                   ]
                    , hId   = HornId i (InvOther "l_sink=r_sink")
                    }
-            | s <- filterRegs a $ a^.aSt^.sinks
+            | s <- filterRegs a $ a^.aSt^.annots^.sinks
             ]
     assertEqs =
       [ Horn { hHead =  BinOp EQU (lvar s) (rvar s)
@@ -345,7 +345,7 @@ provedProperty (PropertyOptions{..}) a =
                             ]
              , hId   = HornId i (InvOther "left var = right var")
              }
-      | s <- filterRegs a $ a^.aSt^.assertEq
+      | s <- filterRegs a $ a^.aSt^.annots^.assertEq
       ]
 
 -------------------------------------------------------------------------------- 

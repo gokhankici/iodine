@@ -51,11 +51,11 @@ m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
                                  stt
                          vars' = vars `HS.union` (HS.fromList $ concat $ snd <$> HM.elems (st'^.ufs))
                          lhss  = getLhss s
-                         st''  = over ports    (filterVars vars') .
-                                 over sources  (filterList vars') .
-                                 over assertEq (filterList vars') .
-                                 over sinks    (filterList lhss) .
-                                 over sanitize (filterList vars') $
+                         st''  = over ports (filterVars vars') .
+                                 over (annots . sources)  (filterList vars') .
+                                 over (annots . assertEq) (filterList vars') .
+                                 over (annots . sinks)    (filterList lhss) .
+                                 over (annots . sanitize) (filterList vars') $
                                  st'
                      in st''
 

@@ -75,10 +75,10 @@ toFqFormat fpst =
       axiomEnv    = AEnv [] [] M.empty
       dataDecls   = []
 
-      custom n (QualifImpl l rs) = custom1 n l rs
-      custom n (QualifEqs vs)    = custom2 n vs
-      custom n (QualifIff l rs)  = custom3 n l rs
-      custom _ (QualifAssume _)  = []
+      custom n (QualifImp l rs) = custom1 n l rs
+      custom n (QualifPairs vs) = custom2 n vs
+      custom n (QualifIff l rs) = custom3 n l rs
+      custom _ (QualifAssume _) = []
 
       custom1 n l rs = 
         [ mkQual

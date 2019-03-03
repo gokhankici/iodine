@@ -5,7 +5,6 @@
 {-# LANGUAGE LambdaCase #-}
 
 module Verylog.Language.Parser ( parse
-                               , parseWithoutConversion
                                , renderError
                                , IRParseError (..)
                                ) where
@@ -75,31 +74,8 @@ data ParseIR = TopModule    { mPortNames :: ! [ParsePort]       -- port list (i.
                             , mBehaviors :: ! [ParseBehavior]   -- always blocks
                             , mUFs       :: ! [ParseUF]         -- uninterpreted functions
                             }
-             | PSource      ! String
-             | PSink        ! String
-             | PSanitize    ! [String]
-             | PNotSanitize { nsPortName   :: ! String
-                            , nsModuleName :: ! (Maybe String)
-                            }
-             | PSanitizeMod { sModuleName :: ! String
-                            , sVarName    :: ! String
-                            }
-             | PTaintEqMod  { sModuleName :: ! String
-                            , sVarName    :: ! String
-                            }
-             | PSanitizeGlob ! String
-             | PTaintEq      ! String
-             | PAssertEq     ! String
-             | PQualifier    { invLhs :: ! String
-                             , invRhs :: ! [String]
-                             }
-             | PQualifierI   { invLhs :: ! String
-                             , invRhs :: ! [String]
-                             }
-             | PQualifier2   { invEqs :: ! [String]
-                             }
-             | PQualifierA   { invAssume :: ! [String]
-                             }
+             | PAnnotation  Annotation
+             | PQualifier   FPQualifier
              deriving (Show)
 
 data ParseStmt = PBlock           ! [ParseStmt]
@@ -117,12 +93,10 @@ data ParseSt = ParseSt { _parseSources      :: ! (S.HashSet Id)
                        , _parseSinks        :: ! (S.HashSet Id)
                        , _parsePorts        :: ! (S.HashSet Var)
                        , _parseSanitize     :: ! (S.HashSet Id)
-                       , _parseNotSanitize  :: ! (M.HashMap Id (S.HashSet Id))
                        , _parseSanitizeGlob :: ! (S.HashSet Id)
                        , _parseTaintEq      :: ! (S.HashSet Id)
                        , _parseAssertEq     :: ! (S.HashSet Id)
                        , _parseModSanitize  :: ! (M.HashMap Id (S.HashSet Id))
-                       , _parseModTaintEq   :: ! (M.HashMap Id (S.HashSet Id))
                        , _parseUFs          :: ! UFMap
                        , _st                :: ! St
                        }
@@ -132,47 +106,35 @@ emptyParseSt = ParseSt { _parseSources      = S.empty
                        , _parseSinks        = S.empty
                        , _parsePorts        = S.empty
                        , _parseSanitize     = S.empty
-                       , _parseNotSanitize  = M.empty
                        , _parseSanitizeGlob = S.empty
                        , _parseTaintEq      = S.empty
                        , _parseAssertEq     = S.empty
                        , _parseModSanitize  = M.empty
-                       , _parseModTaintEq   = M.empty
                        , _parseUFs          = M.empty
                        , _st                = emptySt
                        }
 
 makeLenses ''ParseSt
 
------------------------------------------------------------------------------------
--- | Exported functions
------------------------------------------------------------------------------------
-
 type Parser = Parsec SourcePos String
-type Annots = ([Id], [FPQualifier])
+type Annots = ([Id], [FPQualifier]) -- sources and extra qualifiers
 
 -- --------------------------------------------------------------------------------
 parse :: FilePath -> String -> (St, Annots)
 -- --------------------------------------------------------------------------------
 parse f = parseWithoutConversion f >>> first makeState
 
--- --------------------------------------------------------------------------------
 parseWithoutConversion :: FilePath -> String -> ([ParseIR], Annots)
--- --------------------------------------------------------------------------------
-parseWithoutConversion fp s = foldr f ([],([],[])) (parseWith parseIR fp s)
+parseWithoutConversion fp s = foldr f ([],([],[])) (parseWith parseIR)
   where
-    f (PQualifier{..})  = second $ second ((:) (QualifImpl invLhs invRhs))
-    f (PQualifierI{..}) = second $ second ((:) (QualifIff  invLhs invRhs))
-    f (PQualifier2{..}) = second $ second ((:) (QualifEqs invEqs))
-    f (PQualifierA{..}) = second $ second ((:) (QualifAssume invAssume))
-    f p@(PSource src)  = first ((:) p) >>> second (first ((:) src))
-    f p                = first ((:) p)
+    f (PQualifier q) = second $ second ((:) q)
+    f p@(PAnnotation (Source src)) = first ((:) p) >>> second (first ((:) src))
+    f p = first ((:) p)
 
-parseWith  :: Parser a -> FilePath -> String -> a
-parseWith p f s =
-  case runParser (whole p) f s of
-    Right e     -> e
-    Left bundle -> throw (IRParseError (myParseErrorPretty bundle))
+    parseWith p =
+      case runParser (whole p) fp s of
+        Right e     -> e
+        Left bundle -> throw (IRParseError (myParseErrorPretty bundle))
 
 -----------------------------------------------------------------------------------
 -- | ParseIR -> St
@@ -181,58 +143,51 @@ parseWith p f s =
 -----------------------------------------------------------------------------------
 makeState :: [ParseIR] -> St
 -----------------------------------------------------------------------------------
-makeState (topIR@(TopModule{..}):annots) = resultState -- trace (show (resultState^.sanitize)) resultState
+makeState (topIR@(TopModule{..}):as) = resultState -- trace (show (resultState^.sanitize)) resultState
   where
     resultState = evalState comp emptyParseSt
 
     flattenUFs   :: UFMap -> UFMap
     flattenUFs m = let varDeps :: Id -> [Id]
                        varDeps v = case M.lookup v m of
-                                     Nothing      -> [v]
-                                     Just (_, as) -> concatMap varDeps as
+                                     Nothing        -> [v]
+                                     Just (_, args) -> concatMap varDeps args
                    in M.mapWithKey (\k (f, _) -> (f, varDeps k)) m
 
     loc = ("TOPLEVEL", "TOPLEVEL")
 
     comp = do
-      -- 1. collect taint information (update the state's variables)
-      sequence_ $ collectTaint <$> (annots ++ [topIR])
+      -- collect taint information (update the state's variables)
+      sequence_ $ collectTaint <$> (as ++ [topIR])
 
-      -- 2. remove sanitizes
-      sanitizes     <- use parseSanitize
-      maybeNegVars  <- uses parseNotSanitize (M.lookup "")
-      let negVars   = case maybeNegVars of
-                        Nothing -> S.empty
-                        Just s  -> s
-      parseSanitize .= sanitizes `S.difference` negVars
-
-      -- 3. collect ports and ufs
+      -- collect ports and ufs
       collectNonTaint topIR
+      st . ports <~ uses parsePorts S.toList
+      st . ufs   <~ uses parseUFs   flattenUFs
 
-      -- 4. update taint info of st
-      st . ports        <~ uses parsePorts        S.toList
-      st . ufs          <~ uses parseUFs          flattenUFs
-      st . sources      <~ uses parseSources      S.toList
-      st . sinks        <~ uses parseSinks        S.toList
-      st . taintEq      <~ uses parseTaintEq      S.toList
-      st . assertEq     <~ uses parseAssertEq     S.toList
-      st . sanitize     <~ uses parseSanitize     S.toList
-      st . sanitizeGlob <~ uses parseSanitizeGlob S.toList
+      -- update taint info of st
+      st . annots . sources      <~ uses parseSources      S.toList
+      st . annots . sinks        <~ uses parseSinks        S.toList
+      st . annots . taintEq      <~ uses parseTaintEq      S.toList
+      st . annots . assertEq     <~ uses parseAssertEq     S.toList
+      st . annots . sanitize     <~ uses parseSanitize     S.toList
+      st . annots . sanitizeGlob <~ uses parseSanitizeGlob S.toList
 
       prts <- use (st . ports)
-      let topInputs =
+      let topWireInputs =
             let f (PInput i) l  = if   (Wire i) `elem` prts
                                   then i:l
                                   else l
                 f (POutput _) l = l
             in  foldr f [] mPortNames
 
-      st . taintEq %= S.toList . S.union (S.fromList topInputs) . S.fromList
+      -- top module's input wires are tainted eq
+      st . annots . taintEq %= S.toList . S.union (S.fromList topWireInputs) . S.fromList
 
-      -- 5. create intermediary IR from parse IR
+      -- create intermediary IR from parse IR
       st . irs <~ uses st (makeIntermediaryIR loc mBehaviors mGates)
 
-      -- 6. do some sanity checks
+      -- do some sanity checks
       sanityChecks
 
       use st
@@ -276,32 +231,19 @@ sanityChecks = do
 -----------------------------------------------------------------------------------
 collectTaint :: ParseIR -> State ParseSt ()
 -----------------------------------------------------------------------------------
-collectTaint (PSource s)        = parseSources      %= S.insert s
-collectTaint (PSink s)          = parseSinks        %= S.insert s
-collectTaint (PTaintEq s)       = parseTaintEq      %= S.insert s
-collectTaint (PAssertEq s)      = parseAssertEq     %= S.insert s
-collectTaint (PSanitize s)      = parseSanitize     %= S.union (S.fromList s)
-collectTaint (PNotSanitize{..}) = case nsModuleName of
-                                    Nothing -> parseNotSanitize %= mapOfSetInsert "" nsPortName
-                                    Just m  -> parseNotSanitize %= mapOfSetInsert m  nsPortName
-collectTaint (PSanitizeGlob s)  = do parseSanitizeGlob %= S.insert s
+collectTaint (TopModule{..}) = sanitizeSubmodules mGates
+collectTaint (PQualifier _) = return ()
+collectTaint (PAnnotation annot)  = fromAnnot annot
+  where
+    fromAnnot :: Annotation -> State ParseSt ()
+    fromAnnot (Source s)        = parseSources      %= S.insert s
+    fromAnnot (Sink s)          = parseSinks        %= S.insert s
+    fromAnnot (TaintEq s)       = parseTaintEq      %= S.insert s
+    fromAnnot (AssertEq s)      = parseAssertEq     %= S.insert s
+    fromAnnot (Sanitize s)      = parseSanitize     %= S.union (S.fromList s)
+    fromAnnot (SanitizeGlob s)  = do parseSanitizeGlob %= S.insert s
                                      parseSanitize     %= S.insert s
-collectTaint (PSanitizeMod{..}) = parseModSanitize %= mapOfSetInsert sModuleName sVarName
-collectTaint (PTaintEqMod{..})  = parseModTaintEq  %= mapOfSetInsert sModuleName sVarName
-collectTaint (TopModule{..})    = do sanitizeWires      mPorts
-                                     sanitizeSubmodules mGates
-collectTaint (PQualifier{..})   = return ()
-collectTaint (PQualifierI{..})  = return ()
-collectTaint (PQualifier2{..})  = return ()
-collectTaint (PQualifierA{..})  = return ()
-
--- wires are not sanitized automatically
-sanitizeWires       :: [ParseVar] -> State ParseSt ()
-sanitizeWires _vars = return () -- sequence_ $ sanitizeWire <$> vars
-  -- where
-  --   sanitizeWire               :: ParseVar -> State ParseSt ()
-  --   sanitizeWire (PWire s)     = parseSanitize %= S.insert s
-  --   sanitizeWire (PRegister _) = return ()
+    fromAnnot (SanitizeMod{..}) = parseModSanitize %= mapOfSetInsert annotModuleName annotVarName
 
 -- figures out which variables to sanitize inside the module instantiations
 sanitizeSubmodules       :: [ParseGate] -> State ParseSt ()
@@ -310,25 +252,14 @@ sanitizeSubmodules gates = sequence_ $ sanitizeInst <$> gates
     sanitizeInst                   :: ParseGate -> State ParseSt ()
     sanitizeInst (PContAsgn _ _)   = return ()
     sanitizeInst (PModuleInst{..}) = do
-      sanitizeWires      pmInstVars
       sanitizeSubmodules pmInstGates
 
-      tainteqs <- uses parseModTaintEq (M.lookup pmModuleName)
-      case tainteqs of
-        Nothing -> return ()
-        Just ts -> sequence_ $
-                   (\v -> parseTaintEq %= S.insert (mk_mod_var pmInstName v)) <$> S.toList ts
-
-      vars         <- uses parseModSanitize (M.lookup pmModuleName)
-      maybeNegVars <- uses parseNotSanitize (M.lookup pmModuleName)
-      let negVars = case maybeNegVars of
-                      Nothing -> S.empty
-                      Just s  -> s
+      vars <- uses parseModSanitize (M.lookup pmModuleName)
       case vars of
         Nothing -> return ()
         Just vs -> sequence_ $
                    (\v -> parseSanitize %= S.insert (mk_mod_var pmInstName v))
-                   <$> S.toList (vs `S.difference` negVars)
+                   <$> S.toList vs
       sanitizeSubmodules pmInstGates
 
     mk_mod_var m v = printf "%s_%s" m v
@@ -451,22 +382,23 @@ parseTopModule = spaceConsumer
 
 parseTaint :: Parser ParseIR
 parseTaint = spaceConsumer
-             *> (     rWord "taint_source"  *> parens (PSource <$> identifier)
-                  <|> rWord "taint_sink"    *> parens (PSink <$> identifier)
-                  <|> rWord "taint_eq_mod"  *> parens (PTaintEqMod <$> identifier <*> (comma *> identifier))
-                  <|> rWord "taint_eq"      *> parens (PTaintEq <$> identifier)
-                  <|> rWord "assert_eq"     *> parens (PAssertEq <$> identifier)
-                  <|> rWord "sanitize_mod"  *> parens (PSanitizeMod <$> identifier <*> (comma *> identifier))
-                  <|> rWord "sanitize_glob" *> parens (PSanitizeGlob <$> identifier)
-                  <|> rWord "not_sanitize"  *> parens (PNotSanitize <$> identifier <*> optionMaybe (comma *> identifier))
-                  <|> rWord "sanitize"      *> parens (PSanitize <$> parseMany1 identifier comma)
-
-                  <|> rWord "qualifierPairs"  *> parens (PQualifier2 <$> list identifier)
-                  <|> rWord "qualifierAssume" *> parens (PQualifierA <$> list identifier)
-                  <|> rWord "qualifierIff"    *> parens (PQualifierI <$> identifier <*> (comma *> list identifier))
-                  <|> rWord "qualifierImp"    *> parens (PQualifier  <$> identifier <*> (comma *> list identifier))
+             *> ( PAnnotation <$> parseAnnot <|>
+                  PQualifier <$> parseQual
                 )
              <* char '.' <* spaceConsumer
+  where
+    parseAnnot =     rWord "taint_source"  *> parens (Source <$> identifier)
+                 <|> rWord "taint_sink"    *> parens (Sink <$> identifier)
+                 <|> rWord "taint_eq"      *> parens (TaintEq <$> identifier)
+                 <|> rWord "assert_eq"     *> parens (AssertEq <$> identifier)
+                 <|> rWord "sanitize_mod"  *> parens (SanitizeMod <$> identifier <*> (comma *> identifier))
+                 <|> rWord "sanitize_glob" *> parens (SanitizeGlob <$> identifier)
+                 <|> rWord "sanitize"      *> parens (Sanitize <$> parseMany1 identifier comma)
+
+    parseQual =     rWord "qualifierPairs"  *> parens (QualifPairs  <$> list identifier)
+                <|> rWord "qualifierAssume" *> parens (QualifAssume <$> list identifier)
+                <|> rWord "qualifierIff"    *> parens (QualifIff    <$> identifier <*> (comma *> list identifier))
+                <|> rWord "qualifierImp"    *> parens (QualifImp    <$> identifier <*> (comma *> list identifier))
 
 parseStmt :: Parser ParseStmt
 parseStmt =     rWord "block"  *> parens (PBlock           <$> list parseStmt)

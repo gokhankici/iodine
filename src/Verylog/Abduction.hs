@@ -1,31 +1,14 @@
-module Abduction (abduction) where
+module Verylog.Abduction (abduction) where
 
--- import Verylog.MainCommon
--- import Verylog.FPGen
 import Verylog.Solver.FP.Types
--- import Verylog.Solver.Common
--- import Verylog.Language.Types
 import Verylog.Solver.FP.FQ
 
 import Language.Fixpoint.Solver
 import Language.Fixpoint.Types
 import Language.Fixpoint.Types.Config
 
--- import qualified Data.Set        as S
--- import qualified Data.Map.Strict as M
--- import           Data.List
--- import           Data.Maybe
-import           Control.Monad
--- import           Control.Exception
--- import           Control.Lens hiding ((<.>))
--- import           System.Console.ANSI
--- import           System.Console.GetOpt
--- import           System.Environment (getArgs)
--- import           System.FilePath.Posix
-import           System.Exit
--- import           System.IO
--- import           Text.PrettyPrint
--- import           Text.Printf
+import Control.Monad
+import System.Exit
 
 --------------------------------------------------------------------------------
 abduction :: Config -> FPSt -> IO ()

@@ -8,6 +8,11 @@ extra-deps:
 - dotgen-0.4.2
 - fgl-visualize-0.1.0.1
 - located-base-0.1.1.1
-
 - megaparsec-7.0.4
 - parser-combinators-1.0.1
+- hspec-2.7.0
+- QuickCheck-2.12.6.1
+- hspec-core-2.7.0
+- hspec-discover-2.7.0
+
+

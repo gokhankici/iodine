@@ -36,36 +36,26 @@ dependencies:
 - fgl
 - fgl-visualize
 
+ghc-options:
+- -Werror
+- -O2
+- -fdefer-type-errors
+- -fwarn-incomplete-patterns
+- -fwarn-incomplete-record-updates
+- -fwarn-incomplete-uni-patterns
+- -fwarn-missing-signatures
+- -fwarn-monomorphism-restriction
+- -fwarn-name-shadowing
+- -fwarn-orphans
+- -fwarn-overlapping-patterns
+- -fwarn-redundant-constraints
+- -fwarn-tabs
+- -fwarn-unused-imports
+
 library:
   source-dirs:           src
-  ghc-options:
-  - -Werror
-  - -O2
-  - -fdefer-type-errors
-  - -fwarn-incomplete-patterns
-  - -fwarn-incomplete-record-updates
-  - -fwarn-incomplete-uni-patterns
-  - -fwarn-missing-signatures
-  - -fwarn-monomorphism-restriction
-  - -fwarn-name-shadowing
-  - -fwarn-orphans
-  - -fwarn-overlapping-patterns
-  - -fwarn-redundant-constraints
-  - -fwarn-tabs
-  - -fwarn-unused-imports
   exposed-modules:
-  - Verylog.MainCommon
-  - Verylog.FPGen
-  - Verylog.Language.Parser
-  - Verylog.Language.Types
-  - Verylog.Transform.TransitionRelation
-  - Verylog.Transform.Utils
-  - Verylog.Transform.VCGen
-  - Verylog.Transform.Modularize
-  - Verylog.Solver.Common
-  - Verylog.Solver.FP.Types
-  - Verylog.Solver.FP.FQ
-  - Verylog.Transform.DFG
+  - Verylog.Runner
 
 executables:
   vcgen-fp:
@@ -75,44 +65,18 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wall
-    - -O2
-    - -Werror
-    - -fdefer-type-errors
-    - -fwarn-incomplete-patterns
-    - -fwarn-incomplete-record-updates
-    - -fwarn-incomplete-uni-patterns
-    - -fwarn-missing-signatures
-    - -fwarn-monomorphism-restriction
-    - -fwarn-name-shadowing
-    - -fwarn-orphans
-    - -fwarn-overlapping-patterns
-    - -fwarn-redundant-constraints
-    - -fwarn-tabs
-    - -fwarn-unused-imports
-    dependencies:
-    - verylog-hs
-  verylog-graphs:
-    main:                Main.hs
-    source-dirs:         app-graphs
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    - -Wall
-    - -O2
     dependencies:
     - verylog-hs
 
 tests:
   vcgen-test:
-    main:                Spec.hs
+    main:                Test.hs
     source-dirs:         test
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wall
-    - -O2
     dependencies:
     - verylog-hs
+    - hspec
+    - hspec-core

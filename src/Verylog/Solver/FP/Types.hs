@@ -31,16 +31,14 @@ import qualified Data.HashMap.Strict        as M
 import           GHC.Generics hiding (to)
 import qualified Language.Fixpoint.Types    as FQ
 
-data FPQualifier = QualifImpl { qualifLhs  :: !Id
-                              , qualifRhss :: ![Id]
-                              }
-                 | QualifIff  { qualifLhs  :: !Id
-                              , qualifRhss :: ![Id]
-                              }
-                 | QualifEqs  { qualifEqs :: ![Id]
-                              }
-                 | QualifAssume { qualifAssume :: ![Id]
+data FPQualifier = QualifImp    { qualifLhs  :: !Id
+                                , qualifRhss :: ![Id]
                                 }
+                 | QualifIff    { qualifLhs  :: !Id
+                                , qualifRhss :: ![Id]
+                                }
+                 | QualifPairs  { qualifEqs :: ![Id] }
+                 | QualifAssume { qualifAssume :: ![Id] }
                  deriving (Generic, Show)
 
 data FQBind = FQBind { bindId   :: ! Int
@@ -84,7 +82,7 @@ idFromExp (Var v) = v
 idFromExp _       = throw $ PassError "given expr is not a variable"
 
 qualifVars :: FPQualifier -> [Id]
-qualifVars (QualifImpl l rs) = l:rs
+qualifVars (QualifImp l rs)  = l:rs
 qualifVars (QualifIff l rs)  = l:rs
-qualifVars (QualifEqs vs)    = vs
+qualifVars (QualifPairs vs)  = vs
 qualifVars (QualifAssume vs) = vs

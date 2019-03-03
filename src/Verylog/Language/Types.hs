@@ -94,30 +94,50 @@ data Stmt = Block           { blockStmts :: ! [Stmt] }
 
 type UFMap = M.HashMap Id (Id, [Id])
 
-data St = St { _ports        :: ! [Var]
-             , _ufs          :: ! UFMap
-             , _sources      :: ! [Id]
-             , _sinks        :: ! [Id]
-             , _taintEq      :: ! [Id]
-             , _assertEq     :: ! [Id]
-             , _sanitize     :: ! [Id]
-             , _sanitizeGlob :: ! [Id]
-             , _irs          :: ! [IR]
+data Annotation
+  = Source       ! String
+  | Sink         ! String
+  | Sanitize     ! [String]
+  | SanitizeMod  { annotModuleName :: ! String
+                 , annotVarName    :: ! String
+                 }
+  | SanitizeGlob ! String
+  | TaintEq      ! String
+  | AssertEq     ! String
+  deriving (Show)
+
+data AnnotSt = AnnotSt { _sources      :: ! [Id]
+                       , _sinks        :: ! [Id]
+                       , _taintEq      :: ! [Id]
+                       , _assertEq     :: ! [Id]
+                       , _sanitize     :: ! [Id]
+                       , _sanitizeGlob :: ! [Id]
+                       }
+               deriving (Generic)
+
+data St = St { _ports  :: ! [Var]
+             , _ufs    :: ! UFMap
+             , _irs    :: ! [IR]
+             , _annots :: ! AnnotSt
              }
           deriving (Generic)
 
+emptyAnnotSt :: AnnotSt
+emptyAnnotSt = AnnotSt { _sources      = []
+                       , _sinks        = []
+                       , _assertEq     = []
+                       , _taintEq      = []
+                       , _sanitize     = []
+                       , _sanitizeGlob = []
+                       }
 emptySt :: St
-emptySt = St { _ports        = []
-             , _ufs          = M.empty
-             , _sources      = []
-             , _sinks        = []
-             , _assertEq     = []
-             , _taintEq      = []
-             , _sanitize     = []
-             , _sanitizeGlob = []
-             , _irs          = []
+emptySt = St { _ports  = []
+             , _ufs    = M.empty
+             , _irs    = []
+             , _annots = emptyAnnotSt
              }
 
+makeLenses ''AnnotSt 
 makeLenses ''St 
 makeLenses ''AlwaysBlock
 
@@ -200,25 +220,25 @@ instance PPrint St where
       stDoc = text "St" <+>
               vcat [ lbrace <+> text "ports" <+> equals <+> st^.ports.to     toDoc
                    , comma  <+> text "ufs  " <+> equals <+> st^.ufs.to       printMap
-                   , comma  <+> text "srcs " <+> equals <+> st^.sources.to   printList
-                   , comma  <+> text "sinks" <+> equals <+> st^.sinks.to     printList
-                   , comma  <+> text "sntz " <+> equals <+> st^.sanitize.to  printList
+                   , comma  <+> text "srcs " <+> equals <+> st^.annots^.sources.to   printList
+                   , comma  <+> text "sinks" <+> equals <+> st^.annots^.sinks.to     printList
+                   , comma  <+> text "sntz " <+> equals <+> st^.annots^.sanitize.to  printList
                    , rbrace
                    ]
 
 instance PPrint AlwaysBlock where
-  toDoc a = text "always(" <> vcat [ comment "id       " <+> int (a^.aId)                     <> comma
-                                   , comment "mod name " <+> text (a^.aLoc^._1)               <> comma
-                                   , comment "inst name" <+> text (a^.aLoc^._2)               <> comma
-                                   , comment "ports    " <+> toDoc (a^.aSt^.ports)            <> comma
-                                   , comment "ufs      " <+> printMap  (a^.aSt^.ufs)          <> comma
-                                   , comment "sources  " <+> printList (a^.aSt^.sources)      <> comma
-                                   , comment "sinks    " <+> printList (a^.aSt^.sinks)        <> comma
-                                   , comment "sanitize " <+> printList (a^.aSt^.sanitize)     <> comma
-                                   , comment "san. glob" <+> printList (a^.aSt^.sanitizeGlob) <> comma
-                                   , comment "taint eq." <+> printList (a^.aSt^.taintEq)      <> comma
-                                   , comment "asrt. eq"  <+> printList (a^.aSt^.assertEq)     <> comma
-                                   , toDoc (a^.aEvent)                                        <> comma
+  toDoc a = text "always(" <> vcat [ comment "id       " <+> int (a^.aId)                             <> comma
+                                   , comment "mod name " <+> text (a^.aLoc^._1)                       <> comma
+                                   , comment "inst name" <+> text (a^.aLoc^._2)                       <> comma
+                                   , comment "ports    " <+> toDoc (a^.aSt^.ports)                    <> comma
+                                   , comment "ufs      " <+> printMap  (a^.aSt^.ufs)                  <> comma
+                                   , comment "sources  " <+> printList (a^.aSt^.annots^.sources)      <> comma
+                                   , comment "sinks    " <+> printList (a^.aSt^.annots^.sinks)        <> comma
+                                   , comment "sanitize " <+> printList (a^.aSt^.annots^.sanitize)     <> comma
+                                   , comment "san. glob" <+> printList (a^.aSt^.annots^.sanitizeGlob) <> comma
+                                   , comment "taint eq." <+> printList (a^.aSt^.annots^.taintEq)      <> comma
+                                   , comment "asrt. eq"  <+> printList (a^.aSt^.annots^.assertEq)     <> comma
+                                   , toDoc (a^.aEvent)                                                <> comma
                                    , toDoc (a^.aStmt)
                                    ] <> text ")."
     where
@@ -252,26 +272,41 @@ instance NFData Stmt
 instance NFData Var
 instance NFData Port
 instance NFData IR
+instance NFData AnnotSt
 instance NFData St
 instance NFData AlwaysBlock
 
+instance SG.Semigroup AnnotSt where
+  m1 <> m2 =
+    AnnotSt { _sources      = jn_list sources
+            , _sinks        = jn_list sinks
+            , _taintEq      = jn_list taintEq
+            , _assertEq     = jn_list assertEq
+            , _sanitize     = jn_list sanitize
+            , _sanitizeGlob = jn_list sanitizeGlob
+            }
+    where
+      jn_list fld =
+        S.toList $
+        S.fromList (m1 ^. fld) Mo.<> 
+        S.fromList (m2 ^. fld)
+
 instance SG.Semigroup St where
   m1 <> m2 = 
-    St { _ports        = jn_list ports
-       , _ufs          = (m1 ^. ufs) Mo.<> (m2 ^. ufs)
-       , _sources      = jn_list sources
-       , _sinks        = jn_list sinks
-       , _taintEq      = jn_list taintEq
-       , _assertEq     = jn_list assertEq
-       , _sanitize     = jn_list sanitize
-       , _sanitizeGlob = jn_list sanitizeGlob
-       , _irs          = (m1 ^. irs) Mo.<> (m2 ^. irs)
+    St { _ports  = jn_list ports
+       , _ufs    = (m1 ^. ufs) Mo.<> (m2 ^. ufs)
+       , _irs    = (m1 ^. irs) Mo.<> (m2 ^. irs)
+       , _annots = (m1 ^. annots) Mo.<> (m2 ^. annots)
        }
     where
       jn_list fld =
         S.toList $
         S.fromList (m1 ^. fld) Mo.<> 
         S.fromList (m2 ^. fld)
+
+instance Mo.Monoid AnnotSt where
+  mempty  = emptyAnnotSt
+  mappend = (SG.<>)
 
 instance Mo.Monoid St where
   mempty  = emptySt
