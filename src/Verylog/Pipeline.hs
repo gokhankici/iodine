@@ -1,6 +1,6 @@
-module Verylog.FPGen ( pipeline
-                     , pipeline'
-                     ) where
+module Verylog.Pipeline ( pipeline
+                        , pipeline'
+                        ) where
 
 import Control.Arrow
 
@@ -9,7 +9,7 @@ import Verylog.Language.Types
 import Verylog.Transform.Modularize
 import Verylog.Transform.Merge
 import Verylog.Transform.SanityCheck
-import Verylog.Transform.FPVCGen
+import Verylog.Transform.FP.VCGen
 import Verylog.Solver.FP.Types
 
 --------------------------------------------------------------------------------

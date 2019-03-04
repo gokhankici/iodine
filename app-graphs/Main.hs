@@ -15,7 +15,7 @@ import           System.Console.GetOpt
 import           System.Environment (getArgs)
 -- import           Verylog.Transform.DFG (stmt2Assignments)
 import           Verylog.Transform.Utils
-import           Verylog.FPGen
+import           Verylog.Pipeline
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet        as HS
 import           Verylog.Transform.TransitionRelation

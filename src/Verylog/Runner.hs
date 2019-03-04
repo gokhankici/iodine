@@ -7,10 +7,10 @@ module Verylog.Runner ( Flag(..)
                       ) where
 
 import Verylog.Abduction
-import Verylog.MainCommon
-import Verylog.FPGen
+import Verylog.Pipeline
 import Verylog.Solver.FP.Types
 import Verylog.Solver.Common
+import Verylog.Language.Parser
 import Verylog.Language.Types
 import Verylog.Solver.FP.FQ
 
@@ -26,6 +26,7 @@ import           Control.Exception
 import           Control.Lens hiding ((<.>))
 import           System.Console.ANSI
 import           System.FilePath.Posix
+import           System.Environment (getArgs)
 import           System.Exit
 import           System.IO
 import           Text.PrettyPrint
@@ -137,3 +138,40 @@ withColor c act
 getColor        :: FixResult a -> Color
 getColor (Safe) = Green
 getColor (_)    = Red
+
+
+-- -----------------------------------------------------------------------------
+-- Common Functions
+-- -----------------------------------------------------------------------------
+
+peHandle :: IRParseError -> IO ()
+peHandle e = renderError e >>= hPutStrLn stderr >> exitFailure
+
+passHandle :: PassError -> IO ()
+passHandle (PassError msg) = do
+  redError msg
+  exitFailure
+passHandle (CycleError{..}) = do
+  hPutStrLn stderr cycleErrorStr
+  exitFailure
+
+redError :: String -> IO ()
+redError msg = do
+  hSetSGR stderr [ SetColor Foreground Vivid Red
+                 , SetConsoleIntensity BoldIntensity
+                 ]
+  hPutStrLn stderr msg
+  hSetSGR stderr []
+
+getFiles :: IO (FilePath, FilePath)
+getFiles = do
+  args <- getArgs
+  case args of
+    [f1,f2] -> return (f1,f2)
+    _       -> error "Please run with two files (input & output)"
+
+
+type PRType = FilePath -> FilePath -> IO ()
+
+runMain              :: PRType -> IO ()
+runMain printResults = (getFiles >>= uncurry printResults) `catch` peHandle `catch` passHandle

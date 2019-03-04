@@ -46,8 +46,8 @@ m_flattenToAlways st l = foldM (\as ir -> flattenIR st ir as) l (st^.irs)
 
     filterSt :: Stmt -> St -> St
     filterSt s stt = let vars  = HS.fromList $ foldVariables s
-                         st'   = over ufs      (filterMap vars)  .
-                                 set irs      [] $
+                         st'   = over ufs (filterMap vars)  .
+                                 set irs [] $
                                  stt
                          vars' = vars `HS.union` (HS.fromList $ concat $ snd <$> HM.elems (st'^.ufs))
                          lhss  = getLhss s

@@ -60,21 +60,8 @@ simple runner testDir = do
 mips :: Runner -> FilePath -> Spec
 mips runner d = do
   describe "mips" $ do
-    mipsStubs   runner d
     mipsModules runner d
-
-mipsStubs :: Runner -> FilePath -> Spec
-mipsStubs runner d = describe "stub" $ forM_ (go <$> names) runner
-  where
-    go (ver, name) = t { testName    = ver
-                       , moduleName  = "mips_pipeline"
-                       , verilogFile = d </> name <.> "v"
-                       }
-    names = [ ("v1", "472-mips-fragment")
-            , ("v2", "472-mips-fragment-2")
-            , ("v3", "472-mips-fragment-3")
-            , ("v4", "472-mips-fragment-4")
-            ]
+    mipsStubs   runner d
 
 mipsModules :: Runner -> FilePath -> Spec
 mipsModules runner d = describe "modules" $ forM_ (go <$> names) runner
@@ -91,6 +78,20 @@ mipsModules runner d = describe "modules" $ forM_ (go <$> names) runner
             , "rom32"
             , "reg_file"
             ]
+
+mipsStubs :: Runner -> FilePath -> Spec
+mipsStubs runner d = describe "stub" $ forM_ (go <$> names) runner
+  where
+    go (ver, name) = t { testName    = ver
+                       , moduleName  = "mips_pipeline"
+                       , verilogFile = d </> name <.> "v"
+                       }
+    names = [ ("v1", "472-mips-fragment")
+            , ("v2", "472-mips-fragment-2")
+            , ("v3", "472-mips-fragment-3")
+            , ("v4", "472-mips-fragment-4")
+            ]
+
 
 -- -----------------------------------------------------------------------------
 -- NEGATIVE TESTS
@@ -139,10 +140,6 @@ major runner parserDir = describe "major" $ forM_ ts runner
              , moduleName  = "fpu"
              , verilogFile = b </> "fpu/verilog/fpu.v"
              }
-         , t { testName    = "ctalu"
-             , moduleName  = "scarv_cop_palu"
-             , verilogFile = b </> "xcrypto-ref/rtl/coprocessor/scarv_cop_palu.v"
-             }
          , t { testName    = "fpu-divider"
              , moduleName  = "divider"
              , verilogFile = b </> "fpu2/divider/divider.v"
@@ -152,6 +149,10 @@ major runner parserDir = describe "major" $ forM_ ts runner
              , moduleName  = "ModExp"
              , verilogFile = c </> "RSA4096/ModExp2/ModExp.v"
              , testType    = Fail
+             }
+         , t { testName    = "ctalu"
+             , moduleName  = "scarv_cop_palu"
+             , verilogFile = b </> "xcrypto-ref/rtl/coprocessor/scarv_cop_palu.v"
              }
          ]
 

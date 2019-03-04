@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Verylog.Transform.FPVCGen ( toFpSt
-                                 ) where
+module Verylog.Transform.FP.VCGen ( toFpSt
+                                  ) where
 
 import           Control.Monad.State.Lazy
 import           Control.Lens

@@ -39,16 +39,16 @@ merge =
     disable printBlocks
   )
   where
+    disable :: a -> b -> b
     disable _ = id
 
 -----------------------------------------------------------------------------------
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Filter out continuous assignments
 -----------------------------------------------------------------------------------
 mergeEquals :: (ABS, Annots) -> (ABS, Annots)
-mergeEquals (as, annotations) = (as', annotations)
+mergeEquals (as, annotations@(_, qualifiers)) = (as', annotations)
   where
     as' = rest ++ newclocks1 ++ newclocks2
-    (_, qualifiers) = annotations
 
     (clocks, rest) = partition ((==) NonBlocking . eventToAssignType . view aEvent) as
 
