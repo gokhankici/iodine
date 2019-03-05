@@ -52,13 +52,7 @@ data FPSt = FPSt { _fpConstraints :: ! [Inv]
                  }
             deriving (Generic)
 
-data AllAnnots = AllAnnots { _allAnnotations :: [Annotation]
-                           , _allQualifiers  :: [FPQualifier]
-                           }
-               deriving (Generic)
-
 makeLenses ''FPSt
-makeLenses ''AllAnnots
 
 instance Show FPSt where
   show fpst = show (fpst ^. fpABs)
@@ -77,11 +71,3 @@ qualifVars (QualifIff l rs)  = l:rs
 qualifVars (QualifPairs vs)  = vs
 qualifVars (QualifAssume vs) = vs
 
-instance Monoid AllAnnots where
-  mempty = AllAnnots [] []
-  m1 `mappend` m2 =
-    set allAnnotations ((m1^.allAnnotations) `mappend` (m2^.allAnnotations)) $
-    set allQualifiers ((m1^.allQualifiers) `mappend` (m2^.allQualifiers)) $
-    mempty
-
-  

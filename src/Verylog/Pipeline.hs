@@ -1,7 +1,6 @@
 module Verylog.Pipeline ( pipeline
                         , pipeline'
                         , afterParse
-                        , PipelineIntermediary
                         ) where
 
 import Control.Arrow
@@ -14,7 +13,18 @@ import Verylog.Transform.Merge
 import Verylog.Transform.Modularize
 import Verylog.Transform.SanityCheck
 
-type PipelineIntermediary = ([AlwaysBlock], AllAnnots)
+type States       = (St, AnnotSt)
+type Qualifiers   = [FPQualifier]
+type Intermediary = (ABS, (AnnotSt, Qualifiers))
+type ParseInput   = (FilePath, String)
+type ParseOutput  = (States, Qualifiers)
+type ABS          = [AlwaysBlock]
+
+-- parse       :: (FilePath, String) -> (States, Qualifiers)
+-- flatten     :: States -> ABS
+-- sanityCheck :: ABS -> ABS
+-- merge       :: (ABS, Qualifiers) -> (ABS, Qualifiers)
+-- toFpSt      :: (ABS, (AnnotSt, Qualifiers)) -> FPSt
 
 --------------------------------------------------------------------------------
 pipeline :: ParseInput -> FPSt
@@ -24,15 +34,21 @@ pipeline = common >>> toFpSt
 --------------------------------------------------------------------------------
 pipeline' :: ParseInput -> [AlwaysBlock]
 --------------------------------------------------------------------------------
-pipeline' = common >>> arr fst
+pipeline' = common >>> fst
 
-common :: ParseInput -> PipelineIntermediary
+common :: ParseInput -> Intermediary
 common = parse >>> afterParse
 
 --------------------------------------------------------------------------------
-afterParse :: ParseOutput -> PipelineIntermediary
+afterParse :: ParseOutput -> Intermediary
 --------------------------------------------------------------------------------
-afterParse = (flatten &&& snd)
-             >>> first sanityCheck
-             >>> merge
+afterParse = ((fst >>> flatten)           -- ABS
+              &&& first snd)              -- (AnnotSt, Qualifiers)
+             >>> first sanityCheck        -- (ABS, (AnnotSt, Qualifiers))
+             >>> ( (second snd >>> merge) -- ABS
+                   &&& snd)               -- (AnnotSt, Qualifiers)
+
+
+
+
 

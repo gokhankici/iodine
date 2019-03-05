@@ -7,8 +7,6 @@
 module Verylog.Language.Parser ( parse
                                , renderError
                                , IRParseError (..)
-                               , ParseInput
-                               , ParseOutput
                                ) where
 
 import           Control.Arrow
@@ -122,19 +120,19 @@ makeLenses ''ParseSt
 type Parser = Parsec SourcePos String
 
 type ParseInput  = (FilePath, String)
-type ParseOutput = (St, AllAnnots)
+type ParseOutput = ((St, AnnotSt), [FPQualifier])
 
 -- --------------------------------------------------------------------------------
 parse :: ParseInput -> ParseOutput
 -- --------------------------------------------------------------------------------
 parse = parseWithoutConversion >>> first makeState
 
-parseWithoutConversion :: ParseInput -> ([ParseIR], AllAnnots)
+parseWithoutConversion :: ParseInput -> ([ParseIR], [FPQualifier])
 parseWithoutConversion (fp, s) = foldr f ([],mempty) (parseWith parseIR)
   where
-    f (PQualifier q)    = second $ over allQualifiers ((:) q)
-    f p@(PAnnotation a) = first ((:) p) >>> second (over allAnnotations ((:) a))
-    f p                 = first ((:) p)
+    -- separate extra qualifiers from the rest
+    f (PQualifier q) = second $ ((:) q)
+    f p              = first ((:) p)
 
     parseWith p =
       case runParser (whole p) fp s of
@@ -142,7 +140,7 @@ parseWithoutConversion (fp, s) = foldr f ([],mempty) (parseWith parseIR)
         Left bundle -> throw (IRParseError (myParseErrorPretty bundle))
 
 -----------------------------------------------------------------------------------
-makeState :: [ParseIR] -> St
+makeState :: [ParseIR] -> (St, AnnotSt)
 -----------------------------------------------------------------------------------
 makeState (topIR@(TopModule{..}):as) = resultState -- trace (show (resultState^.sanitize)) resultState
   where
@@ -191,7 +189,7 @@ makeState (topIR@(TopModule{..}):as) = resultState -- trace (show (resultState^.
       -- do some sanity checks
       sanityChecks
 
-      use st
+      (,) <$> use st <*> use annots
 
 makeState _ = throw (PassError "First ir is not a toplevel module !")
 

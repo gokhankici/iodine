@@ -20,22 +20,22 @@ import           Data.Graph.Inductive.Graph hiding ((&))
 import           Text.Printf
 import           Debug.Trace
 
-type ABS = [AlwaysBlock]
+type ABS        = [AlwaysBlock]
+type Qualifiers = [FPQualifier]
 
-merge :: (ABS, AllAnnots) -> (ABS, AllAnnots)
+merge :: (ABS, Qualifiers) -> ABS
 merge =
   mergeEquals
   >>>
-  first
-  (
-    disable mergeClocks
-    >>>
-    mergeAssignsAndStars
-    >>>
-    disable mergeAssigns
-    >>>
-    disable printBlocks
-  )
+  fst
+  >>>
+  disable mergeClocks
+  >>>
+  mergeAssignsAndStars
+  >>>
+  disable mergeAssigns
+  >>>
+  disable printBlocks
   where
     disable :: a -> b -> b
     disable _ = id
@@ -43,8 +43,8 @@ merge =
 -----------------------------------------------------------------------------------
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Filter out continuous assignments
 -----------------------------------------------------------------------------------
-mergeEquals :: (ABS, AllAnnots) -> (ABS, AllAnnots)
-mergeEquals (as, allAnnots) = (as', allAnnots)
+mergeEquals :: (ABS, Qualifiers) -> (ABS, Qualifiers)
+mergeEquals (as, allQualifiers) = (as', allQualifiers)
   where
     as' = rest ++ newclocks1 ++ newclocks2
 
@@ -57,7 +57,7 @@ mergeEquals (as, allAnnots) = (as', allAnnots)
     ws  = writeSets clocks
     vss = foldl' (\acc -> \case
                      QualifPairs vs -> vs:acc
-                     _              -> acc) [] (allAnnots^.allQualifiers)
+                     _              -> acc) [] allQualifiers
 
     abMap = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
     iss =

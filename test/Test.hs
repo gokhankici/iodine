@@ -211,8 +211,6 @@ runUnitTest scriptPath (UnitTest{..}) =
     act :: IO Bool
     act = do
       let verylogArgs  = [ "-M", moduleName
-                         , "--no-save"
-                         , "--no-output"
                          , verilogFile
                          ]
           verylogInput = ""

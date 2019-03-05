@@ -3,38 +3,38 @@
 module Verylog.Transform.FP.VCGen ( toFpSt
                                   ) where
 
+import           Verylog.Language.Types
+import           Verylog.Solver.Common
+import           Verylog.Solver.FP.Types
+import           Verylog.Transform.Utils
+import           Verylog.Transform.VCGen
+
 import           Control.Monad.State.Lazy
 import           Control.Lens
 import           Data.List
 import qualified Data.HashMap.Strict      as M
 import qualified Language.Fixpoint.Types  as FQ
+import qualified Data.HashSet             as HS
 
-import           Verylog.Language.Types 
-import           Verylog.Solver.Common
-import           Verylog.Solver.FP.Types
-import           Verylog.Transform.Utils
-import           Verylog.Transform.VCGen
 -- import Debug.Trace
 
 type S = State (Int, BindMap)
 
-toFpSt    :: ([AlwaysBlock], AllAnnots) -> FPSt
-toFpSt (as, allAnnots) =
+toFpSt    :: ([AlwaysBlock], (AnnotSt, [FPQualifier])) -> FPSt
+toFpSt (as, (allAnnots, allQualifiers)) =
   FPSt { _fpConstraints = cs
        , _fpABs         = as
        , _fpBinds       = bs'
        , _fpUFs         = M.unions $ (view (aSt . ufs)) <$> as
-       , _fpQualifiers  = allAnnots^.allQualifiers
+       , _fpQualifiers  = allQualifiers
        , _fpSources     = srcs
        }
   where
-    srcs = let f (Source s) = [s]
-               f _ = []
-           in  concatMap f (allAnnots^.allAnnotations)
+    srcs = HS.toList (allAnnots^.sources)
     cs   = invs srcs as
     bs   = getBinds as cs
     ni   = M.size bs + 1
-    ts   = makeBothTags $ concatMap qualifVars (allAnnots^.allQualifiers)
+    ts   = makeBothTags $ concatMap qualifVars allQualifiers
     bs'  = foldl' (\m (n,name) -> h m n name) bs (zip [ni..] ts)
     h m i name =
       let f v Nothing  = Just v

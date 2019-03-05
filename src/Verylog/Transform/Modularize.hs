@@ -6,27 +6,21 @@ module Verylog.Transform.Modularize ( flatten
                                     , filterAnnotSt
                                     ) where
 
-import           Control.Arrow
 import           Control.Lens hiding (mapping)
 import           Control.Monad.State.Lazy
 import qualified Data.HashMap.Strict        as HM
 import qualified Data.HashSet               as HS
-import           Data.List (foldl')
 
 import           Verylog.Language.Types
-import           Verylog.Solver.FP.Types
 import           Verylog.Transform.Utils
 
 type States = (St, AnnotSt)
 
 -- | flatten:: Flatten the module hierarchy
 -----------------------------------------------------------------------------------
-flatten :: (St, AllAnnots) -> [AlwaysBlock]
+flatten :: States -> [AlwaysBlock]
 -----------------------------------------------------------------------------------
-flatten = second toAnnotSt >>> flattenToAlways
-
-flattenToAlways :: States -> [AlwaysBlock]
-flattenToAlways input = evalState (m_flattenToAlways input []) 0
+flatten input = evalState (m_flattenToAlways input []) 0
 
 type HS = State Int
 
@@ -78,13 +72,3 @@ filterMap toKeep = HM.filterWithKey (\k _ -> HS.member k toKeep)
 filterVars :: HS.HashSet Id -> [Var] -> [Var]
 filterVars toKeep = filter (\v -> HS.member (varName v) toKeep)
 
-toAnnotSt :: AllAnnots -> AnnotSt
-toAnnotSt aas = foldl' (flip go) mempty (aas^.allAnnotations)
-  where
-    go (Source s)         = over sources (HS.insert s)
-    go (Sink s)           = over sinks (HS.insert s)
-    go (TaintEq v)        = over taintEq (HS.insert v)
-    go (AssertEq v)       = over assertEq (HS.insert v)
-    go (Sanitize vs)      = over sanitize (\hs -> foldl' (flip HS.insert) hs vs)
-    go (SanitizeGlob v)   = over sanitizeGlob (HS.insert v)
-    go (SanitizeMod {..}) = id

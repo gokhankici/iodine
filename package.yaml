@@ -105,6 +105,5 @@ tests:
     - -fwarn-tabs
     - -fwarn-unused-imports
     dependencies:
-    - verylog-hs
     - hspec
     - hspec-core
