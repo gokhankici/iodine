@@ -27,6 +27,7 @@ data AlwaysBlock = AB { _aEvent   :: ! Event
                       , _aStmt    :: ! Stmt
                       , _aId      :: ! Int
                       , _aSt      :: ! St
+                      , _aAnnotSt :: ! AnnotSt
                       , _aLoc     :: ! (String, String) -- Module & instance name
                       }
                    deriving (Generic)
@@ -106,35 +107,35 @@ data Annotation
   | AssertEq     ! String
   deriving (Show)
 
-data AnnotSt = AnnotSt { _sources      :: ! [Id]
-                       , _sinks        :: ! [Id]
-                       , _taintEq      :: ! [Id]
-                       , _assertEq     :: ! [Id]
-                       , _sanitize     :: ! [Id]
-                       , _sanitizeGlob :: ! [Id]
+data AnnotSt = AnnotSt { _sources      :: ! (S.HashSet Id)
+                       , _sinks        :: ! (S.HashSet Id)
+                       , _taintEq      :: ! (S.HashSet Id)
+                       , _assertEq     :: ! (S.HashSet Id)
+                       , _sanitize     :: ! (S.HashSet Id)
+                       , _sanitizeGlob :: ! (S.HashSet Id)
                        }
                deriving (Generic)
 
-data St = St { _ports  :: ! [Var]
-             , _ufs    :: ! UFMap
-             , _irs    :: ! [IR]
-             , _annots :: ! AnnotSt
+data St = St { _ports :: ! [Var]
+             , _ufs   :: ! UFMap
+             , _irs   :: ! [IR]
+             , _vars  :: ! (S.HashSet Id)
              }
           deriving (Generic)
 
 emptyAnnotSt :: AnnotSt
-emptyAnnotSt = AnnotSt { _sources      = []
-                       , _sinks        = []
-                       , _assertEq     = []
-                       , _taintEq      = []
-                       , _sanitize     = []
-                       , _sanitizeGlob = []
+emptyAnnotSt = AnnotSt { _sources      = mempty
+                       , _sinks        = mempty
+                       , _assertEq     = mempty
+                       , _taintEq      = mempty
+                       , _sanitize     = mempty
+                       , _sanitizeGlob = mempty
                        }
 emptySt :: St
-emptySt = St { _ports  = []
-             , _ufs    = M.empty
-             , _irs    = []
-             , _annots = emptyAnnotSt
+emptySt = St { _ports = mempty
+             , _ufs   = mempty
+             , _irs   = mempty
+             , _vars  = mempty
              }
 
 makeLenses ''AnnotSt 
@@ -218,31 +219,31 @@ instance PPrint St where
   toDoc st = vcat $ stDoc : space : st^.irs.to (map toDoc)
     where
       stDoc = text "St" <+>
-              vcat [ lbrace <+> text "ports" <+> equals <+> st^.ports.to     toDoc
-                   , comma  <+> text "ufs  " <+> equals <+> st^.ufs.to       printMap
-                   , comma  <+> text "srcs " <+> equals <+> st^.annots^.sources.to   printList
-                   , comma  <+> text "sinks" <+> equals <+> st^.annots^.sinks.to     printList
-                   , comma  <+> text "sntz " <+> equals <+> st^.annots^.sanitize.to  printList
+              vcat [ lbrace <+> text "ports" <+> equals <+> st^.ports.to         toDoc
+                   , comma  <+> text "ufs  " <+> equals <+> st^.ufs.to           printMap
                    , rbrace
                    ]
 
 instance PPrint AlwaysBlock where
-  toDoc a = text "always(" <> vcat [ comment "id       " <+> int (a^.aId)                             <> comma
-                                   , comment "mod name " <+> text (a^.aLoc^._1)                       <> comma
-                                   , comment "inst name" <+> text (a^.aLoc^._2)                       <> comma
-                                   , comment "ports    " <+> toDoc (a^.aSt^.ports)                    <> comma
-                                   , comment "ufs      " <+> printMap  (a^.aSt^.ufs)                  <> comma
-                                   , comment "sources  " <+> printList (a^.aSt^.annots^.sources)      <> comma
-                                   , comment "sinks    " <+> printList (a^.aSt^.annots^.sinks)        <> comma
-                                   , comment "sanitize " <+> printList (a^.aSt^.annots^.sanitize)     <> comma
-                                   , comment "san. glob" <+> printList (a^.aSt^.annots^.sanitizeGlob) <> comma
-                                   , comment "taint eq." <+> printList (a^.aSt^.annots^.taintEq)      <> comma
-                                   , comment "asrt. eq"  <+> printList (a^.aSt^.annots^.assertEq)     <> comma
-                                   , toDoc (a^.aEvent)                                                <> comma
+  toDoc a = text "always(" <> vcat [ comment "id       " <+> int (a^.aId)                         <> comma
+                                   , comment "mod name " <+> text (a^.aLoc^._1)                   <> comma
+                                   , comment "inst name" <+> text (a^.aLoc^._2)                   <> comma
+                                   , comment "ports    " <+> toDoc (a^.aSt^.ports)                <> comma
+                                   , comment "ufs      " <+> printMap  (a^.aSt^.ufs)              <> comma
+                                   , comment "sources  " <+> printSet (a^.aAnnotSt^.sources)      <> comma
+                                   , comment "sinks    " <+> printSet (a^.aAnnotSt^.sinks)        <> comma
+                                   , comment "sanitize " <+> printSet (a^.aAnnotSt^.sanitize)     <> comma
+                                   , comment "san. glob" <+> printSet (a^.aAnnotSt^.sanitizeGlob) <> comma
+                                   , comment "taint eq." <+> printSet (a^.aAnnotSt^.taintEq)      <> comma
+                                   , comment "asrt. eq"  <+> printSet (a^.aAnnotSt^.assertEq)     <> comma
+                                   , toDoc (a^.aEvent)                                            <> comma
                                    , toDoc (a^.aStmt)
                                    ] <> text ")."
     where
       comment t = text "/*" <+> text t <+> text "*/"
+
+printSet :: S.HashSet String -> Doc
+printSet = printList . S.toList
 
 printList :: [String] -> Doc
 printList = brackets . text . (intercalate ", ")
@@ -278,25 +279,22 @@ instance NFData AlwaysBlock
 
 instance SG.Semigroup AnnotSt where
   m1 <> m2 =
-    AnnotSt { _sources      = jn_list sources
-            , _sinks        = jn_list sinks
-            , _taintEq      = jn_list taintEq
-            , _assertEq     = jn_list assertEq
-            , _sanitize     = jn_list sanitize
-            , _sanitizeGlob = jn_list sanitizeGlob
+    AnnotSt { _sources      = jn_set sources
+            , _sinks        = jn_set sinks
+            , _taintEq      = jn_set taintEq
+            , _assertEq     = jn_set assertEq
+            , _sanitize     = jn_set sanitize
+            , _sanitizeGlob = jn_set sanitizeGlob
             }
     where
-      jn_list fld =
-        S.toList $
-        S.fromList (m1 ^. fld) Mo.<> 
-        S.fromList (m2 ^. fld)
+      jn_set fld = (m1 ^. fld) Mo.<> (m2 ^. fld)
 
 instance SG.Semigroup St where
   m1 <> m2 = 
     St { _ports  = jn_list ports
        , _ufs    = (m1 ^. ufs) Mo.<> (m2 ^. ufs)
        , _irs    = (m1 ^. irs) Mo.<> (m2 ^. irs)
-       , _annots = (m1 ^. annots) Mo.<> (m2 ^. annots)
+       , _vars   = (m1 ^. vars) Mo.<> (m2 ^. vars)
        }
     where
       jn_list fld =

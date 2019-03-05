@@ -1,29 +1,38 @@
 module Verylog.Pipeline ( pipeline
                         , pipeline'
+                        , afterParse
+                        , PipelineIntermediary
                         ) where
 
 import Control.Arrow
 
 import Verylog.Language.Parser
 import Verylog.Language.Types
-import Verylog.Transform.Modularize
-import Verylog.Transform.Merge
-import Verylog.Transform.SanityCheck
-import Verylog.Transform.FP.VCGen
 import Verylog.Solver.FP.Types
+import Verylog.Transform.FP.VCGen
+import Verylog.Transform.Merge
+import Verylog.Transform.Modularize
+import Verylog.Transform.SanityCheck
+
+type PipelineIntermediary = ([AlwaysBlock], AllAnnots)
 
 --------------------------------------------------------------------------------
-pipeline :: FilePath -> String -> FPSt
+pipeline :: ParseInput -> FPSt
 --------------------------------------------------------------------------------
-pipeline f = common f >>> toFpSt
+pipeline = common >>> toFpSt
 
-  
 --------------------------------------------------------------------------------
-pipeline' :: FilePath -> String -> [AlwaysBlock]
+pipeline' :: ParseInput -> [AlwaysBlock]
 --------------------------------------------------------------------------------
-pipeline' f = common f >>> arr fst
+pipeline' = common >>> arr fst
 
-common :: FilePath -> String -> ([AlwaysBlock], Annots)
-common f = parse f
-           >>> first ( flatten >>> sanityCheck )
-           >>> merge
+common :: ParseInput -> PipelineIntermediary
+common = parse >>> afterParse
+
+--------------------------------------------------------------------------------
+afterParse :: ParseOutput -> PipelineIntermediary
+--------------------------------------------------------------------------------
+afterParse = (flatten &&& snd)
+             >>> first sanityCheck
+             >>> merge
+

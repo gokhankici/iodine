@@ -7,6 +7,8 @@
 module Verylog.Language.Parser ( parse
                                , renderError
                                , IRParseError (..)
+                               , ParseInput
+                               , ParseOutput
                                ) where
 
 import           Control.Arrow
@@ -19,7 +21,6 @@ import           Data.Hashable
 import qualified Data.HashMap.Strict        as M
 import qualified Data.HashSet               as S
 import qualified Data.List                  as Li
--- import qualified Data.List.NonEmpty         as NE
 import           Data.Typeable
 import           Text.Megaparsec            as MP hiding (parse, State(..))
 import           Text.Megaparsec.Char
@@ -99,46 +100,46 @@ data ParseSt = ParseSt { _parseSources      :: ! (S.HashSet Id)
                        , _parseModSanitize  :: ! (M.HashMap Id (S.HashSet Id))
                        , _parseUFs          :: ! UFMap
                        , _st                :: ! St
+                       , _annots            :: ! AnnotSt
                        }
 
 emptyParseSt :: ParseSt
-emptyParseSt = ParseSt { _parseSources      = S.empty
-                       , _parseSinks        = S.empty
-                       , _parsePorts        = S.empty
-                       , _parseSanitize     = S.empty
-                       , _parseSanitizeGlob = S.empty
-                       , _parseTaintEq      = S.empty
-                       , _parseAssertEq     = S.empty
-                       , _parseModSanitize  = M.empty
-                       , _parseUFs          = M.empty
-                       , _st                = emptySt
+emptyParseSt = ParseSt { _parseSources      = mempty
+                       , _parseSinks        = mempty
+                       , _parsePorts        = mempty
+                       , _parseSanitize     = mempty
+                       , _parseSanitizeGlob = mempty
+                       , _parseTaintEq      = mempty
+                       , _parseAssertEq     = mempty
+                       , _parseModSanitize  = mempty
+                       , _parseUFs          = mempty
+                       , _st                = mempty
+                       , _annots            = mempty
                        }
 
 makeLenses ''ParseSt
 
 type Parser = Parsec SourcePos String
-type Annots = ([Id], [FPQualifier]) -- sources and extra qualifiers
+
+type ParseInput  = (FilePath, String)
+type ParseOutput = (St, AllAnnots)
 
 -- --------------------------------------------------------------------------------
-parse :: FilePath -> String -> (St, Annots)
+parse :: ParseInput -> ParseOutput
 -- --------------------------------------------------------------------------------
-parse f = parseWithoutConversion f >>> first makeState
+parse = parseWithoutConversion >>> first makeState
 
-parseWithoutConversion :: FilePath -> String -> ([ParseIR], Annots)
-parseWithoutConversion fp s = foldr f ([],([],[])) (parseWith parseIR)
+parseWithoutConversion :: ParseInput -> ([ParseIR], AllAnnots)
+parseWithoutConversion (fp, s) = foldr f ([],mempty) (parseWith parseIR)
   where
-    f (PQualifier q) = second $ second ((:) q)
-    f p@(PAnnotation (Source src)) = first ((:) p) >>> second (first ((:) src))
-    f p = first ((:) p)
+    f (PQualifier q)    = second $ over allQualifiers ((:) q)
+    f p@(PAnnotation a) = first ((:) p) >>> second (over allAnnotations ((:) a))
+    f p                 = first ((:) p)
 
     parseWith p =
       case runParser (whole p) fp s of
         Right e     -> e
         Left bundle -> throw (IRParseError (myParseErrorPretty bundle))
-
------------------------------------------------------------------------------------
--- | ParseIR -> St
------------------------------------------------------------------------------------
 
 -----------------------------------------------------------------------------------
 makeState :: [ParseIR] -> St
@@ -166,12 +167,12 @@ makeState (topIR@(TopModule{..}):as) = resultState -- trace (show (resultState^.
       st . ufs   <~ uses parseUFs   flattenUFs
 
       -- update taint info of st
-      st . annots . sources      <~ uses parseSources      S.toList
-      st . annots . sinks        <~ uses parseSinks        S.toList
-      st . annots . taintEq      <~ uses parseTaintEq      S.toList
-      st . annots . assertEq     <~ uses parseAssertEq     S.toList
-      st . annots . sanitize     <~ uses parseSanitize     S.toList
-      st . annots . sanitizeGlob <~ uses parseSanitizeGlob S.toList
+      annots . sources      <~ use parseSources
+      annots . sinks        <~ use parseSinks
+      annots . taintEq      <~ use parseTaintEq
+      annots . assertEq     <~ use parseAssertEq
+      annots . sanitize     <~ use parseSanitize
+      annots . sanitizeGlob <~ use parseSanitizeGlob
 
       prts <- use (st . ports)
       let topWireInputs =
@@ -182,7 +183,7 @@ makeState (topIR@(TopModule{..}):as) = resultState -- trace (show (resultState^.
             in  foldr f [] mPortNames
 
       -- top module's input wires are tainted eq
-      st . annots . taintEq %= S.toList . S.union (S.fromList topWireInputs) . S.fromList
+      annots . taintEq %= S.union (S.fromList topWireInputs)
 
       -- create intermediary IR from parse IR
       st . irs <~ uses st (makeIntermediaryIR loc mBehaviors mGates)
@@ -254,12 +255,12 @@ sanitizeSubmodules gates = sequence_ $ sanitizeInst <$> gates
     sanitizeInst (PModuleInst{..}) = do
       sanitizeSubmodules pmInstGates
 
-      vars <- uses parseModSanitize (M.lookup pmModuleName)
-      case vars of
-        Nothing -> return ()
-        Just vs -> sequence_ $
-                   (\v -> parseSanitize %= S.insert (mk_mod_var pmInstName v))
-                   <$> S.toList vs
+      vs <- uses parseModSanitize (M.lookup pmModuleName)
+      case vs of
+        Nothing  -> return ()
+        Just vs2 -> sequence_ $
+                    (\v -> parseSanitize %= S.insert (mk_mod_var pmInstName v))
+                    <$> S.toList vs2
       sanitizeSubmodules pmInstGates
 
     mk_mod_var m v = printf "%s_%s" m v
@@ -419,7 +420,7 @@ whole :: Parser a -> Parser a
 whole p = spaceConsumer *> p <* eof
 
 spaceConsumer :: Parser ()
-spaceConsumer = (L.space (void spaceChar) lineCmnt blockCmnt) -- *> (L.space (void spaceChar) prologDecl blockCmnt)
+spaceConsumer = (L.space (void spaceChar) lineCmnt blockCmnt)
   where
     blockCmnt, lineCmnt :: Parser ()
     blockCmnt = L.skipBlockComment "/*" "*/"

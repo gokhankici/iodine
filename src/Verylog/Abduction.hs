@@ -1,5 +1,6 @@
 module Verylog.Abduction (abduction) where
 
+-- import Verylog.Pipeline
 import Verylog.Solver.FP.Types
 import Verylog.Solver.FP.FQ
 

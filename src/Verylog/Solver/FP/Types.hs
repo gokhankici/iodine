@@ -2,24 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Verylog.Solver.FP.Types ( FQBind(..)
-                               , InvFun(..)
-                               , UFConst(..)
-                               , BindMap
-                               , UFMap
-                               , FPQualifier(..)
-                               , qualifVars
-
-                               , FPSt(..)
-                               , fpConstraints
-                               , fpABs
-                               , fpBinds
-                               , fpUFs
-                               , fpQualifiers
-                               , fpSources
-
-                               , idFromExp
-                               ) where
+module Verylog.Solver.FP.Types where
 
 import           Verylog.Language.Types hiding (St, ufs)
 import           Verylog.Solver.Common
@@ -30,6 +13,7 @@ import           Control.Lens
 import qualified Data.HashMap.Strict        as M
 import           GHC.Generics hiding (to)
 import qualified Language.Fixpoint.Types    as FQ
+
 
 data FPQualifier = QualifImp    { qualifLhs  :: !Id
                                 , qualifRhss :: ![Id]
@@ -68,7 +52,13 @@ data FPSt = FPSt { _fpConstraints :: ! [Inv]
                  }
             deriving (Generic)
 
+data AllAnnots = AllAnnots { _allAnnotations :: [Annotation]
+                           , _allQualifiers  :: [FPQualifier]
+                           }
+               deriving (Generic)
+
 makeLenses ''FPSt
+makeLenses ''AllAnnots
 
 instance Show FPSt where
   show fpst = show (fpst ^. fpABs)
@@ -86,3 +76,12 @@ qualifVars (QualifImp l rs)  = l:rs
 qualifVars (QualifIff l rs)  = l:rs
 qualifVars (QualifPairs vs)  = vs
 qualifVars (QualifAssume vs) = vs
+
+instance Monoid AllAnnots where
+  mempty = AllAnnots [] []
+  m1 `mappend` m2 =
+    set allAnnotations ((m1^.allAnnotations) `mappend` (m2^.allAnnotations)) $
+    set allQualifiers ((m1^.allQualifiers) `mappend` (m2^.allQualifiers)) $
+    mempty
+
+  

@@ -65,6 +65,20 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Werror
+    - -O2
+    - -fdefer-type-errors
+    - -fwarn-incomplete-patterns
+    - -fwarn-incomplete-record-updates
+    - -fwarn-incomplete-uni-patterns
+    - -fwarn-missing-signatures
+    - -fwarn-monomorphism-restriction
+    - -fwarn-name-shadowing
+    - -fwarn-orphans
+    - -fwarn-overlapping-patterns
+    - -fwarn-redundant-constraints
+    - -fwarn-tabs
+    - -fwarn-unused-imports
     dependencies:
     - verylog-hs
 
@@ -76,6 +90,20 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Werror
+    - -O2
+    - -fdefer-type-errors
+    - -fwarn-incomplete-patterns
+    - -fwarn-incomplete-record-updates
+    - -fwarn-incomplete-uni-patterns
+    - -fwarn-missing-signatures
+    - -fwarn-monomorphism-restriction
+    - -fwarn-name-shadowing
+    - -fwarn-orphans
+    - -fwarn-overlapping-patterns
+    - -fwarn-redundant-constraints
+    - -fwarn-tabs
+    - -fwarn-unused-imports
     dependencies:
     - verylog-hs
     - hspec

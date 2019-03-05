@@ -66,7 +66,7 @@ run (Options{..}) = do
   fileContents <- readFile optInputFile
 
   fpst <- do
-    res <- try $ evaluate $ pipeline optInputFile fileContents
+    res <- try $ evaluate $ pipeline (optInputFile, fileContents)
     case res of
       Left (PassError msg)  -> hPutStrLn stderr msg >> exitFailure
       Left (CycleError{..}) -> do

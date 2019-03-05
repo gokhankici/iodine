@@ -46,8 +46,6 @@ modular_inv srcs a =
   ] <*> [srcs] <*> [a']
   where
     a' = dbg (printf "\nalways block #%d:\n%s" (a^.aId) (show a)) a
-    -- a' = trc (printf "\nalways block #%d:\n" (a^.aId)) a a
-    -- a' = trc (printf "\nalways block #%d: " (a^.aId)) (length $ makeInvArgs fmt a) a
 
 --------------------------------------------------------------------------------
 initial_inv :: [Id] -> AlwaysBlock -> Inv
@@ -62,11 +60,11 @@ initial_inv srcs a =
        , hId   = HornId i (InvInit i)
        }
   where
-    i    = a ^. aId
-    st   = a ^. aSt
+    i      = a ^. aId
+    st     = a ^. aSt
+    annots = a ^. aAnnotSt
     sub1 = [ (n_lvar sntz, rvar sntz)
-           | sntz <- S.toList . S.fromList $
-                     st ^. annots ^. sanitize
+           | sntz <- S.toList $ annots ^. sanitize
            ]
     sub2 = [ (t, Boolean False)
            | t <- makeInvTags fmt a
@@ -117,8 +115,8 @@ next_step_inv srcs a =
     (nl,ul)  = next fmt{leftVar=True}  a
     (nr,ur)  = next fmt{rightVar=True} a
     body     = Ands [ prevKV a
-                    , sanGlobs (a^.aSt^.annots^.sanitizeGlob) subs
-                    , taintEqs (a^.aSt^.annots^.taintEq) subs
+                    , sanGlobs (a^.aAnnotSt^.sanitizeGlob) subs
+                    , taintEqs (a^.aAnnotSt^.taintEq) subs
                     , sourcesAreEqual srcs
                     , nl, nr
                     ]
@@ -141,9 +139,10 @@ sourcesAreEqual srcs = Ands $ h <$> twoPairs srcs
 
 
 type Subs = [(Id,Expr)]
+type AS = S.HashSet Id          -- annotation set
 
 -- sanitize globs are always the same
-sanGlobs        :: [Id] -> Subs -> Expr
+sanGlobs        :: AS -> Subs -> Expr
 sanGlobs vs subs = alwaysEqs conf vs subs
   where
     conf = AEC { isInitEq  = True
@@ -152,7 +151,7 @@ sanGlobs vs subs = alwaysEqs conf vs subs
                , isTagEq   = True
                }
 
-taintEqs        :: [Id] -> Subs -> Expr
+taintEqs        :: AS -> Subs -> Expr
 taintEqs vs subs = alwaysEqs conf vs subs
   where
     conf = AEC { isInitEq  = True
@@ -167,7 +166,7 @@ data AlwaysEqConfig = AEC { isInitEq  :: Bool
                           , isTagEq   :: Bool
                           }
 
-alwaysEqs :: AlwaysEqConfig -> [Id] -> Subs -> Expr
+alwaysEqs :: AlwaysEqConfig -> AS -> Subs -> Expr
 alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
   where
     fmts :: [VarFormat]
@@ -181,7 +180,7 @@ alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
              in  BinOp o
                  (makeVar f{leftVar=True} v)
                  (makeVar f{rightVar=True} v)
-           | v <- vs, f <- fmts
+           | v <- S.toList vs, f <- fmts
            ]
       else []
 
@@ -189,7 +188,7 @@ alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
     primeEq =
       if   isPrimeEq
       then [ BinOp o exprL exprR
-           | v <- vs, (exprL, exprR, o) <- findLastIfExists v
+           | v <- S.toList vs, (exprL, exprR, o) <- findLastIfExists v
            ]
       else []
 
@@ -243,8 +242,8 @@ readWriteSet a = let (r,w) = evalState (comp (a^.aStmt) >> get) ([], [])
 
     regs = S.fromList $ getRegisters a
 
-    -- readVars  v = S.fromList . filterRegs a $ M.lookupDefault [v] v us
-    -- writeVars v = S.fromList . filterRegs a $ if M.member v us then [] else [v]
+    -- readVars  v = S.fromList . isReg a $ M.lookupDefault [v] v us
+    -- writeVars v = S.fromList . isReg a $ if M.member v us then [] else [v]
 
     readVars, writeVars :: [Id] -> S.HashSet Id
     readVars l = foldl' (\s v -> case M.lookup v us of
@@ -297,11 +296,11 @@ non_interference_inv srcs a1 a2 =
                  , v <- primes p
                  ]
     
-    merge f = S.toList $ (S.fromList (view f a1)) `S.union` (S.fromList (view f a2))
+    merge f = (view f a1) `S.union` (view f a2)
     body   = Ands [ prevKV a1
                   , prevKV a2
-                  , sanGlobs (merge (aSt.annots.sanitizeGlob)) (updates1++updates2)
-                  , taintEqs (merge (aSt.annots.taintEq)) (updates1++updates2)
+                  , sanGlobs (merge (aAnnotSt.sanitizeGlob)) (updates1++updates2)
+                  , taintEqs (merge (aAnnotSt.taintEq)) (updates1++updates2)
                   , sourcesAreEqual srcs
                   , nl1
                   , nr1
@@ -322,7 +321,7 @@ provedProperty (PropertyOptions{..}) a =
                                 }
                    , hId   = HornId i (InvTagEq i)
                    }
-            | s <- filterRegs a $ a^.aSt^.annots^.sinks
+            | s <- S.toList $ S.filter (isReg a) (a^.aAnnotSt^.sinks)
             ]
     valEq = [ Horn { hHead =  BinOp EQU (lvar s) (rvar s)
                    , hBody = Ands [ KV { kvId   = i
@@ -333,7 +332,7 @@ provedProperty (PropertyOptions{..}) a =
                                   ]
                    , hId   = HornId i (InvOther "l_sink=r_sink")
                    }
-            | s <- filterRegs a $ a^.aSt^.annots^.sinks
+            | s <- S.toList $ S.filter (isReg a) (a^.aAnnotSt^.sinks)
             ]
     assertEqs =
       [ Horn { hHead =  BinOp EQU (lvar s) (rvar s)
@@ -345,7 +344,7 @@ provedProperty (PropertyOptions{..}) a =
                             ]
              , hId   = HornId i (InvOther "left var = right var")
              }
-      | s <- filterRegs a $ a^.aSt^.annots^.assertEq
+      | s <- S.toList $ S.filter (isReg a) (a^.aAnnotSt^.assertEq)
       ]
 
 -------------------------------------------------------------------------------- 
@@ -379,12 +378,8 @@ primes v = [ makeVarName f v
     -- f' = fmt{primedVar=True}
     f' = fmt
 
-filterRegs :: AlwaysBlock -> [Id] -> [Id]
-filterRegs a vs =
-  foldl' (\l v -> if   (Register v) `elem` (a ^. aSt ^. ports)
-                  then v:l
-                  else l
-         ) [] vs
+isReg :: AlwaysBlock -> Id -> Bool
+isReg a v = (Register v) `elem` (a ^. aSt ^. ports)
 
 filterSubs :: AlwaysBlock -> [(Id,Expr)] -> [(Id,Expr)]
 filterSubs a = filter (\(v,_) -> v `S.member` kv_vars)

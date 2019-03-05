@@ -16,32 +16,35 @@ import           Verylog.Transform.Utils
 import           Verylog.Transform.VCGen
 -- import Debug.Trace
 
-toFpSt    :: ([AlwaysBlock], ([Id],[FPQualifier])) -> FPSt
-toFpSt (as, (srcs,qs)) =
+type S = State (Int, BindMap)
+
+toFpSt    :: ([AlwaysBlock], AllAnnots) -> FPSt
+toFpSt (as, allAnnots) =
   FPSt { _fpConstraints = cs
        , _fpABs         = as
        , _fpBinds       = bs'
        , _fpUFs         = M.unions $ (view (aSt . ufs)) <$> as
-       , _fpQualifiers  = qs
+       , _fpQualifiers  = allAnnots^.allQualifiers
        , _fpSources     = srcs
        }
   where
+    srcs = let f (Source s) = [s]
+               f _ = []
+           in  concatMap f (allAnnots^.allAnnotations)
     cs   = invs srcs as
     bs   = getBinds as cs
     ni   = M.size bs + 1
-    ts   = makeBothTags $ concatMap qualifVars qs
+    ts   = makeBothTags $ concatMap qualifVars (allAnnots^.allQualifiers)
     bs'  = foldl' (\m (n,name) -> h m n name) bs (zip [ni..] ts)
     h m i name =
-      M.alter (f FQBind { bindId   = i
-                        , bindName = name
-                        , bindType = FQ.FTC FQ.boolFTyCon
-                        , bindRef  = FQ.PTrue
-                        }) name m
-    f v Nothing  = Just v
-    f _ (Just v) = Just v
+      let f v Nothing  = Just v
+          f _ (Just v) = Just v
+      in  M.alter (f FQBind { bindId   = i
+                            , bindName = name
+                            , bindType = FQ.FTC FQ.boolFTyCon
+                            , bindRef  = FQ.PTrue
+                            }) name m
 
-
-type S = State (Int, BindMap)
 
 getBinds       :: [AlwaysBlock] -> [Inv] -> BindMap
 getBinds as cs = evalState comp (length constants + 1, m)
@@ -95,24 +98,3 @@ getBindsFromExp (Boolean _)      = return ()
 
 getBindsFromExps :: [Expr] -> S ()
 getBindsFromExps = sequence_ . (map getBindsFromExp)
-
--- addArgs invs = do
---   n <- use _1
---   m <- use _2
---   let addInvArgs inv@(InvFun{..}) (n,m) =
---         let binder argName n = FQBind { bindId   = n
---                                       , bindName = argName
---                                       , bindType = FQ.FInt
---                                       , bindRef  = FQ.prop True
---                                       }
---             args = argVars inv
---             m' = foldr
---                  (\(argName,n1) m ->
---                      M.insert argName (binder argName (n1+n)) m)
---                  m
---                  args
---             n' = n + invFunArity
---         in  (n', m')
---   let (n', m') = foldr addInvArgs (n, m) invs
---   _1 .= n'
---   _2 .= m'

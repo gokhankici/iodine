@@ -4,27 +4,25 @@
 {-# LANGUAGE LambdaCase #-}
 
 module Verylog.Transform.Merge ( merge
-                               , Annots
                                ) where
 
 import           Verylog.Language.Types
 import           Verylog.Transform.DFG
-import           Verylog.Solver.FP.Types           (FPQualifier(..))
+import           Verylog.Solver.FP.Types
 
 import           Control.Arrow
+import           Control.Exception
 import           Control.Lens               hiding (mapping)
 import qualified Data.IntMap.Strict         as IM
 import qualified Data.HashSet               as HS
 import           Data.List
 import           Data.Graph.Inductive.Graph hiding ((&))
-import           Control.Exception
 import           Text.Printf
 import           Debug.Trace
 
-type Annots = ([Id], [FPQualifier])
-type ABS    = [AlwaysBlock]
+type ABS = [AlwaysBlock]
 
-merge :: (ABS, Annots) -> (ABS, Annots)
+merge :: (ABS, AllAnnots) -> (ABS, AllAnnots)
 merge =
   mergeEquals
   >>>
@@ -45,8 +43,8 @@ merge =
 -----------------------------------------------------------------------------------
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Filter out continuous assignments
 -----------------------------------------------------------------------------------
-mergeEquals :: (ABS, Annots) -> (ABS, Annots)
-mergeEquals (as, annotations@(_, qualifiers)) = (as', annotations)
+mergeEquals :: (ABS, AllAnnots) -> (ABS, AllAnnots)
+mergeEquals (as, allAnnots) = (as', allAnnots)
   where
     as' = rest ++ newclocks1 ++ newclocks2
 
@@ -59,7 +57,7 @@ mergeEquals (as, annotations@(_, qualifiers)) = (as', annotations)
     ws  = writeSets clocks
     vss = foldl' (\acc -> \case
                      QualifPairs vs -> vs:acc
-                     _              -> acc) [] qualifiers
+                     _              -> acc) [] (allAnnots^.allQualifiers)
 
     abMap = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
     iss =
@@ -105,11 +103,12 @@ mergeClocks as = groups ++ assigns ++ rest
         event' = let e = head gs ^. aEvent
                  in  assert (e /= Assign) e
 
-        a = AB { _aEvent = event'
-               , _aStmt  = Block $ view aStmt <$> gs
-               , _aId    = n + maxId
-               , _aSt    = mconcat $ view aSt <$> gs
-               , _aLoc   = ("clk join", "clk join")
+        a = AB { _aEvent   = event'
+               , _aStmt    = Block $ view aStmt <$> gs
+               , _aId      = n + maxId
+               , _aSt      = mconcat $ view aSt <$> gs
+               , _aLoc     = ("clk join", "clk join")
+               , _aAnnotSt = mconcat $ view aAnnotSt <$> gs
                }
 
 mergeAssigns :: [AlwaysBlock] -> [AlwaysBlock]
@@ -142,12 +141,13 @@ printBlocks as = f <$> as
 -----------------------------------------------------------------------------------
 mergeBlocks :: AM -> [[Node]] -> [AlwaysBlock]
 mergeBlocks abMap nss = 
-  [ let as2      = (abMap IM.!) <$> ns
+  [ let as2 = (abMap IM.!) <$> ns
         a' = AB { _aEvent = (last as2) ^. aEvent
                 , _aStmt  = Block $ view aStmt <$> as2
                 , _aId    = n + maxId
                 , _aSt    = mconcat $ view aSt <$> as2
                 , _aLoc   = ("mergeBlocks", "mergeBlocks")
+                , _aAnnotSt = mconcat $ view aAnnotSt <$> as2
                 }
         ns = debug (show ns') ns'
 

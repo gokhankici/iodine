@@ -182,7 +182,7 @@ main = do
                           , configFailureReport = Just reportPath
                           , configPrintCpuTime  = True
                           }
-  readConfig defaultConfig args'
+  readConfig cfg args'
     >>= withArgs [] . runSpec (spec thisDir parserDir)
     >>= evaluateSummary
 
