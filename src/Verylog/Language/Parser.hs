@@ -203,8 +203,8 @@ sanityChecks = do
 
   prts <- use parsePorts
   let f p = S.member (Register p) prts || S.member (Wire p) prts
-  when (not $ all f (srcs ++ snks)) $
-    throw (PassError "Source or sink taint is an unknown variable")
+  forM_ (srcs ++ snks) $ \p ->
+    if f p then return () else throw (PassError $ printf "Source or sink taint %s is an unknown variable" p)
 
   taintEqs      <- use parseTaintEq
   assertEqs     <- use parseAssertEq

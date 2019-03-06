@@ -35,6 +35,7 @@ dependencies:
 - hashable
 - fgl
 - fgl-visualize
+- cmdargs
 
 ghc-options:
 - -Werror
@@ -105,5 +106,6 @@ tests:
     - -fwarn-tabs
     - -fwarn-unused-imports
     dependencies:
+    - verylog-hs
     - hspec
     - hspec-core
