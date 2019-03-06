@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE MultiWayIf #-}
 
 module Verylog.Runner ( VerylogArgs(..)
                       , verylogArgs
@@ -9,38 +10,50 @@ module Verylog.Runner ( VerylogArgs(..)
                       ) where
 
 import qualified Verylog.Abduction as VA
-import Verylog.Pipeline
-import Verylog.Solver.FP.Types
-import Verylog.Solver.Common
-import Verylog.Language.Parser
-import Verylog.Language.Types
-import Verylog.Solver.FP.FQ
+import           Verylog.Pipeline
+import           Verylog.Solver.FP.Solve
+import           Verylog.Language.Parser
+import           Verylog.Language.Types
+import           Verylog.Solver.FP.FQ
 
-import Language.Fixpoint.Solver
-import Language.Fixpoint.Types hiding (err)
-import Language.Fixpoint.Types.Config as FPConfig
+import Language.Fixpoint.Types (saveQuery)
+import Language.Fixpoint.Types.Config as FC
 
 import           Control.Exception
-import           Control.Lens hiding ((<.>))
-import           Data.List
-import           Data.Maybe
-import qualified Data.Map.Strict as M
-import qualified Data.Set        as S
-import           System.Console.ANSI
 import           System.Console.CmdArgs.Implicit
 import           System.Directory
 import           System.Exit
 import           System.FilePath.Posix
 import           System.IO
 import           System.Process
-import           Text.PrettyPrint
 import           Text.Printf
 import           GHC.IO.Handle
 
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
 -- -----------------------------------------------------------------------------
+{- | vcgen-fp v1.0, (C) Rami Gokhan Kici 2019
 
+vcgen-fp [OPTIONS] FILE MODULE
+
+Common flags:
+     --iverilog-dir=DIR        path of the iverilog-parser directory
+     --ir                      just generate the IR file
+  -v --vcgen                   just generate the .fq file
+  -m --minimize                run delta-debugging of fixpoint
+     --no-save --nosave        do not save the fq file
+  -a --abduction               run abduction algorithm
+  -t --time                    print the runtime
+     --no-output --nofpoutput  disable the output from fixpoint
+  -h --help                    Display help message
+  -V --version                 Print version information
+     --numeric-version         Print just the version number
+
+Checks whether the given Verilog file runs in constant time.
+
+First argument is the path the to the verilog file.
+Second argument is the name of the root Verilog module in that file.
+-}
 data VerylogArgs =
   VerylogArgs { fileName    :: FilePath -- this is used for both the Verilog and IR file
               , moduleName  :: String
@@ -55,6 +68,9 @@ data VerylogArgs =
               }
   deriving (Show, Data, Typeable)
 
+-- | Default arguments for the VerylogArgs type.
+-- fileName and moduleName are required.
+-- By default, this project and iverilog-parser is assumed to be located in the same folder.
 verylogArgs :: VerylogArgs
 verylogArgs = VerylogArgs { fileName    = def
                                           &= argPos 0
@@ -105,13 +121,17 @@ verylogArgs = VerylogArgs { fileName    = def
 -- -----------------------------------------------------------------------------
 main :: IO ()
 -- -----------------------------------------------------------------------------
+-- | parses the command line arguments automatically, and runs the tool
 main = parseOpts >>= run
+
+-- -----------------------------------------------------------------------------
+run :: VerylogArgs -> IO ()
+-- -----------------------------------------------------------------------------
+-- | runs the verification process
+run a = (normalizePaths a >>= generateIR >>= checkIR) `catch` peHandle `catch` passHandle
 
 parseOpts :: IO VerylogArgs
 parseOpts = cmdArgs verylogArgs
-
-run :: VerylogArgs -> IO ()
-run a = (normalizePaths a >>= generateIR >>= checkIR) `catch` peHandle `catch` passHandle
 
 normalizePaths :: VerylogArgs -> IO VerylogArgs
 normalizePaths (VerylogArgs{..}) = do
@@ -194,83 +214,23 @@ checkIR (VerylogArgs{..}) = do
         let dotFileName = fileName <.> "dot"
         writeFile dotFileName cycleStr
         hPutStrLn stderr cycleErrorStr
-        redError "\nCYCLE DETECTED !\n"
+        hPutStrLn stderr "\nCYCLE DETECTED !\n"
         exitFailure
       Right r -> return r
 
-  let finfo = toFqFormat fpst
-
-  let cfg = defConfig { eliminate = Some
-                      , save      = not noSave
-                      , srcFile   = fileName
-                      , metadata  = True
-                      , FPConfig.minimize  = minimize
+  let cfg = defConfig { eliminate   = Some
+                      , save        = not noSave
+                      , srcFile     = fileName
+                      , metadata    = True
+                      , FC.minimize = minimize
                       }
 
-  case () of
-    _ | vcgen ->
-        if   noSave
-        then putStrLn $ intercalate "\n\n" (show <$> fpst ^. fpABs)
-        else saveQuery cfg finfo >> exitSuccess
-      | abduction -> VA.abduction cfg{save=False} fpst
-      | otherwise ->
-        let act = do res <- solve cfg finfo
-                     let stat = resStatus res
-                     colorStrLn (getColor stat) (render $ resultDoc $ fmap fst stat)
-                     printResult fpst res
-                     exitWith (resultExit stat)
-        in if   noFPOutput
-           then silence act
-           else act
-
-
--- -----------------------------------------------------------------------------
--- Printing results
--- -----------------------------------------------------------------------------
-
-printResult :: FPSt -> Result (Integer, HornId) -> IO ()
-printResult fpst (Result{..}) =
-  case resStatus of
-    Unsafe ids -> do
-      let m        = errMap ids
-          findAB i = fromJust $ find (\a -> (a^.aId) == i) (fpst ^. fpABs)
-      sequence_ $ (flip map) (M.assocs m) $ \(aid, cids) -> do
-        withColor Blue $ printf "Failed constraint ids: %s\n" (show $ S.toList cids)
-        print $ view aStmt $ findAB aid
-    _          -> return ()
-  where
-    errMap cids = foldr (\(cid,hid) m ->
-                           foldr (\(a_id, inv_type) m' ->
-                                     M.alter (altr cid inv_type) a_id m'
-                                 ) m (aIds hid)
-                        ) M.empty cids
-
-    aIds (HornId a2 t@(InvInter a1)) = [(a1, InvInter a2), (a2, t)]
-    aIds (HornId a t)                = [(a,t)]
-
-    altr cid t Nothing  = Just $ S.singleton (cid, t)
-    altr cid t (Just s) = Just $ S.insert (cid, t) s
-
-colorStrLn   :: Color -> String -> IO ()
-colorStrLn c = withColor c . putStrLn
-
-withColor :: Color -> IO () -> IO ()
-withColor c act
-   = do setSGR [ SetConsoleIntensity BoldIntensity, SetColor Foreground Vivid c]
-        act
-        setSGR [ Reset]
-
-getColor        :: FixResult a -> Color
-getColor (Safe) = Green
-getColor (_)    = Red
-
-redError :: String -> IO ()
-redError msg = do
-  hSetSGR stderr [ SetColor Foreground Vivid Red
-                 , SetConsoleIntensity BoldIntensity
-                 ]
-  hPutStrLn stderr msg
-  hSetSGR stderr []
+  if | vcgen     -> saveQuery cfg (toFqFormat fpst)
+     | abduction -> VA.abduction cfg{save=False} fpst
+     | otherwise -> let act = solve cfg fpst >>= exitWith
+                    in  if   noFPOutput
+                        then silence act
+                        else act
 
 
 -- -----------------------------------------------------------------------------
@@ -282,7 +242,7 @@ peHandle e = renderError e >>= hPutStrLn stderr >> exitFailure
 
 passHandle :: PassError -> IO ()
 passHandle (PassError msg) = do
-  redError msg
+  hPutStrLn stderr msg
   exitFailure
 passHandle (CycleError{..}) = do
   hPutStrLn stderr cycleErrorStr

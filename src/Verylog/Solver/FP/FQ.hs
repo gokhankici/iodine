@@ -1,7 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Verylog.Solver.FP.FQ ( toFqFormat
-                            , Metadata
                             , convertExpr
                             ) where
 
@@ -20,10 +19,6 @@ import           Text.Printf
 
 import qualified Language.Fixpoint.Types    as FQT
 import           Language.Fixpoint.Types    hiding (Expr(..), KV)
-
--- import Debug.Trace  
-
-type Metadata = HornId
 
 toFqFormat :: FPSt -> GInfo SubC Metadata
 toFqFormat fpst =

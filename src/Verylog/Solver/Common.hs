@@ -29,6 +29,8 @@ data InvType = InvInit     !Int
              | InvOther    !String
             deriving (Generic, Eq, Ord)
 
+type Metadata = HornId
+
 data HornId = HornId Int InvType
             deriving (Generic, Show)
 

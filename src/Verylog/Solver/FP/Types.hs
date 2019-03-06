@@ -14,7 +14,6 @@ import qualified Data.HashMap.Strict        as M
 import           GHC.Generics hiding (to)
 import qualified Language.Fixpoint.Types    as FQ
 
-
 data FPQualifier = QualifImp    { qualifLhs  :: !Id
                                 , qualifRhss :: ![Id]
                                 }
