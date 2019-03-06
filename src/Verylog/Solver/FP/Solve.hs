@@ -8,8 +8,8 @@ import Verylog.Solver.Common
 import Verylog.Solver.FP.Types
 import Verylog.Solver.FP.FQ
 
-import qualified Language.Fixpoint.Solver as F
-import           Language.Fixpoint.Types hiding (err)
+import qualified Language.Fixpoint.Solver       as F
+import qualified Language.Fixpoint.Types        as FT
 import qualified Language.Fixpoint.Types.Config as FC
 
 import           Control.Lens hiding ((<.>))
@@ -24,24 +24,26 @@ import           Text.PrettyPrint
 import           Text.Printf
 
 -- -----------------------------------------------------------------------------
-solve :: FC.Config -> FPSt -> IO ExitCode
+solve :: FC.Config -> FPSt -> IO (ExitCode, AnnotSt)
 -- -----------------------------------------------------------------------------
 solve cfg fpst = do
   let finfo = toFqFormat fpst
   res <- F.solve cfg finfo
-  let stat = resStatus res
-  colorStrLn (getColor stat) (render $ resultDoc $ fmap fst stat)
+  let stat = FT.resStatus res
+  colorStrLn (getColor stat) (render $ FT.resultDoc $ fmap fst stat)
   printResult fpst res
-  return (F.resultExit stat)
+  return ( F.resultExit stat
+         , mempty
+         )
 
 -- -----------------------------------------------------------------------------
 -- Printing results
 -- -----------------------------------------------------------------------------
 
-printResult :: FPSt -> Result (Integer, HornId) -> IO ()
-printResult fpst (Result{..}) =
+printResult :: FPSt -> FT.Result (Integer, HornId) -> IO ()
+printResult fpst (FT.Result{..}) =
   case resStatus of
-    Unsafe ids -> do
+    FT.Unsafe ids -> do
       let m        = errMap ids
           findAB i = fromJust $ find (\a -> (a^.aId) == i) (fpst ^. fpABs)
       sequence_ $ (flip map) (M.assocs m) $ \(aid, cids) -> do
@@ -70,9 +72,9 @@ withColor c act = do
   act
   setSGR [ Reset]
 
-getColor        :: FixResult a -> Color
-getColor (Safe) = Green
-getColor (_)    = Red
+getColor :: FT.FixResult a -> Color
+getColor (FT.Safe) = Green
+getColor (_) = Red
 
 redError :: String -> IO ()
 redError msg = do

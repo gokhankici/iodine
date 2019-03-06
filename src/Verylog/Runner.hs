@@ -19,20 +19,22 @@ import           Verylog.Solver.FP.FQ
 import Language.Fixpoint.Types (saveQuery)
 import Language.Fixpoint.Types.Config as FC
 
-import           Control.Exception
-import           System.Console.CmdArgs.Implicit
-import           System.Directory
-import           System.Exit
-import           System.FilePath.Posix
-import           System.IO
-import           System.Process
-import           Text.Printf
-import           GHC.IO.Handle
+import Control.Exception
+import System.Console.CmdArgs.Implicit
+import System.Directory
+import System.Exit
+import System.FilePath.Posix
+import System.IO
+import System.Process
+import Text.Printf
+import GHC.IO.Handle
 
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
 -- -----------------------------------------------------------------------------
-{- | vcgen-fp v1.0, (C) Rami Gokhan Kici 2019
+{- |
+@
+vcgen-fp v1.0, (C) Rami Gokhan Kici 2019
 
 vcgen-fp [OPTIONS] FILE MODULE
 
@@ -48,9 +50,9 @@ Common flags:
   -h --help                    Display help message
   -V --version                 Print version information
      --numeric-version         Print just the version number
+@
 
 Checks whether the given Verilog file runs in constant time.
-
 First argument is the path the to the verilog file.
 Second argument is the name of the root Verilog module in that file.
 -}
@@ -68,8 +70,8 @@ data VerylogArgs =
               }
   deriving (Show, Data, Typeable)
 
--- | Default arguments for the VerylogArgs type.
--- fileName and moduleName are required.
+-- | Default arguments for the @VerylogArgs@ type.
+-- @fileName@ and @moduleName@ are required.
 -- By default, this project and iverilog-parser is assumed to be located in the same folder.
 verylogArgs :: VerylogArgs
 verylogArgs = VerylogArgs { fileName    = def
@@ -121,13 +123,13 @@ verylogArgs = VerylogArgs { fileName    = def
 -- -----------------------------------------------------------------------------
 main :: IO ()
 -- -----------------------------------------------------------------------------
--- | parses the command line arguments automatically, and runs the tool
+-- | Parses the command line arguments automatically, and runs the tool.
 main = parseOpts >>= run
 
 -- -----------------------------------------------------------------------------
 run :: VerylogArgs -> IO ()
 -- -----------------------------------------------------------------------------
--- | runs the verification process
+-- | Runs the verification process.
 run a = (normalizePaths a >>= generateIR >>= checkIR) `catch` peHandle `catch` passHandle
 
 parseOpts :: IO VerylogArgs
@@ -141,6 +143,7 @@ normalizePaths (VerylogArgs{..}) = do
                        , iverilogDir = i'
                        , ..
                        }
+
 
 -- -----------------------------------------------------------------------------
 generateIR :: VerylogArgs -> IO VerylogArgs
@@ -200,10 +203,11 @@ generateIR (VerylogArgs{..}) = runPreProcessor >> runIVL >> appendAnnots >> retu
                               , ..
                               }
 
+
 -- -----------------------------------------------------------------------------
 checkIR :: VerylogArgs -> IO ()
 -- -----------------------------------------------------------------------------
-checkIR (VerylogArgs{..}) = do
+checkIR (VerylogArgs{..}) = makeSilent $ do
   fileContents <- readFile fileName
 
   fpst <- do
@@ -218,19 +222,18 @@ checkIR (VerylogArgs{..}) = do
         exitFailure
       Right r -> return r
 
-  let cfg = defConfig { eliminate   = Some
-                      , save        = not noSave
-                      , srcFile     = fileName
-                      , metadata    = True
-                      , FC.minimize = minimize
-                      }
-
   if | vcgen     -> saveQuery cfg (toFqFormat fpst)
      | abduction -> VA.abduction cfg{save=False} fpst
-     | otherwise -> let act = solve cfg fpst >>= exitWith
-                    in  if   noFPOutput
-                        then silence act
-                        else act
+     | otherwise -> solve cfg fpst >>= exitWith . fst
+
+  where
+    makeSilent = if noFPOutput then silence else id
+    cfg = defConfig { eliminate   = Some
+                    , save        = not noSave
+                    , srcFile     = fileName
+                    , metadata    = True
+                    , FC.minimize = minimize
+                    }
 
 
 -- -----------------------------------------------------------------------------
@@ -241,12 +244,8 @@ peHandle :: IRParseError -> IO ()
 peHandle e = renderError e >>= hPutStrLn stderr >> exitFailure
 
 passHandle :: PassError -> IO ()
-passHandle (PassError msg) = do
-  hPutStrLn stderr msg
-  exitFailure
-passHandle (CycleError{..}) = do
-  hPutStrLn stderr cycleErrorStr
-  exitFailure
+passHandle (PassError msg)  = hPutStrLn stderr msg >> exitFailure
+passHandle (CycleError{..}) = hPutStrLn stderr cycleErrorStr >> exitFailure
 
 -- taken from https://github.com/hspec/silently
 silence :: IO a -> IO a

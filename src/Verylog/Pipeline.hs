@@ -45,13 +45,12 @@ common :: ParseInput -> Intermediary
 common = parse >>> afterParse
 
 afterParse :: ParseOutput -> Intermediary
-afterParse = ((fst >>> flatten)           -- ABS
-              &&& first snd)              -- (AnnotSt, Qualifiers)
+afterParse = ( (fst >>> flatten)          -- ABS
+               &&&
+               first snd                  -- (AnnotSt, Qualifiers)
+             )
              >>> first sanityCheck        -- (ABS, (AnnotSt, Qualifiers))
              >>> ( (second snd >>> merge) -- ABS
-                   &&& snd)               -- (AnnotSt, Qualifiers)
-
-
-
-
-
+                   &&&
+                   snd                    -- (AnnotSt, Qualifiers)
+                 )
