@@ -2,35 +2,38 @@
 
 ## Instructions
 
-First copy the `configuration-skeleton.sh` file into `configuration.sh`, and
-fill the missing parts.
-
 To build, you need to install
 [stack](https://docs.haskellstack.org/en/stable/README/#how-to-install). When
-installed, just run `stack install`.
+installed, just run `./iodine`. For the test suite, run `./t`.
 
 ## Command Line Options
 
 ``` sh
-verylog [options] <verilog file>
+iodine v1.0, (C) Rami Gokhan Kici 2019
 
-verylog options:
-  --just-ir
-      Just generate the IR file and print it
-  --just-vcgen
-      Just generate the file that will be fed to qarmc and print it
-  --emacs
-      Opens the output (IR or VC) in emacs
-  -h, --help
-      Prints this help
+iodine [OPTIONS] FILE MODULE
 
-parser options:
-  -M <toplevel module name>
-      When the verilog file contains multiple modules, this is used to denote the toplevel one
+Common flags:
+     --iverilog-dir=DIR        path of the iverilog-parser directory
+     --ir                      just generate the IR file
+  -v --vcgen                   just generate the .fq file
+  -m --minimize                run delta-debugging of fixpoint
+     --no-save --nosave        do not save the fq file
+  -a --abduction               run abduction algorithm
+  -t --time                    print the runtime
+     --no-output --nofpoutput  disable the output from fixpoint
+  -h --help                    Display help message
+  -V --version                 Print version information
+     --numeric-version         Print just the version number
+
+Checks whether the given Verilog file runs in constant time.
+
+First argument is the path the to the verilog file.
+Second argument is the name of the root Verilog module in that file.
 ```
 
 ### Example
 
 ```sh
-./verylog -M stalling_cpu examples/verilog/stall.v
+./iodine -- examples/verilog/stall.v stalling_cpu
 ```
