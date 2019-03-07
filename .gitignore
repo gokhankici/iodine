@@ -42,4 +42,4 @@ flycheck_*.el
 .projectile
 .dir-locals.el
 
-/test-report.txt
+/.test-report.txt

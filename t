@@ -1,13 +1,8 @@
 #!/bin/sh
 
+PACKAGE_NAME='verylog-hs'
 TEST_NAME='iodine-test'
 
-build() {
-    stack build
-}
+TEST_COMP="${PACKAGE_NAME}:test:${TEST_NAME}"
 
-test() {
-    stack exec $TEST_NAME -- $@
-}
-
-build && test $@
+stack build $TEST_COMP --test-arguments "$*"

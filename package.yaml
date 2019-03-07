@@ -72,6 +72,8 @@ executables:
     - -O2
     dependencies:
     - verylog-hs
+
+tests:
   iodine-test:
     main:                Test.hs
     source-dirs:         test

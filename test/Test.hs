@@ -44,7 +44,9 @@ testArgs = mode programName def detailsText (flagArg argUpd "HSPEC_ARG") flags
     argUpd s = Right . over hspecArgs (++ [s])
 
     programName = "iodine-test"
-    detailsText = "Runs the benchmarks."
+    detailsText = unlines [ "Runs the benchmarks."
+                          , "The arguments after -- are passed into hspec."
+                          ]
     def         = TestArgs { _verbose   = False
                            , _help      = False
                            , _hspecArgs = []
@@ -230,7 +232,6 @@ spec opts = sequential $ do
 main :: IO ()
 main = do
   opts <- parseOpts
-  print opts
   return (opts^.hspecArgs)
     >>= readConfig defaultConfig
     >>= withArgs [] . runSpec (spec opts)
