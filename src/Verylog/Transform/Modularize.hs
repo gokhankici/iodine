@@ -62,9 +62,6 @@ filterAnnotSt s stt astt =
     lhss = getLhss s
     vs   = stt^.vars
 
-filterList :: HS.HashSet Id -> [Id] -> [Id]
-filterList toKeep = filter (\x -> HS.member x toKeep)
-
 -- | Keep the keys that are present in the given set
 filterMap :: HS.HashSet Id -> UFMap -> UFMap
 filterMap toKeep = HM.filterWithKey (\k _ -> HS.member k toKeep)

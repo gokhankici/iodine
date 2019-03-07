@@ -242,6 +242,16 @@ instance PPrint AlwaysBlock where
     where
       comment t = text "/*" <+> text t <+> text "*/"
 
+instance PPrint AnnotSt where
+  toDoc a = text "annots" <> vcat [ lparen <+> text "sources:  " <+> printSet (a^.sources)
+                                  , comma  <+> text "sinks:    " <+> printSet (a^.sinks)
+                                  , comma  <+> text "taint eq: " <+> printSet (a^.taintEq)
+                                  , comma  <+> text "assert eq:" <+> printSet (a^.assertEq)
+                                  , comma  <+> text "init eq:  " <+> printSet (a^.sanitize)
+                                  , comma  <+> text "always eq:" <+> printSet (a^.sanitizeGlob)
+                                  , rparen
+                                  ]
+
 printSet :: S.HashSet String -> Doc
 printSet = printList . S.toList
 
@@ -262,6 +272,8 @@ instance Show IR where
 instance Show Stmt where
   show = pprint
 instance Show Event where
+  show = pprint
+instance Show AnnotSt where
   show = pprint
 instance Show St where
   show = pprint

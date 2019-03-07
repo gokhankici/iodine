@@ -47,7 +47,7 @@ data FPSt = FPSt { _fpConstraints :: ! [Inv]
                  , _fpBinds       :: ! BindMap
                  , _fpUFs         :: ! UFMap
                  , _fpQualifiers  :: ! [FPQualifier]
-                 , _fpSources     :: ! [Id]
+                 , _fpAnnotations :: ! AnnotSt
                  }
             deriving (Generic)
 

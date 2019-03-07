@@ -1,16 +1,70 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
 
-module Main where
+module Main (main) where
 
 import qualified Verylog.Runner as R
 
-import Control.Exception
+import Control.Lens hiding (simple, (<.>))
 import Control.Monad
-import System.FilePath.Posix
+import System.Console.CmdArgs.Explicit
+import System.Environment
 import System.Exit
+import System.FilePath.Posix
 import Test.Hspec
 import Test.Hspec.Core.Runner
 import Test.Hspec.Core.Spec
+import GHC.Generics hiding (to, moduleName)
+
+-- -----------------------------------------------------------------------------
+-- Argument Parsing
+-- -----------------------------------------------------------------------------
+data TestArgs = TestArgs { _verbose   :: Bool
+                         , _help      :: Bool
+                         , _hspecArgs :: [String] -- rest of the positional arguments
+                         }
+              deriving (Generic, Show)
+
+makeLenses ''TestArgs
+
+testArgs :: Mode TestArgs
+testArgs = mode programName def detailsText (flagArg argUpd "HSPEC_ARG") flags
+  where
+    flags = [ flagNone ["v", "verbose"] (set verbose True)
+              "display both stdout & stderr of a test"
+            , flagNone ["h", "help"] (set help True)
+              "displays this help message"
+            , flagNone ["hspec-help"] (over hspecArgs (++ ["--help"]))
+              "displays the help message of hspec"
+            ]
+
+    argUpd s = Right . over hspecArgs (++ [s])
+
+    programName = "iodine-test"
+    detailsText = "Runs the benchmarks."
+    def         = TestArgs { _verbose   = False
+                           , _help      = False
+                           , _hspecArgs = []
+                           }
+
+parseOpts :: IO TestArgs
+parseOpts = do
+  res <- process testArgs <$> getArgs
+  case res of
+    Left errMsg -> error errMsg
+    Right opts  -> do
+      when (opts^.help) $ do
+        print $ helpText [] HelpFormatDefault testArgs
+        exitSuccess
+      return opts
+
+
+-- -----------------------------------------------------------------------------
+-- Data Types
+-- -----------------------------------------------------------------------------
 
 data UnitTestType = Succ | Fail
                   deriving (Eq, Show)
@@ -161,8 +215,8 @@ major runner parserDir = describe "major" $ forM_ ts runner
 -- HELPER FUNCTIONS
 -- -----------------------------------------------------------------------------
 
-spec :: Spec
-spec = sequential $ do
+spec :: TestArgs -> Spec
+spec opts = sequential $ do
   simple r testDir
   negative r testDir
   mips r $ mipsDir parserDir
@@ -170,16 +224,17 @@ spec = sequential $ do
   where
     thisDir   = "."
     parserDir = R.iverilogDir R.verylogArgs
-    r         = runUnitTest (thisDir </> "verylog")
     testDir   = thisDir </> "test"
+    r         = runUnitTest opts
 
 main :: IO ()
-main = hspecWith cfg spec
-  where
-  cfg = defaultConfig { configFastFail      = True
-                      , configFailureReport = Just reportPath
-                      , configPrintCpuTime  = True
-                      }
+main = do
+  opts <- parseOpts
+  print opts
+  return (opts^.hspecArgs)
+    >>= readConfig defaultConfig
+    >>= withArgs [] . runSpec (spec opts)
+    >>= evaluateSummary
 
 -- default unit test
 t :: UnitTest
@@ -196,19 +251,13 @@ benchmarkDir, mipsDir :: FilePath -> FilePath
 benchmarkDir p = p </> "benchmarks"
 mipsDir p      = benchmarkDir p </> "472-mips-pipelined"
 
-reportPath :: String
-reportPath = "test-report.txt"
 
-runUnitTest :: FilePath -> Runner
-runUnitTest scriptPath (UnitTest{..}) =
-  it testName $ act `shouldReturn` testType
+runUnitTest :: TestArgs -> Runner
+runUnitTest opts (UnitTest{..}) =
+  it testName $ R.run a `shouldReturn` (testType == Succ)
   where
     a = R.verylogArgs { R.fileName   = verilogFile
                       , R.moduleName = moduleName
                       , R.noSave     = True
-                      , R.noFPOutput = True
+                      , R.noFPOutput = view (verbose . to not) opts
                       }
-    act = (R.run a >> return Succ) `catch` handler
-    handler ExitSuccess = return Succ
-    handler _           = return Fail
-      

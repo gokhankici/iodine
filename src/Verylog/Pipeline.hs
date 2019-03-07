@@ -1,6 +1,5 @@
 module Verylog.Pipeline ( pipeline
                         , pipeline'
-                        , pipelineWithState
                         ) where
 
 import Control.Arrow
@@ -35,11 +34,6 @@ pipeline = common >>> toFpSt
 pipeline' :: ParseInput -> [AlwaysBlock]
 --------------------------------------------------------------------------------
 pipeline' = common >>> fst
-
---------------------------------------------------------------------------------
-pipelineWithState :: ParseInput -> (FPSt, Intermediary)
---------------------------------------------------------------------------------
-pipelineWithState = common >>> (toFpSt &&& id)
 
 common :: ParseInput -> Intermediary
 common = parse >>> afterParse

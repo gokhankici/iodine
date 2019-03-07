@@ -249,6 +249,8 @@ getUFGlobals fpst = fromListSEnv $ snd $ M.foldr mkGlobF (0, []) (fpst^.fpUFs)
     
 
 extraEnv :: FPSt -> [Id]
-extraEnv fpst =
-  makeBothTags . HS.toList . HS.fromList $
-  concatMap qualifVars (fpst ^. fpQualifiers) ++ (fpst ^. fpSources)
+extraEnv fpst = makeBothTags $ HS.toList . HS.fromList $ l1 ++ l2
+  where
+    l1 = concatMap qualifVars (fpst ^. fpQualifiers)
+    l2 = HS.toList $ fpst ^. fpAnnotations ^. sources
+

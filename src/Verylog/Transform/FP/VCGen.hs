@@ -27,15 +27,14 @@ toFpSt (as, (allAnnots, allQualifiers)) =
        , _fpBinds       = bs'
        , _fpUFs         = M.unions $ (view (aSt . ufs)) <$> as
        , _fpQualifiers  = allQualifiers
-       , _fpSources     = srcs
+       , _fpAnnotations = allAnnots
        }
   where
-    srcs = HS.toList (allAnnots^.sources)
-    cs   = invs srcs as
-    bs   = getBinds as cs
-    ni   = M.size bs + 1
-    ts   = makeBothTags $ concatMap qualifVars allQualifiers
-    bs'  = foldl' (\m (n,name) -> h m n name) bs (zip [ni..] ts)
+    cs  = invs (HS.toList (allAnnots^.sources)) as
+    bs  = getBinds as cs
+    ni  = M.size bs + 1
+    ts  = makeBothTags $ concatMap qualifVars allQualifiers
+    bs' = foldl' (\m (n,name) -> h m n name) bs (zip [ni..] ts)
     h m i name =
       let f v Nothing  = Just v
           f _ (Just v) = Just v

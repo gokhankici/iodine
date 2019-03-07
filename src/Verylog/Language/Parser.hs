@@ -484,34 +484,6 @@ parseMany1 elemP sepP =
 -- | Printing Error Messages
 --------------------------------------------------------------------------------
 
-readFilePos    :: SourcePos -> IO String
-readFilePos pos = getPos pos <$> readFile (MP.sourceName pos)
-
-getPos :: SourcePos -> String -> String
-getPos pos = getSpanSingle (unPos $ sourceLine pos) (unPos $ sourceColumn pos)
-
-getSpanSingle :: Int -> Int -> String -> String
-getSpanSingle l c
-  = highlight l c
-  . safeHead ""
-  . getRange l l
-  . lines
-
-highlight :: Int -> Int -> String -> String
-highlight l c s = unlines
-  [ cursorLine l s
-  , replicate (12 + c) ' ' ++ "^"
-  ]
-
-cursorLine :: Int -> String -> String
-cursorLine l s = printf "%s|  %s" (lineString l) s
-
-lineString :: Int -> String
-lineString n = replicate (10 - nD) ' ' ++ nS
-  where
-    nS       = show n
-    nD       = Li.length nS
-
 renderError :: IRParseError -> IO String
 renderError = return . eMsg
 
@@ -525,9 +497,6 @@ instance Hashable ParseVar where
   hashWithSalt n (PRegister s) = hashWithSalt n ("parse-register", s)
   hashWithSalt n (PWire s)     = hashWithSalt n ("parse-wire", s)
 
-
-optionMaybe   :: Parser a -> Parser (Maybe a)
-optionMaybe p = Just <$> p <|> return Nothing
 
 myParseErrorPretty :: (Stream s) => ParseErrorBundle s e -> String
 myParseErrorPretty (ParseErrorBundle errs posSt) =

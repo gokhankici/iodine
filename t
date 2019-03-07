@@ -1,10 +1,13 @@
 #!/bin/sh
 
-PACKAGE_NAME='verylog-hs'
-EXE_NAME='vcgen-fp'
-TEST_NAME='vcgen-test'
+TEST_NAME='iodine-test'
 
-EXE_COMP="${PACKAGE_NAME}:${EXE_NAME}"
-TEST_COMP="${PACKAGE_NAME}:test:${TEST_NAME}"
+build() {
+    stack build
+}
 
-stack build $EXE_COMP $TEST_COMP --test-arguments "$*"
+test() {
+    stack exec $TEST_NAME -- $@
+}
+
+build && test $@

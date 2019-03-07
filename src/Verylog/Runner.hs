@@ -7,6 +7,7 @@ module Verylog.Runner ( VerylogArgs(..)
                       , verylogArgs
                       , run
                       , main
+                      , silence
                       ) where
 
 import qualified Verylog.Abduction as VA
@@ -16,10 +17,12 @@ import           Verylog.Language.Parser
 import           Verylog.Language.Types
 import           Verylog.Solver.FP.FQ
 
-import Language.Fixpoint.Types (saveQuery)
+import Language.Fixpoint.Types (saveQuery, showpp)
 import Language.Fixpoint.Types.Config as FC
 
 import Control.Exception
+import Control.Monad
+import GHC.IO.Handle
 import System.Console.CmdArgs.Implicit
 import System.Directory
 import System.Exit
@@ -27,16 +30,15 @@ import System.FilePath.Posix
 import System.IO
 import System.Process
 import Text.Printf
-import GHC.IO.Handle
 
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
 -- -----------------------------------------------------------------------------
 {- |
 @
-vcgen-fp v1.0, (C) Rami Gokhan Kici 2019
+iodine v1.0, (C) Rami Gokhan Kici 2019
 
-vcgen-fp [OPTIONS] FILE MODULE
+iodine [OPTIONS] FILE MODULE
 
 Common flags:
      --iverilog-dir=DIR        path of the iverilog-parser directory
@@ -70,9 +72,9 @@ data VerylogArgs =
               }
   deriving (Show, Data, Typeable)
 
--- | Default arguments for the @VerylogArgs@ type.
--- @fileName@ and @moduleName@ are required.
--- By default, this project and iverilog-parser is assumed to be located in the same folder.
+-- | Default arguments for the 'VerylogArgs' type.
+-- 'fileName' and 'moduleName' are required.
+-- By default, this project and @iverilog-parser@ is assumed to be located in the same folder.
 verylogArgs :: VerylogArgs
 verylogArgs = VerylogArgs { fileName    = def
                                           &= argPos 0
@@ -111,7 +113,7 @@ verylogArgs = VerylogArgs { fileName    = def
               &= details detailsText
               &= helpArg [explicit, name "h", name "help"]
   where
-    programName = "vcgen-fp"
+    programName = "iodine"
     summaryText = printf "%s v1.0, (C) Rami Gokhan Kici 2019" programName :: String
     detailsText = [ "Checks whether the given Verilog file runs in constant time."
                   , ""
@@ -124,12 +126,15 @@ verylogArgs = VerylogArgs { fileName    = def
 main :: IO ()
 -- -----------------------------------------------------------------------------
 -- | Parses the command line arguments automatically, and runs the tool.
-main = parseOpts >>= run
+-- If the program is not constant time, the process exists with a non-zero return code.
+main = do
+  safe <- parseOpts >>= run
+  when (not safe) $ exitFailure
 
 -- -----------------------------------------------------------------------------
-run :: VerylogArgs -> IO ()
+run :: VerylogArgs -> IO Bool
 -- -----------------------------------------------------------------------------
--- | Runs the verification process.
+-- | Runs the verification process, and returns 'True' if the program is constant time.
 run a = (normalizePaths a >>= generateIR >>= checkIR) `catch` peHandle `catch` passHandle
 
 parseOpts :: IO VerylogArgs
@@ -205,27 +210,18 @@ generateIR (VerylogArgs{..}) = runPreProcessor >> runIVL >> appendAnnots >> retu
 
 
 -- -----------------------------------------------------------------------------
-checkIR :: VerylogArgs -> IO ()
+checkIR :: VerylogArgs -> IO Bool
 -- -----------------------------------------------------------------------------
 checkIR (VerylogArgs{..}) = makeSilent $ do
   fileContents <- readFile fileName
+  let fpst = pipeline (fileName, fileContents)
 
-  fpst <- do
-    res <- try $ evaluate $ pipeline (fileName, fileContents)
-    case res of
-      Left (PassError msg)  -> hPutStrLn stderr msg >> exitFailure
-      Left (CycleError{..}) -> do
-        let dotFileName = fileName <.> "dot"
-        writeFile dotFileName cycleStr
-        hPutStrLn stderr cycleErrorStr
-        hPutStrLn stderr "\nCYCLE DETECTED !\n"
-        exitFailure
-      Right r -> return r
-
-  if | vcgen     -> saveQuery cfg (toFqFormat fpst)
+  if | vcgen     -> saveQuery cfg (toFqFormat fpst) >> return True
      | abduction -> VA.abduction cfg{save=False} fpst
-     | otherwise -> solve cfg fpst >>= exitWith . fst
-
+     | otherwise -> do (safe, sol) <- solve cfg fpst
+                       when (not safe) $
+                         hPutStrLn stderr (showpp sol)
+                       return safe
   where
     makeSilent = if noFPOutput then silence else id
     cfg = defConfig { eliminate   = Some
@@ -240,14 +236,19 @@ checkIR (VerylogArgs{..}) = makeSilent $ do
 -- Common Functions
 -- -----------------------------------------------------------------------------
 
-peHandle :: IRParseError -> IO ()
-peHandle e = renderError e >>= hPutStrLn stderr >> exitFailure
+peHandle :: IRParseError -> IO Bool
+peHandle e = renderError e >>= hPutStrLn stderr >> return False
 
-passHandle :: PassError -> IO ()
-passHandle (PassError msg)  = hPutStrLn stderr msg >> exitFailure
-passHandle (CycleError{..}) = hPutStrLn stderr cycleErrorStr >> exitFailure
+passHandle :: PassError -> IO Bool
+passHandle (PassError msg)  = hPutStrLn stderr msg >> return False
+passHandle (CycleError{..}) = do
+  writeFile "/tmp/cycle.dot" cycleStr
+  hPutStrLn stderr "Cycle is written to /tmp/cycle.dot"
+  hPutStrLn stderr cycleErrorStr
+  return False
 
--- taken from https://github.com/hspec/silently
+-- | Redirect @stdout@ and @stderr@ of the 'IO' action to @/dev/null@
+-- The function is taken from 'https://github.com/hspec/silently'
 silence :: IO a -> IO a
 silence action = bracket (openFile "/dev/null" AppendMode) hClose prepareAndRun
   where

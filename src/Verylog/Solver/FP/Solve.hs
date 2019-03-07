@@ -18,13 +18,11 @@ import qualified Data.Map.Strict as M
 import           Data.Maybe
 import qualified Data.Set        as S
 import           System.Console.ANSI
-import           System.Exit
-import           System.IO
 import           Text.PrettyPrint
 import           Text.Printf
 
 -- -----------------------------------------------------------------------------
-solve :: FC.Config -> FPSt -> IO (ExitCode, AnnotSt)
+solve :: FC.Config -> FPSt -> IO (Bool, FT.FixSolution)
 -- -----------------------------------------------------------------------------
 solve cfg fpst = do
   let finfo = toFqFormat fpst
@@ -32,8 +30,8 @@ solve cfg fpst = do
   let stat = FT.resStatus res
   colorStrLn (getColor stat) (render $ FT.resultDoc $ fmap fst stat)
   printResult fpst res
-  return ( F.resultExit stat
-         , mempty
+  return ( FT.isSafe res
+         , FT.resSolution res
          )
 
 -- -----------------------------------------------------------------------------
@@ -75,12 +73,3 @@ withColor c act = do
 getColor :: FT.FixResult a -> Color
 getColor (FT.Safe) = Green
 getColor (_) = Red
-
-redError :: String -> IO ()
-redError msg = do
-  hSetSGR stderr [ SetColor Foreground Vivid Red
-                 , SetConsoleIntensity BoldIntensity
-                 ]
-  hPutStrLn stderr msg
-  hSetSGR stderr []
-

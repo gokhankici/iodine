@@ -61,7 +61,6 @@ initial_inv srcs a =
        }
   where
     i      = a ^. aId
-    st     = a ^. aSt
     annots = a ^. aAnnotSt
     sub1 = [ (n_lvar sntz, rvar sntz)
            | sntz <- S.toList $ annots ^. sanitize
