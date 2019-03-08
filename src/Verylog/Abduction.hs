@@ -10,7 +10,7 @@ import Prelude hiding (break)
 import Verylog.Solver.FP.Solve
 import Verylog.Solver.FP.Types
 import Verylog.Transform.Utils
-import Verylog.Language.Types
+-- import Verylog.Language.Types
 import Verylog.Utils
 
 import qualified Language.Fixpoint.Types        as FT
@@ -60,7 +60,7 @@ abduction fcConfig st = do
           , _step     = 2
           , _curStep  = 0
           , _solution = sol
-          , _cost     = calculateCost (st ^. fpAnnotations) sol
+          , _cost     = calculateCost st sol
           , _fpst     = st
           , _cfg      = fcConfig
           }
@@ -70,7 +70,7 @@ abduction fcConfig st = do
 
   return (isSafe', sol')
 
-calculateCost :: AnnotSt -> Sol -> Double
+calculateCost :: FPSt -> Sol -> Double
 calculateCost _ _ = 0.0
 
 outerLoop :: M Bool
@@ -88,11 +88,10 @@ outerLoop = while False ((>) <$> use t <*> use tMin) $ do
 innerLoop :: M Bool
 innerLoop = while False ((>) <$> use step <*> use curStep) $ do
   debug l $ curStep += 1
-  a' <- sample
-  fpst' <- (flip const) a' <$> use fpst
+  fpst' <- sample
   traceM "UPDATE fpst !!!"
   (safe, sol') <- runSolve fpst'
-  let cost'  = calculateCost (fpst'^.fpAnnotations) sol'
+  let cost'  = calculateCost fpst' sol'
   let updAct = updateSol fpst' sol' cost'
   if safe
     then break $ updAct >> return True
@@ -112,8 +111,8 @@ runSolve :: FPSt -> M (Bool, Sol)
 runSolve f = do
   (liftIO1 $ flip solve f) =<< use cfg
 
-sample :: M AnnotSt
-sample = use (fpst.fpAnnotations)
+sample :: M FPSt
+sample = use fpst
 
 acceptanceProb :: Double -> M Double
 acceptanceProb newCost = do

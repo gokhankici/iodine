@@ -22,10 +22,11 @@ import GHC.Generics hiding (to, moduleName)
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
 -- -----------------------------------------------------------------------------
-data TestArgs = TestArgs { _verbose    :: Bool
-                         , _help       :: Bool
-                         , _iodineArgs :: [String]
-                         , _hspecArgs  :: [String] -- rest of the positional arguments
+data TestArgs = TestArgs { _verbose      :: Bool
+                         , _help         :: Bool
+                         , _iodineArgs   :: [String]
+                         , _hspecArgs    :: [String] -- rest of the positional arguments
+                         , _runAbduction :: Bool
                          }
               deriving (Generic, Show)
 
@@ -34,31 +35,33 @@ makeLenses ''TestArgs
 testArgs :: Mode TestArgs
 testArgs = mode programName def detailsText (flagArg argUpd "HSPEC_ARG") flags
   where
-    flags = [ flagNone ["v", "verbose"] (set verbose True)
-              "display both stdout & stderr of a test"
+    flags = [ flagReq ["iodine"] (\s -> Right . over iodineArgs (++ words s)) "IODINE_ARG"
+              "This is passed to the Iodine script directly."
+            , flagNone ["a", "abduction"] (set runAbduction True)
+              "Only run the abduction tests, otherwise they are disabled."
+            ,  flagNone ["v", "verbose"] (set verbose True)
+              "Display both stdout & stderr of a test."
             , flagNone ["h", "help"] (set help True)
-              "displays this help message"
-            , flagReq ["iodine"] (\s -> Right . set iodineArgs (words s)) "IODINE_ARG"
-              "This is passed to the Iodine script directly"
-            , flagNone ["hspec-help"] (over hspecArgs (++ ["--help"]))
-              "displays the help message of hspec"
+              "Displays this help message."
             ]
 
     argUpd s = Right . over hspecArgs (++ [s])
 
     programName = "iodine-test"
     detailsText = unlines [ "Runs the benchmarks."
-                          , "The arguments after -- are passed into hspec."
+                          , "The positional arguments (e.g. after --) are passed into hspec."
                           ]
-    def         = TestArgs { _verbose    = False
-                           , _help       = False
-                           , _iodineArgs = []
-                           , _hspecArgs  = []
-                           }
+
+    def = TestArgs { _verbose      = False
+                   , _help         = False
+                   , _iodineArgs   = []
+                   , _hspecArgs    = []
+                   , _runAbduction = False
+                   }
 
 parseOpts :: IO TestArgs
 parseOpts = do
-  res <- process testArgs <$> getArgs
+  res <-  fmap post . process testArgs <$> getArgs
   case res of
     Left errMsg -> error errMsg
     Right opts  -> do
@@ -66,6 +69,14 @@ parseOpts = do
         print $ helpText [] HelpFormatDefault testArgs
         exitSuccess
       return opts
+  where
+    post o =
+      if o ^. runAbduction
+      then over hspecArgs  (++ ["--match", '/':abductionRoot]) .
+           over iodineArgs (++ ["--abduction"]) .
+           set  verbose    True $
+           o
+      else over hspecArgs (++ ["--skip",  '/':abductionRoot]) o
 
 
 -- -----------------------------------------------------------------------------
@@ -117,8 +128,11 @@ simple runner testDir = do
 -- -----------------------------------------------------------------------------
 -- SIMPLE TESTS
 -- -----------------------------------------------------------------------------
+abductionRoot :: String
+abductionRoot = "abduction"
+
 abduction :: Runner -> FilePath -> Spec
-abduction runner testDir = describe "abduction" $ forM_ (go <$> names) runner
+abduction runner testDir = describe abductionRoot $ forM_ (go <$> names) runner
   where
     go name = t { testName    = name
                 , moduleName  = "test"
