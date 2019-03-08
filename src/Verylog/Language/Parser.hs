@@ -25,9 +25,9 @@ import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import           Text.Printf
 
-import           Verylog.Language.Types
-import           Verylog.Language.Utils
-import           Verylog.Solver.FP.Types
+import Verylog.Utils
+import Verylog.Language.Types
+import Verylog.Solver.FP.Types
 
 -----------------------------------------------------------------------------------
 -- | Verylog IR

@@ -36,28 +36,29 @@ dependencies:
 - fgl
 - fgl-visualize
 - cmdargs
-
-ghc-options:
-- -Werror
-- -O2
-- -fdefer-type-errors
-- -fwarn-incomplete-patterns
-- -fwarn-incomplete-record-updates
-- -fwarn-incomplete-uni-patterns
-- -fwarn-missing-signatures
-- -fwarn-monomorphism-restriction
-- -fwarn-name-shadowing
-- -fwarn-orphans
-- -fwarn-overlapping-patterns
-- -fwarn-redundant-constraints
-- -fwarn-tabs
-- -fwarn-unused-imports
-- -fwarn-unused-binds
+- random
 
 library:
   source-dirs:           src
   exposed-modules:
   - Verylog.Runner
+  ghc-options:
+  - -Werror
+  - -O2
+  - -fdefer-type-errors
+  - -fwarn-incomplete-patterns
+  - -fwarn-incomplete-record-updates
+  - -fwarn-incomplete-uni-patterns
+  - -fwarn-missing-signatures
+  - -fwarn-monomorphism-restriction
+  - -fwarn-name-shadowing
+  - -fwarn-orphans
+  - -fwarn-overlapping-patterns
+  - -fwarn-redundant-constraints
+  - -fwarn-tabs
+  - -fwarn-unused-binds
+  - -fwarn-unused-imports
+  - -fwarn-unused-matches
 
 executables:
   iodine:

@@ -7,6 +7,7 @@ import Verylog.Language.Types
 import Verylog.Solver.Common
 import Verylog.Solver.FP.Types
 import Verylog.Solver.FP.FQ
+import Verylog.Utils
 
 import qualified Language.Fixpoint.Solver       as F
 import qualified Language.Fixpoint.Types        as FT
@@ -26,7 +27,7 @@ solve :: FC.Config -> FPSt -> IO (Bool, FT.FixSolution)
 -- -----------------------------------------------------------------------------
 solve cfg fpst = do
   let finfo = toFqFormat fpst
-  res <- F.solve cfg finfo
+  res <- silence $ F.solve cfg finfo
   let stat = FT.resStatus res
   colorStrLn (getColor stat) (render $ FT.resultDoc $ fmap fst stat)
   printResult fpst res

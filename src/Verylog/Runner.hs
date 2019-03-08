@@ -7,11 +7,11 @@ module Verylog.Runner ( VerylogArgs(..)
                       , parseArgs
                       , run
                       , main
-                      , silence
                       ) where
 
 import qualified Verylog.Abduction as VA
 import           Verylog.Pipeline
+import           Verylog.Utils
 import           Verylog.Solver.FP.Solve
 import           Verylog.Language.Parser
 import           Verylog.Language.Types
@@ -22,7 +22,6 @@ import Language.Fixpoint.Types.Config as FC
 
 import Control.Exception
 import Control.Monad
-import GHC.IO.Handle
 import System.Console.CmdArgs.Implicit
 import System.Directory
 import System.Environment
@@ -178,7 +177,7 @@ generateIR (VerylogArgs{..}) = runPreProcessor >> runIVL >> appendAnnots >> retu
                     , "-O", irFile
                     , preprocFile
                     ]
-      (rc, out, err) <- readProcessWithExitCode ivl ivlArgs ""
+      (rc, _out, err) <- readProcessWithExitCode ivl ivlArgs ""
       case rc of
         ExitSuccess -> return ()
         ExitFailure _ -> do
@@ -248,27 +247,3 @@ passHandle (CycleError{..}) = do
   hPutStrLn stderr "Cycle is written to /tmp/cycle.dot"
   hPutStrLn stderr cycleErrorStr
   return False
-
--- | Redirect @stdout@ and @stderr@ of the 'IO' action to @/dev/null@
--- The function is taken from 'https://github.com/hspec/silently'
-silence :: IO a -> IO a
-silence action = bracket (openFile "/dev/null" AppendMode) hClose prepareAndRun
-  where
-    handles = [stdout, stderr]
-    prepareAndRun tmpHandle = go handles
-      where
-        go [] = action
-        go hs = goBracket go tmpHandle hs
-
-    goBracket _ _ [] = undefined
-    goBracket go tmpHandle (h:hs) = do
-      buffering <- hGetBuffering h
-      let redirect = do
-            old <- hDuplicate h
-            hDuplicateTo tmpHandle h
-            return old
-          restore old = do
-            hDuplicateTo old h
-            hSetBuffering h buffering
-            hClose old
-      bracket redirect restore (\_ -> go hs)
