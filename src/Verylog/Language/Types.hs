@@ -25,7 +25,7 @@ import           Control.DeepSeq
 
 data AlwaysBlock = AB { _aEvent   :: ! Event
                       , _aStmt    :: ! Stmt
-                      , _aId      :: ! Int
+                      , _aId      :: ! Int -- to blocks are equal, if this field is the same. be careful !
                       , _aSt      :: ! St
                       , _aAnnotSt :: ! AnnotSt
                       , _aLoc     :: ! (String, String) -- Module & instance name

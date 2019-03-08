@@ -22,9 +22,10 @@ import GHC.Generics hiding (to, moduleName)
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
 -- -----------------------------------------------------------------------------
-data TestArgs = TestArgs { _verbose   :: Bool
-                         , _help      :: Bool
-                         , _hspecArgs :: [String] -- rest of the positional arguments
+data TestArgs = TestArgs { _verbose    :: Bool
+                         , _help       :: Bool
+                         , _iodineArgs :: [String]
+                         , _hspecArgs  :: [String] -- rest of the positional arguments
                          }
               deriving (Generic, Show)
 
@@ -37,6 +38,8 @@ testArgs = mode programName def detailsText (flagArg argUpd "HSPEC_ARG") flags
               "display both stdout & stderr of a test"
             , flagNone ["h", "help"] (set help True)
               "displays this help message"
+            , flagReq ["iodine"] (\s -> Right . set iodineArgs (words s)) "IODINE_ARG"
+              "This is passed to the Iodine script directly"
             , flagNone ["hspec-help"] (over hspecArgs (++ ["--help"]))
               "displays the help message of hspec"
             ]
@@ -47,9 +50,10 @@ testArgs = mode programName def detailsText (flagArg argUpd "HSPEC_ARG") flags
     detailsText = unlines [ "Runs the benchmarks."
                           , "The arguments after -- are passed into hspec."
                           ]
-    def         = TestArgs { _verbose   = False
-                           , _help      = False
-                           , _hspecArgs = []
+    def         = TestArgs { _verbose    = False
+                           , _help       = False
+                           , _iodineArgs = []
+                           , _hspecArgs  = []
                            }
 
 parseOpts :: IO TestArgs
@@ -109,6 +113,19 @@ simple runner testDir = do
             , "secverilog-01"
             ]
 
+
+-- -----------------------------------------------------------------------------
+-- SIMPLE TESTS
+-- -----------------------------------------------------------------------------
+abduction :: Runner -> FilePath -> Spec
+abduction runner testDir = describe "abduction" $ forM_ (go <$> names) runner
+  where
+    go name = t { testName    = name
+                , moduleName  = "test"
+                , verilogFile = testDir </> name <.> "v"
+                }
+    names = [ "abduction-01"
+            ]
 
 -- -----------------------------------------------------------------------------
 -- MIPS TESTS
@@ -217,25 +234,42 @@ major runner parserDir = describe "major" $ forM_ ts runner
 -- HELPER FUNCTIONS
 -- -----------------------------------------------------------------------------
 
-spec :: TestArgs -> Spec
-spec opts = sequential $ do
-  simple r testDir
-  negative r testDir
-  mips r $ mipsDir parserDir
-  major r parserDir
-  where
-    thisDir   = "."
-    parserDir = R.iverilogDir R.verylogArgs
-    testDir   = thisDir </> "test"
-    r         = runUnitTest opts
-
 main :: IO ()
 main = do
   opts <- parseOpts
-  return (opts^.hspecArgs)
-    >>= readConfig defaultConfig
-    >>= withArgs [] . runSpec (spec opts)
+
+  -- if no Iodine argument is given, use the following default ones
+  let updateDef va =
+        if null $  opts ^. iodineArgs
+        then va { R.noSave     = True
+                , R.noFPOutput = view (verbose . to not) opts
+                }
+        else va
+
+  -- hack: set the required first two positional arguments to empty list
+  va <- updateDef . invalidate <$> R.parseArgs ("" : "" : opts ^. iodineArgs)
+
+  readConfig defaultConfig (opts^.hspecArgs)
+    >>= withArgs [] . runSpec (spec va)
     >>= evaluateSummary
+  where
+    invalidate va = va { R.fileName   = undefined
+                       , R.moduleName = undefined
+                       }
+
+type Runner = UnitTest -> Spec
+
+spec :: R.VerylogArgs -> Spec
+spec va = sequential $ do
+  simple r testDir
+  negative r testDir
+  mips r $ mipsDir parserDir
+  abduction r $ testDir </> "abduction" </> "pos"
+  major r parserDir
+  where
+    testDir   = "test"
+    r         = runUnitTest va
+    parserDir = R.iverilogDir va
 
 -- default unit test
 t :: UnitTest
@@ -245,20 +279,15 @@ t = UnitTest { testName    = undefined
              , testType    = Succ
              }
 
-type Runner = UnitTest -> Spec
-
 -- given the parser dir, returns the benchmark's root directory
 benchmarkDir, mipsDir :: FilePath -> FilePath
 benchmarkDir p = p </> "benchmarks"
 mipsDir p      = benchmarkDir p </> "472-mips-pipelined"
 
-
-runUnitTest :: TestArgs -> Runner
-runUnitTest opts (UnitTest{..}) =
-  it testName $ R.run a `shouldReturn` (testType == Succ)
+runUnitTest :: R.VerylogArgs -> Runner
+runUnitTest va (UnitTest{..}) =
+  it testName $ R.run va' `shouldReturn` (testType == Succ)
   where
-    a = R.verylogArgs { R.fileName   = verilogFile
-                      , R.moduleName = moduleName
-                      , R.noSave     = True
-                      , R.noFPOutput = view (verbose . to not) opts
-                      }
+    va' = va { R.fileName   = verilogFile
+             , R.moduleName = moduleName
+             }

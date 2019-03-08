@@ -12,10 +12,9 @@ import           Text.Printf
 import           Debug.Trace
 import           Data.Char
 import           Data.List
-import qualified Data.HashSet            as HS
+import qualified Data.HashSet as HS
 
 data VarFormat = VarFormat { taggedVar   :: Bool
-                           -- , primedVar   :: Bool
                            , leftVar     :: Bool
                            , rightVar    :: Bool
                            , atomVar     :: Bool
@@ -37,10 +36,7 @@ makeVar :: VarFormat -> Id -> Expr
 makeVar f v = Var (makeVarName f v)
 
 makeVarName :: VarFormat -> Id -> Id
-makeVarName f@(VarFormat{..}) v =
-  -- printf "%s%sV%s%s%s_%s" par atom pos tag vid v
-  par ++ atom ++ "V" ++ pos ++ tag ++ vid ++ "_" ++ v
-
+makeVarName f@(VarFormat{..}) v = par ++ atom ++ "V" ++ pos ++ tag ++ vid ++ "_" ++ v
   where
     atom | atomVar   = "v"
          | otherwise = ""

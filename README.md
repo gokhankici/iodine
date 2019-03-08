@@ -8,7 +8,7 @@ installed, just run `./iodine`. For the test suite, run `./t`.
 
 ## Command Line Options
 
-``` sh
+```
 iodine v1.0, (C) Rami Gokhan Kici 2019
 
 iodine [OPTIONS] FILE MODULE

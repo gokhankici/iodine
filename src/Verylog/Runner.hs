@@ -4,7 +4,7 @@
 {-# LANGUAGE MultiWayIf #-}
 
 module Verylog.Runner ( VerylogArgs(..)
-                      , verylogArgs
+                      , parseArgs
                       , run
                       , main
                       , silence
@@ -25,6 +25,7 @@ import Control.Monad
 import GHC.IO.Handle
 import System.Console.CmdArgs.Implicit
 import System.Directory
+import System.Environment
 import System.Exit
 import System.FilePath.Posix
 import System.IO
@@ -55,8 +56,12 @@ Common flags:
 @
 
 Checks whether the given Verilog file runs in constant time.
+
+'fileName' and 'moduleName' are required:
 First argument is the path the to the verilog file.
 Second argument is the name of the root Verilog module in that file.
+
+By default, this project and @iverilog-parser@ is assumed to be located in the same folder.
 -}
 data VerylogArgs =
   VerylogArgs { fileName    :: FilePath -- this is used for both the Verilog and IR file
@@ -72,9 +77,6 @@ data VerylogArgs =
               }
   deriving (Show, Data, Typeable)
 
--- | Default arguments for the 'VerylogArgs' type.
--- 'fileName' and 'moduleName' are required.
--- By default, this project and @iverilog-parser@ is assumed to be located in the same folder.
 verylogArgs :: VerylogArgs
 verylogArgs = VerylogArgs { fileName    = def
                                           &= argPos 0
@@ -128,7 +130,7 @@ main :: IO ()
 -- | Parses the command line arguments automatically, and runs the tool.
 -- If the program is not constant time, the process exists with a non-zero return code.
 main = do
-  safe <- parseOpts >>= run
+  safe <- getArgs >>= parseArgs >>= run
   when (not safe) $ exitFailure
 
 -- -----------------------------------------------------------------------------
@@ -137,8 +139,9 @@ run :: VerylogArgs -> IO Bool
 -- | Runs the verification process, and returns 'True' if the program is constant time.
 run a = (normalizePaths a >>= generateIR >>= checkIR) `catch` peHandle `catch` passHandle
 
-parseOpts :: IO VerylogArgs
-parseOpts = cmdArgs verylogArgs
+-- | Parses the command line arguments (e.g. from 'getArgs') into 'VerylogArgs'.
+parseArgs :: [String] -> IO VerylogArgs
+parseArgs as = withArgs as $ cmdArgs verylogArgs
 
 normalizePaths :: VerylogArgs -> IO VerylogArgs
 normalizePaths (VerylogArgs{..}) = do
@@ -217,10 +220,9 @@ checkIR (VerylogArgs{..}) = makeSilent $ do
   let fpst = pipeline (fileName, fileContents)
 
   if | vcgen     -> saveQuery cfg (toFqFormat fpst) >> return True
-     | abduction -> VA.abduction cfg{save=False} fpst
-     | otherwise -> do (safe, sol) <- solve cfg fpst
-                       when (not safe) $
-                         hPutStrLn stderr (showpp sol)
+     | otherwise -> do let act = if abduction then VA.abduction else solve
+                       (safe, sol) <- act cfg fpst
+                       putStrLn (showpp sol)
                        return safe
   where
     makeSilent = if noFPOutput then silence else id
