@@ -8,6 +8,9 @@ configuration.sh
 .log*
 flycheck_*
 
+/*.prof
+/*.prof.html
+
 .liquid/
 .*.fq
 

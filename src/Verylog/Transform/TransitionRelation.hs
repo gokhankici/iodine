@@ -233,7 +233,7 @@ varDeps v = do c <- isUF v
                  then snd <$> uses (trSt.ufs) (M.lookupDefault err v)
                  else return [v]
   where
-    err = throw (PassError $ "could not find " ++ v ++ " in ufs")
+    err = throw (PassError $ "could not find " ++ id2Str v ++ " in ufs")
 
 ----------------------------------------
 ufAtomsRHS :: VarFormat -> Id -> S [Expr]
@@ -244,7 +244,7 @@ ufAtomsRHS fmt u = do c <- isUF u
                       atoms <- varDeps u
                       sequence $ getLastVarRHS fmt <$> atoms
   where
-    err = throw (PassError $ "could not find " ++ u ++ " in ufs")
+    err = throw (PassError $ "could not find " ++ id2Str u ++ " in ufs")
              
 
 ----------------------------------------

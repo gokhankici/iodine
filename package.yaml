@@ -37,6 +37,7 @@ dependencies:
 - fgl-visualize
 - cmdargs
 - random
+- text
 
 library:
   source-dirs:           src

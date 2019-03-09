@@ -2,6 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Verylog.Language.Types where
 
@@ -11,6 +12,7 @@ import           Control.Monad.Reader
 import           Control.Monad.State.Lazy
 import qualified Data.HashMap.Strict      as M
 import qualified Data.HashSet             as S
+import qualified Data.Text                as T
 import           Data.Typeable
 import           Text.PrettyPrint hiding (sep)
 import           Data.List
@@ -36,7 +38,7 @@ data AlwaysBlock = AB { _aEvent   :: Event
                       , _aId      :: Int -- to blocks are equal, if this field is the same. be careful !
                       , _aSt      :: St
                       , _aMd      :: BlockMetadata
-                      , _aLoc     :: (String, String) -- Module & instance name
+                      , _aLoc     :: (Id, Id) -- Module & instance name
                       }
                    deriving (Generic)
 
@@ -44,38 +46,21 @@ data AlwaysBlock = AB { _aEvent   :: Event
 -- Intermediary IR after parsing
 --------------------------------------------------------------------------------
 
-type Id = String
+type Id = T.Text
 
-data Port = Input  { portName :: ! String }
-          | Output { portName :: ! String }
+data Port = Input  { portName :: ! Id }
+          | Output { portName :: ! Id }
           deriving (Eq, Generic)
 
-instance Show Port where
-  show (Input  i) = "input("  ++ i ++ ")"
-  show (Output o) = "output(" ++ o ++ ")"
-
-instance Hashable Port where
-  hashWithSalt n (Input s)  = hashWithSalt n ("input", s)
-  hashWithSalt n (Output s) = hashWithSalt n ("output", s)
-
-data Var = Register { varName :: ! String }
-         | Wire     { varName :: ! String }
+data Var = Register { varName :: ! Id }
+         | Wire     { varName :: ! Id }
          deriving (Eq, Generic)
-
-instance Show Var where
-  show (Register r) = "register(" ++ r ++ ")"
-  show (Wire     w) = "wire("     ++ w ++ ")"
-
-
-instance Hashable Var where
-  hashWithSalt n (Register s) = hashWithSalt n ("register", s)
-  hashWithSalt n (Wire s)     = hashWithSalt n ("wire", s)
 
 data IR = Always     { event      :: ! Event
                      , alwaysStmt :: ! Stmt
-                     , alwaysLoc  :: ! (String, String) -- Module & instance name
+                     , alwaysLoc  :: ! (Id, Id) -- Module & instance name
                      }
-        | ModuleInst { modInstName :: ! String
+        | ModuleInst { modInstName :: ! Id
                      , modParams   :: ! [Port] -- formal parameters
                      , modInstSt   :: ! St
                      }
@@ -104,15 +89,15 @@ data Stmt = Block           { blockStmts :: ! [Stmt] }
 type UFMap = M.HashMap Id (Id, [Id])
 
 data Annotation
-  = Source       String
-  | Sink         String
-  | Sanitize     [String]
-  | SanitizeMod  { annotModuleName :: String
-                 , annotVarName    :: String
+  = Source       Id
+  | Sink         Id
+  | Sanitize     [Id]
+  | SanitizeMod  { annotModuleName :: Id
+                 , annotVarName    :: Id
                  }
-  | SanitizeGlob String
-  | TaintEq      String
-  | AssertEq     String
+  | SanitizeGlob Id
+  | TaintEq      Id
+  | AssertEq     Id
   deriving (Show)
 
 data AnnotSt = AnnotSt { _sources      :: S.HashSet Id
@@ -186,8 +171,8 @@ class PPrint a where
 
 instance PPrint IR where
   toDoc (Always{..})      = text "always(" <> vcat [toDoc event <> comma, toDoc alwaysStmt] <> text ")."
-  toDoc (ModuleInst{..})  = text "module" <> vcat [ lparen <+> text modInstName
-                                                  , comma  <+> pl ((text . portName) <$> modParams)
+  toDoc (ModuleInst{..})  = text "module" <> vcat [ lparen <+> id2Doc modInstName
+                                                  , comma  <+> pl ((id2Doc . portName) <$> modParams)
                                                   , comma  <+> toDoc modInstSt
                                                   , rparen
                                                   ] <> text "."
@@ -199,10 +184,10 @@ instance PPrint Stmt where
   toDoc (Block [])     = brackets empty
   toDoc (Block (s:ss)) = vcat $ (lbrack <+> toDoc s) : (((comma <+>) . toDoc) <$> ss) ++ [rbrack]
   toDoc (BlockingAsgn{..}) =
-    text "b_asn(" <> text lhs <> comma <+> text rhs <> rparen
+    text "b_asn(" <> id2Doc lhs <> comma <+> id2Doc rhs <> rparen
   toDoc (NonBlockingAsgn{..}) =
-    text "nb_asn(" <> text lhs <> comma <+> text rhs <> rparen
-  toDoc (IfStmt{..}) = text "ite" <> vcat [ lparen <+> text ifCond
+    text "nb_asn(" <> id2Doc lhs <> comma <+> id2Doc rhs <> rparen
+  toDoc (IfStmt{..}) = text "ite" <> vcat [ lparen <+> id2Doc ifCond
                                           , comma  <+> toDoc thenStmt
                                           , comma  <+> toDoc elseStmt
                                           , rparen
@@ -212,15 +197,15 @@ instance PPrint Stmt where
 instance PPrint Event where
   toDoc Star          = text "event1(star)"
   toDoc Assign        = text "assign"
-  toDoc (PosEdge clk) = text "event2(posedge," <> text clk <> rparen
-  toDoc (NegEdge clk) = text "event2(negedge," <> text clk <> rparen
+  toDoc (PosEdge clk) = text "event2(posedge," <> id2Doc clk <> rparen
+  toDoc (NegEdge clk) = text "event2(negedge," <> id2Doc clk <> rparen
 
 instance PPrint a => PPrint [a] where
   toDoc as = brackets $ hsep $ punctuate comma (map toDoc as)
 
 instance PPrint Var where
-  toDoc (Register r) = text "register" <> parens (text r)
-  toDoc (Wire w)     = text "wire" <> parens (text w)
+  toDoc (Register r) = text "register" <> parens (id2Doc r)
+  toDoc (Wire w)     = text "wire" <> parens (id2Doc w)
 
 instance PPrint St where
   toDoc st = vcat $ stDoc : space : st^.irs.to (map toDoc)
@@ -232,12 +217,12 @@ instance PPrint St where
                    ]
 
 instance PPrint AlwaysBlock where
-  toDoc a = text "always(" <> vcat [ comment "id       " <+> int (a^.aId)                         <> comma
-                                   , comment "mod name " <+> text (a^.aLoc^._1)                   <> comma
-                                   , comment "inst name" <+> text (a^.aLoc^._2)                   <> comma
-                                   , comment "ports    " <+> toDoc (a^.aSt^.ports)                <> comma
-                                   , comment "ufs      " <+> printMap  (a^.aSt^.ufs)              <> comma
-                                   , toDoc (a^.aEvent)                                            <> comma
+  toDoc a = text "always(" <> vcat [ comment "id       " <+> int (a^.aId)            <> comma
+                                   , comment "mod name " <+> id2Doc (a^.aLoc^._1)    <> comma
+                                   , comment "inst name" <+> id2Doc (a^.aLoc^._2)    <> comma
+                                   , comment "ports    " <+> toDoc (a^.aSt^.ports)   <> comma
+                                   , comment "ufs      " <+> printMap  (a^.aSt^.ufs) <> comma
+                                   , toDoc (a^.aEvent)                               <> comma
                                    , toDoc (a^.aStmt)
                                    ] <> text ")."
     where
@@ -253,11 +238,11 @@ instance PPrint AnnotSt where
                                   , rparen
                                   ]
 
-printSet :: S.HashSet String -> Doc
+printSet :: S.HashSet Id -> Doc
 printSet = printList . S.toList
 
-printList :: [String] -> Doc
-printList = brackets . text . (intercalate ", ")
+printList :: [Id] -> Doc
+printList = brackets . text . (intercalate ", ") . fmap id2Str
 
 printMap :: UFMap -> Doc
 printMap = brackets
@@ -266,7 +251,7 @@ printMap = brackets
            . (map mapKV)
            . M.toList
   where
-    mapKV (k,(f, l)) = "(" ++ k ++ ", " ++ f ++ ", [" ++ (intercalate ", " l) ++ "])"
+    mapKV (k,(f, l)) = "(" ++ id2Str k ++ ", " ++ id2Str f ++ ", [" ++ (intercalate ", " $ id2Str <$> l) ++ "])"
 
 instance Show IR where
   show = pprint
@@ -370,3 +355,35 @@ instance Mo.Monoid BlockMetadata where
                                   }
     where
       j o = (m1^.o) `S.union` (m2^.o)
+instance Show Port where
+  show (Input  i) = "input("  ++ id2Str i ++ ")"
+  show (Output o) = "output(" ++ id2Str o ++ ")"
+
+instance Hashable Port where
+  hashWithSalt n (Input s)  = hashWithSalt n ("input" :: Id, s)
+  hashWithSalt n (Output s) = hashWithSalt n ("output":: Id, s)
+
+instance Show Var where
+  show (Register r) = "register(" ++ id2Str r ++ ")"
+  show (Wire     w) = "wire("     ++ id2Str w ++ ")"
+
+
+instance Hashable Var where
+  hashWithSalt n (Register s) = hashWithSalt n ("register" :: Id, s)
+  hashWithSalt n (Wire s)     = hashWithSalt n ("wire" :: Id, s)
+
+
+id2Doc :: Id -> Doc
+id2Doc = text . T.unpack
+
+id2Str :: Id -> String
+id2Str = T.unpack
+
+str2Id :: String -> Id  
+str2Id = T.pack
+
+idAppend :: Id -> Id -> Id
+idAppend = T.append
+
+idCons :: Char -> Id -> Id
+idCons = T.cons

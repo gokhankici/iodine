@@ -71,12 +71,12 @@ toFqFormat fpst =
       axiomEnv    = AEnv [] [] M.empty
       dataDecls   = []
 
-      custom n (QualifImp l rs) = custom1 n l rs
-      custom n (QualifPairs vs) = custom2 n vs
-      custom n (QualifIff l rs) = custom3 n l rs
+      custom n (QualifImp l rs) = custom1 n (id2Str l) (id2Str <$> rs)
+      custom n (QualifPairs vs) = custom2 n (id2Str <$> vs)
+      custom n (QualifIff l rs) = custom3 n (id2Str l) (id2Str <$> rs)
       custom _ (QualifAssume _) = []
 
-      custom1 n l rs = 
+      custom1 n l rs =
         [ mkQual
           (symbol $ "Custom1_" ++ show n ++ "_" ++ show n2)
           ( [ QP (symbol "v") PatNone FInt
@@ -132,8 +132,6 @@ makeConstraints fpst = snd $ IM.foldl' gos (0, []) (fpst ^. fpConstraints)
 
     mc (n, (Horn{..})) = helper hBody hHead n hId
 
-    env es = insertsIBindEnv (getBindIds fpst es) emptyIBindEnv
-
     helper bdy' hd n hId =
       let bdy = Ands [eqs, bdy']
       in  mkSubC
@@ -143,6 +141,8 @@ makeConstraints fpst = snd $ IM.foldl' gos (0, []) (fpst ^. fpConstraints)
           (Just n)              -- id
           []                    -- tags
           hId                   -- metadata
+
+    env es = insertsIBindEnv (getBindIds fpst es) emptyIBindEnv
 
     eqs = Ands [ BinOp IFF (Var x1t) (Var x2t)
                | q       <- fpst ^. fpQualifiers

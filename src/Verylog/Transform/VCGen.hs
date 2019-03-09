@@ -294,7 +294,7 @@ non_interference_inv annots a1 a2 =
     (nr1,ur1) = next fmt{rightVar=True} a1
     updates1  = ul1 ++ ur1
     lukap v   = case lookup v updates1 of
-                  Nothing -> throw $ PassError $ "cannot find " ++ v ++ " in updates1"
+                  Nothing -> throw $ PassError $ "cannot find " ++ id2Str v ++ " in updates1"
                   Just e  -> (v,e)
     updates2    = updates2_1 ++ updates2_2
     updates2_1  = concat [ [ (n_lvar v,  lvar v)  -- l' = l

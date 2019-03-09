@@ -1,4 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MultiWayIf #-}
 
 module Verylog.Transform.Utils where
 
@@ -13,6 +15,7 @@ import           Debug.Trace
 import           Data.Char
 import           Data.List
 import qualified Data.HashSet as HS
+import qualified Data.Text as T
 
 data VarFormat = VarFormat { taggedVar   :: Bool
                            , leftVar     :: Bool
@@ -36,23 +39,30 @@ makeVar :: VarFormat -> Id -> Expr
 makeVar f v = Var (makeVarName f v)
 
 makeVarName :: VarFormat -> Id -> Id
-makeVarName f@(VarFormat{..}) v = par ++ atom ++ "V" ++ pos ++ tag ++ vid ++ "_" ++ v
+makeVarName f@(VarFormat{..}) v = par +=+ atom +=+ "V" +=+ pos +=+ tag +=+ vid +=+ "_" +=+ v
   where
-    atom | atomVar   = "v"
-         | otherwise = ""
+    (+=+) = idAppend
 
-    par  | paramVar  = "arg_"
-         | otherwise = ""
+    atom | atomVar   = "v" :: Id
+         | otherwise = "" :: Id
 
-    tag  | taggedVar = "T"
-         | otherwise = ""
+    par  | paramVar  = "arg_" :: Id
+         | otherwise = "" :: Id
 
-    vid   = maybe "" show varId
+    tag  | taggedVar = "T" :: Id
+         | otherwise = "" :: Id
 
-    pos   | (leftVar && rightVar) = throw (PassError $ "Both left & right requested from makeVarName for " ++ v ++ " " ++ show f)
-          | leftVar   = "L"
-          | rightVar  = "R"
-          | otherwise = ""
+    -- vid   = maybe "" show varId
+    vid   = case varId of
+              Nothing -> "" :: Id
+              Just n  -> T.pack $ show n
+
+
+    pos   | (leftVar && rightVar) =
+            throw (PassError $ "Both left & right requested from makeVarName for " ++ id2Str v ++ " " ++ show f)
+          | leftVar   = "L" :: Id
+          | rightVar  = "R" :: Id
+          | otherwise = "" :: Id
 
 parseVarName :: Id -> (VarFormat, Id)
 parseVarName v = pipeline (fmt, v)
@@ -64,28 +74,27 @@ parseVarName v = pipeline (fmt, v)
     parseTag   = go "T"    $ \f r -> f { taggedVar = r }
 
     removeV    = second $ \s ->
-      case s of
-        'V':rest -> rest
-        _        -> error "expected 'V' in the variable prefix"
+      case T.uncons s of
+        Just ('V',rest) -> rest
+        _               -> error "expected 'V' in the variable prefix"
 
     parsePos (f, s) =
-      case s of
-        'L':rest -> (f { leftVar  = True }, rest)
-        'R':rest -> (f { rightVar = True }, rest)
-        _        -> (f, s)
+      case T.uncons s of
+        Just ('L',rest) -> (f { leftVar  = True }, rest)
+        Just ('R',rest) -> (f { rightVar = True }, rest)
+        _               -> (f, s)
 
-    parseId (f, s) = case digits of
-                       [] -> (f, s')
-                       _  -> (f { varId = read digits }, s')
+    parseId (f, s) = if | T.null digits -> (f, s')
+                        | otherwise     -> (f { varId = read $ id2Str digits }, s')
       where
-        (digits, rest) = span isDigit s
-        s' = case rest of
-               '_':ss -> ss
-               _      -> error "expected a '_' before the variable name"
+        (digits, rest) = T.span isDigit s
+        s' = case T.uncons rest of
+               Just ('_',ss) -> ss
+               _             -> error "expected a '_' before the variable name"
 
     go pfx f (a, s) =
-      if   pfx `isPrefixOf` s
-      then (f a True,  drop (length pfx) s)
+      if   pfx `T.isPrefixOf` s
+      then (f a True,  T.drop (T.length pfx) s)
       else (f a False, s)
 
 
@@ -117,14 +126,14 @@ makeBothTags vs = [mk fmt{leftVar=True}, mk fmt{rightVar=True}] <*> vs
 trc         :: Show b => String -> b -> a -> a
 trc msg b a = trace (printf "%s%s" msg (show b)) a
 
-constants :: [(String,Expr)]
+constants :: [(Id,Expr)]
 constants = [ ("zero",  Number 0)
             , ("one",   Number 1)
             , ("tru",   Boolean True)
             , ("fals",  Boolean False)
             ]
 
-getConstantName :: Expr -> String
+getConstantName :: Expr -> Id
 getConstantName e =
   case find ((==) e . snd) constants of
     Just (name,_) -> name

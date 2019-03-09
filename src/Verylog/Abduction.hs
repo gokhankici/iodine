@@ -10,7 +10,7 @@ import Prelude hiding (break)
 import Verylog.Solver.FP.Solve
 import Verylog.Solver.FP.Types
 import Verylog.Transform.Utils
--- import Verylog.Language.Types
+import Verylog.Language.Types
 import Verylog.Utils
 
 import qualified Language.Fixpoint.Types        as FT
@@ -135,11 +135,11 @@ acceptanceProb newCost = do
 -- Parsing liquid-fixpoint output
 -- -----------------------------------------------------------------------------
 
-data R = TagEq    { varName :: String }
-       | ValueEq  { varName :: String }
-       | TagEq2   { varName :: String, var2Name :: String }
-       | ValueEq2 { varName :: String, var2Name :: String }
-       | NoTaint  { varName :: String }
+data R = TagEq    { varName :: Id }
+       | ValueEq  { varName :: Id }
+       | TagEq2   { varName :: Id, var2Name :: Id }
+       | ValueEq2 { varName :: Id, var2Name :: Id }
+       | NoTaint  { varName :: Id }
        deriving (Eq)
 
 type RS = HS.HashSet R
@@ -168,14 +168,14 @@ toR sol = goTops $ HM.elems sol
         diffRun    = dr f1 f2
         sameVar    = v1 == v2
         bothTag    = taggedVar f1 && taggedVar f2
-        (f1, v1)   = parseVarName $ FT.symbolSafeString s1
-        (f2, v2)   = parseVarName $ FT.symbolSafeString s2
+        (f1, v1)   = parseVarName . str2Id $ FT.symbolSafeString s1
+        (f2, v2)   = parseVarName . str2Id $ FT.symbolSafeString s2
 
     go e@(FT.PIff (FT.EVar s1) e2) =
       if taggedVar f1 && not b then NoTaint v1 else err e
       where
         b        = toBool e2
-        (f1, v1) = parseVarName $ FT.symbolSafeString s1
+        (f1, v1) = parseVarName . str2Id $ FT.symbolSafeString s1
 
     go (FT.PIff e1 (FT.EVar s2)) =
       go (FT.PIff (FT.EVar s2) e1)
@@ -189,8 +189,8 @@ toR sol = goTops $ HM.elems sol
         bothVar  = not $ taggedVar f1 || taggedVar f2
         diffRun  = dr f1 f2
         sameVar  = v1 == v2
-        (f1, v1) = parseVarName $ FT.symbolSafeString s1
-        (f2, v2) = parseVarName $ FT.symbolSafeString s2
+        (f1, v1) = parseVarName . str2Id $ FT.symbolSafeString s1
+        (f2, v2) = parseVarName . str2Id $ FT.symbolSafeString s2
 
     go e = err e
 
