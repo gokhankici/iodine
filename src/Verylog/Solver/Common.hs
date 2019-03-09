@@ -1,16 +1,24 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE StrictData #-}
 
 module Verylog.Solver.Common where
 
-import Text.Printf
-import Control.Lens
 import Verylog.Language.Types
-import GHC.Generics
-import Control.DeepSeq
 
-import Language.Fixpoint.Types (Fixpoint(..), Loc(..), showFix, dummySpan)
+import Language.Fixpoint.Types ( Fixpoint(..)
+                               , Loc(..)
+                               , showFix
+                               , dummySpan
+                               )
+
+import           Control.DeepSeq
+import           Control.Lens
+import qualified Data.IntMap.Strict        as IM
+import           GHC.Generics
 import qualified Text.PrettyPrint.HughesPJ as PP
+import           Text.Printf
+
 
 -- -----------------------------------------------------------------------------
 -- data types
@@ -19,45 +27,45 @@ import qualified Text.PrettyPrint.HughesPJ as PP
 data BinOp = EQU | LE | GE | OR | AND | PLUS | IMPLIES | IFF
            deriving (Show, Eq, Generic, Ord)
 
-data InvType = InvInit     !Int
-             | InvReTag    !Int
-             | InvSrcReset !Int
-             | InvNext     !Int
-             | InvTagEq    !Int
-             | InvWF       !Int
-             | InvInter    !Int
-             | InvOther    !String
+data InvType = InvInit     Int
+             | InvReTag    Int
+             | InvSrcReset Int
+             | InvNext     Int
+             | InvTagEq    Int
+             | InvWF       Int
+             | InvInter    Int
+             | InvOther    String
             deriving (Generic, Eq, Ord)
-
-type Metadata = HornId
 
 data HornId = HornId Int InvType
             deriving (Generic, Show)
 
-data Inv = Horn { hBody :: ! Expr -- body of the horn clause
-                , hHead :: ! Expr -- head of the horn clause, must be a kvar
-                , hId   :: ! HornId
+data Inv = Horn { hBody :: Expr -- body of the horn clause
+                , hHead :: Expr -- head of the horn clause, must be a kvar
+                , hId   :: HornId
                 }
            deriving (Show, Generic)
 
-data Expr = BinOp     { bOp   :: ! BinOp
-                      , expL  :: ! Expr
-                      , expR  :: ! Expr
+type Constraints = IM.IntMap [Inv]
+
+data Expr = BinOp     { bOp   :: BinOp
+                      , expL  :: Expr
+                      , expR  :: Expr
                       }
           | Ands      [Expr]
-          | Ite       { cnd     :: ! Expr
-                      , expThen :: ! Expr
-                      , expElse :: ! Expr
+          | Ite       { cnd     :: Expr
+                      , expThen :: Expr
+                      , expElse :: Expr
                       }
-          | KV        { kvId   :: ! Int
-                      , kvSubs :: ! [(Id,Expr)]
+          | KV        { kvId   :: Int
+                      , kvSubs :: [(Id,Expr)]
                       }
           | Var       Id
           | Boolean   Bool
           | Number    Int
-          | UFCheck   { ufArgs  :: ! [(Expr,Expr)]
-                      , ufNames :: ! (Expr,Expr)
-                      , ufFunc  :: ! Id
+          | UFCheck   { ufArgs  :: [(Expr,Expr)]
+                      , ufNames :: (Expr,Expr)
+                      , ufFunc  :: Id
                       }
           deriving (Show, Eq, Generic)
 
@@ -107,4 +115,3 @@ makeInvPred a = makeInv (a^.aId)
 
 makeInv :: Int -> String
 makeInv n = printf "inv%d" n
-

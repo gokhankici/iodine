@@ -28,6 +28,7 @@ import Debug.Trace
 
 type Sol = FT.FixSolution
 type M   = StateT S IO
+-- type Ids = HS.HashSet Id
 
 -- state used in the annotation algorithm
 data S = S { _t       :: Double -- temperature
@@ -40,7 +41,7 @@ data S = S { _t       :: Double -- temperature
            , _cost     :: Double  -- the cost of the current annotations & solution
            , _fpst     :: FPSt    -- current solution
 
-           , _cfg  :: FC.Config
+           , _cfg     :: FC.Config
            }
 
 makeLenses ''S
@@ -70,9 +71,6 @@ abduction fcConfig st = do
 
   return (isSafe', sol')
 
-calculateCost :: FPSt -> Sol -> Double
-calculateCost _ _ = 0.0
-
 outerLoop :: M Bool
 outerLoop = while False ((>) <$> use t <*> use tMin) $ do
   debugM (printf "%s\nouterloop: t = %g\n" (unlines $ cp 3 l) <$> use t) $
@@ -89,7 +87,6 @@ innerLoop :: M Bool
 innerLoop = while False ((>) <$> use step <*> use curStep) $ do
   debug l $ curStep += 1
   fpst' <- sample
-  traceM "UPDATE fpst !!!"
   (safe, sol') <- runSolve fpst'
   let cost'  = calculateCost fpst' sol'
   let updAct = updateSol fpst' sol' cost'
@@ -101,6 +98,22 @@ innerLoop = while False ((>) <$> use step <*> use curStep) $ do
             when (p > r) updAct
             return False
 
+sample :: M FPSt
+sample = do
+  -- st <- use fpst
+  -- let a = st ^. fpAnnotations
+  -- rs <- toR <$> use solution
+  traceM "Fix sample !!!"
+  use fpst
+
+calculateCost :: FPSt -> Sol -> Double
+calculateCost _ _ = 0.0
+
+
+-- -----------------------------------------------------------------------------
+-- Helper functions
+-- -----------------------------------------------------------------------------
+
 updateSol :: FPSt -> Sol -> Double -> M ()
 updateSol fpst' sol' cost' = do
   fpst     .= fpst'
@@ -111,14 +124,12 @@ runSolve :: FPSt -> M (Bool, Sol)
 runSolve f = do
   (liftIO1 $ flip solve f) =<< use cfg
 
-sample :: M FPSt
-sample = use fpst
-
 acceptanceProb :: Double -> M Double
 acceptanceProb newCost = do
   oldCost     <- use cost
   currentTemp <- use t
   return $ exp ( (oldCost - newCost) / currentTemp )
+
 
 -- -----------------------------------------------------------------------------
 -- Parsing liquid-fixpoint output

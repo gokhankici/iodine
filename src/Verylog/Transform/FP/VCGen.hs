@@ -12,16 +12,27 @@ import           Verylog.Transform.VCGen
 import           Control.Monad.State.Lazy
 import           Control.Lens
 import           Data.List
+-- import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
+import qualified Data.IntMap.Strict       as IM
 import qualified Language.Fixpoint.Types  as FQ
-import qualified Data.HashSet             as HS
 
 -- import Debug.Trace
 
 type S = State (Int, BindMap)
 
-toFpSt    :: ([AlwaysBlock], (AnnotSt, [FPQualifier])) -> FPSt
-toFpSt (as, (allAnnots, allQualifiers)) =
+-- toFpSt' :: FPSt -> AnnotSt -> FPSt
+-- toFpSt' fpst allAnnots =
+--   set fpABs as' .
+--   set fpConstraints cs .
+--   set fpAnnotations allAnnots $
+--   fpst 
+--   where
+--     as' = updateAnnots allAnnots <$> fpst ^. fpABs
+--     cs  = invs allAnnots as'
+
+toFpSt  :: ([AlwaysBlock], (AnnotSt, [FPQualifier])) -> FPSt
+toFpSt (_as, (allAnnots, allQualifiers)) =
   FPSt { _fpConstraints = cs
        , _fpABs         = as
        , _fpBinds       = bs'
@@ -30,8 +41,10 @@ toFpSt (as, (allAnnots, allQualifiers)) =
        , _fpAnnotations = allAnnots
        }
   where
-    cs  = invs (HS.toList (allAnnots^.sources)) as
-    bs  = getBinds as cs
+    -- as  = updateFPVars <$> _as
+    as = _as
+    cs  = invs allAnnots as
+    bs  = getBinds as $ concat $ IM.elems cs
     ni  = M.size bs + 1
     ts  = makeBothTags $ concatMap qualifVars allQualifiers
     bs' = foldl' (\m (n,name) -> h m n name) bs (zip [ni..] ts)
@@ -45,7 +58,7 @@ toFpSt (as, (allAnnots, allQualifiers)) =
                             }) name m
 
 
-getBinds       :: [AlwaysBlock] -> [Inv] -> BindMap
+getBinds :: [AlwaysBlock] -> [Inv] -> BindMap
 getBinds as cs = evalState comp (length constants + 1, m)
   where
     comp = do sequence_ (getBind <$> cs)

@@ -25,6 +25,8 @@ type ABS          = [AlwaysBlock]
 -- merge       :: (ABS, Qualifiers) -> (ABS, Qualifiers)
 -- toFpSt      :: (ABS, (AnnotSt, Qualifiers)) -> FPSt
 
+-- parse --> flatten --> sanityCheck --> merge --> toFpSt --> liquid-fixpoint
+
 --------------------------------------------------------------------------------
 pipeline :: ParseInput -> FPSt
 --------------------------------------------------------------------------------

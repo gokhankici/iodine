@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE StrictData #-}
 
 module Verylog.Solver.FP.Types where
 
@@ -14,40 +15,40 @@ import qualified Data.HashMap.Strict        as M
 import           GHC.Generics hiding (to)
 import qualified Language.Fixpoint.Types    as FQ
 
-data FPQualifier = QualifImp    { qualifLhs  :: !Id
-                                , qualifRhss :: ![Id]
+data FPQualifier = QualifImp    { qualifLhs  :: Id
+                                , qualifRhss :: [Id]
                                 }
-                 | QualifIff    { qualifLhs  :: !Id
-                                , qualifRhss :: ![Id]
+                 | QualifIff    { qualifLhs  :: Id
+                                , qualifRhss :: [Id]
                                 }
-                 | QualifPairs  { qualifEqs :: ![Id] }
-                 | QualifAssume { qualifAssume :: ![Id] }
+                 | QualifPairs  { qualifEqs    :: [Id] }
+                 | QualifAssume { qualifAssume :: [Id] }
                  deriving (Generic, Show)
 
-data FQBind = FQBind { bindId   :: ! Int
-                     , bindName :: ! Id
-                     , bindType :: ! FQ.Sort
-                     , bindRef  :: ! FQ.Expr
+data FQBind = FQBind { bindId   :: Int
+                     , bindName :: Id
+                     , bindType :: FQ.Sort
+                     , bindRef  :: FQ.Expr
                      }
             deriving (Generic)
 
-data InvFun = InvFun { invFunName   :: ! Id
-                     , invFunArity  :: ! Int
-                     , invFunParams :: ! [Id]
+data InvFun = InvFun { invFunName   :: Id
+                     , invFunArity  :: Int
+                     , invFunParams :: [Id]
                      }
 
-data UFConst = UFConst { ufConstName  :: ! Id
-                       , ufConstArity :: ! Int
+data UFConst = UFConst { ufConstName  :: Id
+                       , ufConstArity :: Int
                        }
 
 type BindMap = M.HashMap Id FQBind
 
-data FPSt = FPSt { _fpConstraints :: ! [Inv]
-                 , _fpABs         :: ! [AlwaysBlock]
-                 , _fpBinds       :: ! BindMap
-                 , _fpUFs         :: ! UFMap
-                 , _fpQualifiers  :: ! [FPQualifier]
-                 , _fpAnnotations :: ! AnnotSt
+data FPSt = FPSt { _fpConstraints :: Constraints
+                 , _fpABs         :: [AlwaysBlock]
+                 , _fpBinds       :: BindMap
+                 , _fpUFs         :: UFMap
+                 , _fpQualifiers  :: [FPQualifier]
+                 , _fpAnnotations :: AnnotSt
                  }
             deriving (Generic)
 

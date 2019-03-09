@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE StrictData #-}
 
 module Verylog.Language.Types where
 
@@ -23,12 +24,19 @@ import           Control.DeepSeq
 -- IR for the formalism
 --------------------------------------------------------------------------------
 
-data AlwaysBlock = AB { _aEvent   :: ! Event
-                      , _aStmt    :: ! Stmt
-                      , _aId      :: ! Int -- to blocks are equal, if this field is the same. be careful !
-                      , _aSt      :: ! St
-                      , _aAnnotSt :: ! AnnotSt
-                      , _aLoc     :: ! (String, String) -- Module & instance name
+data BlockMetadata = BlockMetadata { _mVariables :: S.HashSet Id
+                                   , _mReadSet   :: S.HashSet Id
+                                   , _mWriteSet  :: S.HashSet Id
+                                   , _fp_vars    :: S.HashSet Id
+                                   }
+                   deriving (Generic)
+
+data AlwaysBlock = AB { _aEvent   :: Event
+                      , _aStmt    :: Stmt
+                      , _aId      :: Int -- to blocks are equal, if this field is the same. be careful !
+                      , _aSt      :: St
+                      , _aMd      :: BlockMetadata
+                      , _aLoc     :: (String, String) -- Module & instance name
                       }
                    deriving (Generic)
 
@@ -96,30 +104,29 @@ data Stmt = Block           { blockStmts :: ! [Stmt] }
 type UFMap = M.HashMap Id (Id, [Id])
 
 data Annotation
-  = Source       ! String
-  | Sink         ! String
-  | Sanitize     ! [String]
-  | SanitizeMod  { annotModuleName :: ! String
-                 , annotVarName    :: ! String
+  = Source       String
+  | Sink         String
+  | Sanitize     [String]
+  | SanitizeMod  { annotModuleName :: String
+                 , annotVarName    :: String
                  }
-  | SanitizeGlob ! String
-  | TaintEq      ! String
-  | AssertEq     ! String
+  | SanitizeGlob String
+  | TaintEq      String
+  | AssertEq     String
   deriving (Show)
 
-data AnnotSt = AnnotSt { _sources      :: ! (S.HashSet Id)
-                       , _sinks        :: ! (S.HashSet Id)
-                       , _taintEq      :: ! (S.HashSet Id)
-                       , _assertEq     :: ! (S.HashSet Id)
-                       , _sanitize     :: ! (S.HashSet Id)
-                       , _sanitizeGlob :: ! (S.HashSet Id)
+data AnnotSt = AnnotSt { _sources      :: S.HashSet Id
+                       , _sinks        :: S.HashSet Id
+                       , _taintEq      :: S.HashSet Id
+                       , _assertEq     :: S.HashSet Id
+                       , _sanitize     :: S.HashSet Id
+                       , _sanitizeGlob :: S.HashSet Id
                        }
                deriving (Generic)
 
-data St = St { _ports :: ! [Var]
-             , _ufs   :: ! UFMap
-             , _irs   :: ! [IR]
-             , _vars  :: ! (S.HashSet Id)
+data St = St { _ports :: [Var]
+             , _ufs   :: UFMap
+             , _irs   :: [IR]
              }
           deriving (Generic)
 
@@ -135,11 +142,11 @@ emptySt :: St
 emptySt = St { _ports = mempty
              , _ufs   = mempty
              , _irs   = mempty
-             , _vars  = mempty
              }
 
-makeLenses ''AnnotSt 
-makeLenses ''St 
+makeLenses ''AnnotSt
+makeLenses ''St
+makeLenses ''BlockMetadata
 makeLenses ''AlwaysBlock
 
 done_atom :: Id
@@ -163,11 +170,11 @@ data PassError = PassError !String
                deriving (Show, Typeable)
 
 instance Exception PassError
-  
 
--- -----------------------------------------------------------------------------  
+
+-- -----------------------------------------------------------------------------
 -- Pretty printing
--- -----------------------------------------------------------------------------  
+-- -----------------------------------------------------------------------------
 
 class PPrint a where
   toDoc :: a -> Doc
@@ -186,14 +193,14 @@ instance PPrint IR where
                                                   ] <> text "."
     where
       pl = brackets . hsep . (punctuate (text ", "))
-                            
-  
+
+
 instance PPrint Stmt where
   toDoc (Block [])     = brackets empty
   toDoc (Block (s:ss)) = vcat $ (lbrack <+> toDoc s) : (((comma <+>) . toDoc) <$> ss) ++ [rbrack]
-  toDoc (BlockingAsgn{..}) = 
+  toDoc (BlockingAsgn{..}) =
     text "b_asn(" <> text lhs <> comma <+> text rhs <> rparen
-  toDoc (NonBlockingAsgn{..}) = 
+  toDoc (NonBlockingAsgn{..}) =
     text "nb_asn(" <> text lhs <> comma <+> text rhs <> rparen
   toDoc (IfStmt{..}) = text "ite" <> vcat [ lparen <+> text ifCond
                                           , comma  <+> toDoc thenStmt
@@ -230,12 +237,6 @@ instance PPrint AlwaysBlock where
                                    , comment "inst name" <+> text (a^.aLoc^._2)                   <> comma
                                    , comment "ports    " <+> toDoc (a^.aSt^.ports)                <> comma
                                    , comment "ufs      " <+> printMap  (a^.aSt^.ufs)              <> comma
-                                   , comment "sources  " <+> printSet (a^.aAnnotSt^.sources)      <> comma
-                                   , comment "sinks    " <+> printSet (a^.aAnnotSt^.sinks)        <> comma
-                                   , comment "sanitize " <+> printSet (a^.aAnnotSt^.sanitize)     <> comma
-                                   , comment "san. glob" <+> printSet (a^.aAnnotSt^.sanitizeGlob) <> comma
-                                   , comment "taint eq." <+> printSet (a^.aAnnotSt^.taintEq)      <> comma
-                                   , comment "asrt. eq"  <+> printSet (a^.aAnnotSt^.assertEq)     <> comma
                                    , toDoc (a^.aEvent)                                            <> comma
                                    , toDoc (a^.aStmt)
                                    ] <> text ")."
@@ -287,6 +288,7 @@ instance NFData Port
 instance NFData IR
 instance NFData AnnotSt
 instance NFData St
+instance NFData BlockMetadata
 instance NFData AlwaysBlock
 
 instance SG.Semigroup AnnotSt where
@@ -302,16 +304,15 @@ instance SG.Semigroup AnnotSt where
       jn_set fld = (m1 ^. fld) Mo.<> (m2 ^. fld)
 
 instance SG.Semigroup St where
-  m1 <> m2 = 
-    St { _ports  = jn_list ports
-       , _ufs    = (m1 ^. ufs) Mo.<> (m2 ^. ufs)
-       , _irs    = (m1 ^. irs) Mo.<> (m2 ^. irs)
-       , _vars   = (m1 ^. vars) Mo.<> (m2 ^. vars)
+  m1 <> m2 =
+    St { _ports = jn_list ports
+       , _ufs   = (m1 ^. ufs) Mo.<> (m2 ^. ufs)
+       , _irs   = (m1 ^. irs) Mo.<> (m2 ^. irs)
        }
     where
       jn_list fld =
         S.toList $
-        S.fromList (m1 ^. fld) Mo.<> 
+        S.fromList (m1 ^. fld) Mo.<>
         S.fromList (m2 ^. fld)
 
 instance Mo.Monoid AnnotSt where
@@ -355,3 +356,17 @@ instance Hashable AlwaysBlock where
 
 instance Eq AlwaysBlock where
   a1 == a2 = (a1 ^. aId) == (a2 ^. aId)
+
+instance Mo.Monoid BlockMetadata where
+  mempty = BlockMetadata { _mVariables = mempty
+                         , _mReadSet   = mempty
+                         , _mWriteSet  = mempty
+                         , _fp_vars    = mempty
+                         }
+  m1 `mappend` m2 = BlockMetadata { _mVariables = j mVariables
+                                  , _mReadSet   = j mReadSet
+                                  , _mWriteSet  = j mWriteSet
+                                  , _fp_vars    = j fp_vars
+                                  }
+    where
+      j o = (m1^.o) `S.union` (m2^.o)

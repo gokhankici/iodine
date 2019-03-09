@@ -10,6 +10,7 @@ import           Data.Maybe
 import           Data.List
 import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
+import qualified Data.IntMap.Strict       as IM
 
 import           Verylog.Transform.TransitionRelation
 import           Verylog.Transform.Utils as U
@@ -28,29 +29,39 @@ defaultPropertyOptions = PropertyOptions { checkTagEq = True
                                          }
 
 --------------------------------------------------------------------------------
-invs :: [Id] -> [AlwaysBlock] -> [Inv]
+invs :: AnnotSt -> [AlwaysBlock] -> Constraints
 --------------------------------------------------------------------------------
-invs srcs as =
-  concatMap (modular_inv srcs) as
-  ++ non_interference_checks srcs as
-  ++ concatMap (provedProperty defaultPropertyOptions) as
+invs annots as =
+  foldl' go2 (foldl' go mempty as) nics
+  where
+    nics = non_interference_checks annots as
+
+    go2 c (id1, _, i) =
+      let f Nothing    = Just [i]
+          f (Just is) = Just (i:is)
+      in  IM.alter f id1 c
+
+    go c a = IM.insert (a^.aId) is c
+      where
+        is = modular_inv annots a ++
+             provedProperty annots defaultPropertyOptions a
 
 --------------------------------------------------------------------------------
-modular_inv :: [Id] -> AlwaysBlock -> [Inv]
+modular_inv :: AnnotSt -> AlwaysBlock -> [Inv]
 --------------------------------------------------------------------------------
-modular_inv srcs a =
-  [ initial_inv
-  , tag_reset_inv
-  , src_reset_inv
-  , next_step_inv
-  ] <*> [srcs] <*> [a']
+modular_inv annots a =
+  [ initial_inv   annots a'
+  , tag_reset_inv annots a'
+  , src_reset_inv annots a'
+  , next_step_inv annots a'
+  ]
   where
     a' = dbg (printf "\nalways block #%d:\n%s" (a^.aId) (show a)) a
 
 --------------------------------------------------------------------------------
-initial_inv :: [Id] -> AlwaysBlock -> Inv
+initial_inv :: AnnotSt -> AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-initial_inv srcs a =
+initial_inv annots a =
   Horn { hBody = Boolean True
        , hHead = Ands [ KV { kvId   = a ^. aId
                            , kvSubs = filterSubs a (sub1 ++ sub2)
@@ -60,8 +71,8 @@ initial_inv srcs a =
        , hId   = HornId i (InvInit i)
        }
   where
+    srcs = srcLs annots
     i      = a ^. aId
-    annots = a ^. aAnnotSt
     sub1 = [ (n_lvar sntz, rvar sntz)
            | sntz <- S.toList $ annots ^. sanitize
            ]
@@ -70,9 +81,9 @@ initial_inv srcs a =
            ]
 
 --------------------------------------------------------------------------------
-tag_reset_inv :: [Id] -> AlwaysBlock -> Inv
+tag_reset_inv :: AnnotSt -> AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-tag_reset_inv srcs a =
+tag_reset_inv annots a =
   Horn { hBody =  prevKV a
        , hHead = KV { kvId   = i
                     , kvSubs = filterSubs a hsubs
@@ -81,14 +92,15 @@ tag_reset_inv srcs a =
        , hId   = HornId i (InvReTag i)
        }
   where
+    srcs = srcLs annots
     i      = a ^. aId
     hsubs  = [(t, Boolean False) | t <- makeBothTags $ (getRegisters a \\ srcs)]
 
 
 --------------------------------------------------------------------------------
-src_reset_inv :: [Id] -> AlwaysBlock -> Inv
+src_reset_inv :: AnnotSt -> AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
-src_reset_inv srcs a =
+src_reset_inv annots a =
   Horn { hBody =  prevKV a
        , hHead = KV { kvId   = i
                     , kvSubs = [ (v, Boolean False) | v <- makeBothTags srcs]
@@ -96,12 +108,13 @@ src_reset_inv srcs a =
        , hId   = HornId i (InvSrcReset i)
        }
   where
-    i      = a ^. aId
+    srcs = srcLs annots
+    i = a ^. aId
 
 --------------------------------------------------------------------------------
-next_step_inv :: [Id] -> AlwaysBlock -> Inv 
+next_step_inv :: AnnotSt -> AlwaysBlock -> Inv 
 --------------------------------------------------------------------------------
-next_step_inv srcs a =
+next_step_inv annots a =
   Horn { hBody = body
        , hHead = KV { kvId   = i
                     , kvSubs = filterSubs a subs
@@ -114,11 +127,12 @@ next_step_inv srcs a =
     (nl,ul)  = next fmt{leftVar=True}  a
     (nr,ur)  = next fmt{rightVar=True} a
     body     = Ands [ prevKV a
-                    , sanGlobs (a^.aAnnotSt^.sanitizeGlob) subs
-                    , taintEqs (a^.aAnnotSt^.taintEq) subs
+                    , sanGlobs (annots^.sanitizeGlob) subs
+                    , taintEqs (annots^.taintEq) subs
                     , sourcesAreEqual srcs
                     , nl, nr
                     ]
+    srcs = srcLs annots
 
 -- wire input sources
 sourcesAreEqual :: [Id] -> Expr
@@ -138,10 +152,10 @@ sourcesAreEqual srcs = Ands $ h <$> twoPairs srcs
 
 
 type Subs = [(Id,Expr)]
-type AS = S.HashSet Id          -- annotation set
+type Ids = S.HashSet Id          -- annotation set
 
 -- sanitize globs are always the same
-sanGlobs        :: AS -> Subs -> Expr
+sanGlobs        :: Ids -> Subs -> Expr
 sanGlobs vs subs = alwaysEqs conf vs subs
   where
     conf = AEC { isInitEq  = True
@@ -150,7 +164,7 @@ sanGlobs vs subs = alwaysEqs conf vs subs
                , isTagEq   = True
                }
 
-taintEqs        :: AS -> Subs -> Expr
+taintEqs        :: Ids -> Subs -> Expr
 taintEqs vs subs = alwaysEqs conf vs subs
   where
     conf = AEC { isInitEq  = True
@@ -165,7 +179,7 @@ data AlwaysEqConfig = AEC { isInitEq  :: Bool
                           , isTagEq   :: Bool
                           }
 
-alwaysEqs :: AlwaysEqConfig -> AS -> Subs -> Expr
+alwaysEqs :: AlwaysEqConfig -> Ids -> Subs -> Expr
 alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
   where
     fmts :: [VarFormat]
@@ -204,28 +218,31 @@ alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
       | f <- fmts
       ]
   
-  
+type NIC = (Int, Int, Inv)
 --------------------------------------------------------------------------------
-non_interference_checks :: [Id] -> [AlwaysBlock] -> [Inv]
+non_interference_checks :: AnnotSt -> [AlwaysBlock] -> [NIC]
 --------------------------------------------------------------------------------
-non_interference_checks srcs as = non_int_chk as [] []
+non_interference_checks annots as = non_int_chk as [] []
   where
     hasCommon :: S.HashSet Id -> S.HashSet Id -> Bool
     hasCommon s1 s2 = not . null $ S.intersection s1 s2  
 
-    non_int_chk :: [AlwaysBlock] -> [(RWSet,AlwaysBlock)] -> [Inv] -> [Inv]
+    non_int_chk :: [AlwaysBlock] -> [(RWSet,AlwaysBlock)] -> [NIC] -> [NIC]
     non_int_chk []      _checked cs = cs
     non_int_chk (a1:a1s) checked cs =
       let cs'                     = foldl' f cs checked
           rw1@(r1,w1)             = readWriteSet a1
           f cs_prev ((r2,w2), a2) =
+            let i1 = a1 ^. aId; i2 = a2 ^. aId in
             if   hasCommon w1 w2
-            then (non_interference_inv srcs a1 a2) : (non_interference_inv srcs a2 a1) : cs_prev
+            then (i1, i2, non_interference_inv annots a1 a2) :
+                 (i2, i1, non_interference_inv annots a2 a1) :
+                 cs_prev
             else let t12 = if   hasCommon w1 r2
-                           then (non_interference_inv srcs a1 a2) : cs_prev
+                           then (i1, i2, non_interference_inv annots a1 a2) : cs_prev
                            else cs_prev
                  in  if   hasCommon w2 r1
-                     then (non_interference_inv srcs a2 a1) : t12
+                     then (i2, i1, non_interference_inv annots a2 a1) : t12
                      else t12
       in non_int_chk a1s ((rw1, a1):checked) cs'
 
@@ -262,10 +279,10 @@ readWriteSet a = let (r,w) = evalState (comp (a^.aStmt) >> get) ([], [])
     comp Skip                  = return ()
 
 --------------------------------------------------------------------------------
-non_interference_inv :: [Id] -> AlwaysBlock -> AlwaysBlock -> Inv
+non_interference_inv :: AnnotSt -> AlwaysBlock -> AlwaysBlock -> Inv
 --------------------------------------------------------------------------------
 -- when a1 takes a step, a2 still holds
-non_interference_inv srcs a1 a2 =
+non_interference_inv annots a1 a2 =
   Horn { hBody = body
        , hHead = KV { kvId   = a2 ^. aId
                     , kvSubs = filterSubs a2 updates2
@@ -295,18 +312,19 @@ non_interference_inv srcs a1 a2 =
                  , v <- primes p
                  ]
     
-    merge f = (view f a1) `S.union` (view f a2)
     body   = Ands [ prevKV a1
                   , prevKV a2
-                  , sanGlobs (merge (aAnnotSt.sanitizeGlob)) (updates1++updates2)
-                  , taintEqs (merge (aAnnotSt.taintEq)) (updates1++updates2)
-                  , sourcesAreEqual srcs
+                  , sanGlobs (annots^.sanitizeGlob) (updates1++updates2)
+                  , taintEqs (annots^.taintEq) (updates1++updates2)
+                  , sourcesAreEqual $ srcLs annots
                   , nl1
                   , nr1
                   ]
 
-provedProperty :: PropertyOptions -> AlwaysBlock -> [Inv]
-provedProperty (PropertyOptions{..}) a = 
+--------------------------------------------------------------------------------
+provedProperty :: AnnotSt -> PropertyOptions -> AlwaysBlock -> [Inv]
+--------------------------------------------------------------------------------
+provedProperty annots (PropertyOptions{..}) a = 
   (if checkTagEq then tagEq else []) ++
   (if checkValEq then valEq else []) ++
   assertEqs
@@ -320,7 +338,7 @@ provedProperty (PropertyOptions{..}) a =
                                 }
                    , hId   = HornId i (InvTagEq i)
                    }
-            | s <- S.toList $ S.filter (isReg a) (a^.aAnnotSt^.sinks)
+            | s <- S.toList $ S.filter (isReg a) (annots^.sinks)
             ]
     valEq = [ Horn { hHead =  BinOp EQU (lvar s) (rvar s)
                    , hBody = Ands [ KV { kvId   = i
@@ -331,7 +349,7 @@ provedProperty (PropertyOptions{..}) a =
                                   ]
                    , hId   = HornId i (InvOther "l_sink=r_sink")
                    }
-            | s <- S.toList $ S.filter (isReg a) (a^.aAnnotSt^.sinks)
+            | s <- S.toList $ S.filter (isReg a) (annots^.sinks)
             ]
     assertEqs =
       [ Horn { hHead =  BinOp EQU (lvar s) (rvar s)
@@ -343,7 +361,7 @@ provedProperty (PropertyOptions{..}) a =
                             ]
              , hId   = HornId i (InvOther "left var = right var")
              }
-      | s <- S.toList $ S.filter (isReg a) (a^.aAnnotSt^.assertEq)
+      | s <- S.toList $ S.filter (isReg a) (annots^.assertEq)
       ]
 
 -------------------------------------------------------------------------------- 
@@ -380,12 +398,10 @@ primes v = [ makeVarName f v
 isReg :: AlwaysBlock -> Id -> Bool
 isReg a v = (Register v) `elem` (a ^. aSt ^. ports)
 
+-- TODO : is this not necessary ?
 filterSubs :: AlwaysBlock -> [(Id,Expr)] -> [(Id,Expr)]
-filterSubs a = filter (\(v,_) -> v `S.member` kv_vars)
-  where
-    kv_vars :: S.HashSet Id
-    kv_vars =
-      (S.fromList (allArgs fmt{leftVar=True} (a^.aSt)))
-      `S.union`
-      (S.fromList (allArgs fmt{rightVar=True} (a^.aSt)))
+-- filterSubs a = filter (\(v,_) -> v `S.member` (a^.aMd^.fp_vars))
+filterSubs _ = id
 
+srcLs :: AnnotSt -> [Id]
+srcLs = view (sources . to S.toList)

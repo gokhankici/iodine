@@ -15,12 +15,13 @@ import           Control.Monad.Reader
 import qualified Data.List                  as L
 import qualified Data.HashSet               as HS
 import qualified Data.HashMap.Strict        as M
+import qualified Data.IntMap.Strict         as IM
 import           Text.Printf
 
 import qualified Language.Fixpoint.Types    as FQT
 import           Language.Fixpoint.Types    hiding (Expr(..), KV)
 
-toFqFormat :: FPSt -> GInfo SubC Metadata
+toFqFormat :: FPSt -> GInfo SubC HornId
 toFqFormat fpst =
   let cns         = makeConstraints   fpst
       wfs         = makeWFConstraints fpst
@@ -120,9 +121,29 @@ toFqFormat fpst =
         ]
   in  fi cns wfs binders gConsts dConsts cuts qualifiers bindMds highOrBinds highOrQuals assrts axiomEnv dataDecls 
 
-makeConstraints :: FPSt -> [SubC Metadata]
-makeConstraints fpst = mc <$> zip [0..] (fpst ^. fpConstraints)
+makeConstraints :: FPSt -> [SubC HornId]
+makeConstraints fpst = snd $ IM.foldl' gos (0, []) (fpst ^. fpConstraints)
   where
+    gos :: (Integer, [SubC HornId]) -> [Inv] -> (Integer, [SubC HornId])
+    gos = L.foldl' go
+
+    go :: (Integer, [SubC HornId]) -> Inv -> (Integer, [SubC HornId])
+    go (n, subcs) horn = (n+1, (mc (n, horn)):subcs)
+
+    mc (n, (Horn{..})) = helper hBody hHead n hId
+
+    env es = insertsIBindEnv (getBindIds fpst es) emptyIBindEnv
+
+    helper bdy' hd n hId =
+      let bdy = Ands [eqs, bdy']
+      in  mkSubC
+          (env [bdy,hd])
+          (RR FInt (Reft (symbol "v", convertExpr bdy)))
+          (RR FInt (Reft (symbol "v", convertExpr hd)))
+          (Just n)              -- id
+          []                    -- tags
+          hId                   -- metadata
+
     eqs = Ands [ BinOp IFF (Var x1t) (Var x2t)
                | q       <- fpst ^. fpQualifiers
                , (x1,x2) <- case q of
@@ -130,19 +151,9 @@ makeConstraints fpst = mc <$> zip [0..] (fpst ^. fpConstraints)
                               _               -> []
                , (x1t, x2t) <- zip (makeBothTags [x1]) (makeBothTags [x2])
                ]
-    mc (n, (Horn{..})) = helper hBody hHead n hId
-    env es        = insertsIBindEnv (getBindIds fpst es) emptyIBindEnv
-    helper bdy' hd n hId =
-      let bdy = Ands [eqs, bdy']
-      in  mkSubC
-          (env [bdy,hd])
-          (RR FInt (Reft (symbol "v", convertExpr bdy)))
-          (RR FInt (Reft (symbol "v", convertExpr hd)))
-          (Just n)          -- id
-          []                -- tags
-          hId               -- metadata
 
-makeWFConstraints :: FPSt -> [WfC Metadata]
+
+makeWFConstraints :: FPSt -> [WfC HornId]
 makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
   where
     mwf a@(AB{..}) =

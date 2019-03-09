@@ -304,4 +304,5 @@ runUnitTest va (UnitTest{..}) =
   where
     va' = va { R.fileName   = verilogFile
              , R.moduleName = moduleName
+             , R.noSave     = True
              }
