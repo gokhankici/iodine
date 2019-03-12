@@ -51,8 +51,8 @@ abduction fn fcConfig st = do
     act = do
       -- load the good and bad annotations
       readAnnots fn
-
-      use (fpst.fpAnnotations) >>= debugM . printf "fpst = %s" . show
+      -- use (fpst.fpAnnotations) >>= debugM . printf "pos annots:\n%s" . show
+      -- use negAnnots >>= debugM . printf "neg annots:\n%s" . show
 
       (safe, sol) <- use fpst >>= runSolve
 

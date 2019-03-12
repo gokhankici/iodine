@@ -110,6 +110,11 @@ data AnnotSt = AnnotSt { _sources      :: S.HashSet Id
                        }
                deriving (Generic)
 
+data AnnotStFile = AnnotStFile { _goodAnnot :: AnnotSt
+                               , _badAnnot  :: AnnotSt
+                               }
+                 deriving (Generic)
+
 data St = St { _ports :: [Var]
              , _ufs   :: UFMap
              , _irs   :: [IR]
@@ -131,6 +136,7 @@ emptySt = St { _ports = mempty
              }
 
 makeLenses ''AnnotSt
+makeLenses ''AnnotStFile
 makeLenses ''St
 makeLenses ''BlockMetadata
 makeLenses ''AlwaysBlock
@@ -389,33 +395,46 @@ idAppend = T.append
 idCons :: Char -> Id -> Id
 idCons = T.cons
 
-instance Y.ToJSON AnnotSt where
-  toJSON a = Y.object [ f "init_eq"   sanitize
-                      , f "always_eq" sanitizeGlob
-                      -- , f "sources"   sources
-                      -- , f "sinks"     sinks
-                      -- , f "taint_eq"  taintEq
-                      -- , f "assert_eq" assertEq
-                      ]
+instance Monoid AnnotStFile where
+  mempty = AnnotStFile mempty mempty
+  m1 `mappend` m2 =
+    over goodAnnot (`mappend` (m2^.goodAnnot)) .
+    over badAnnot  (`mappend` (m2^.badAnnot)) $
+    m1
+
+instance Y.ToJSON AnnotStFile where
+  toJSON af = Y.object [ "good" Y..= h (af^.goodAnnot)
+                       , "bad"  Y..= h (af^.badAnnot)
+                       ]
     where
-      f name getter = name Y..= (a ^. getter)
+      h a = Y.object [ f a "init_eq"   sanitize
+                     , f a "always_eq" sanitizeGlob
+                     ]
+      f a name getter = name Y..= (a ^. getter)
 
-instance Y.FromJSON AnnotSt where
-  parseJSON (Y.Object o) =
-    return mempty
-    -- >>= f "sources"   sources
-    -- >>= f "sinks"     sinks
-    -- >>= f "taint_eq"  taintEq
-    -- >>= f "assert_eq" assertEq
-    >>= f "init_eq"   sanitize
-    >>= f "always_eq" sanitizeGlob
+instance Y.FromJSON AnnotStFile where
+  parseJSON v = do
+    ga <- getAnnot "good"
+    ba <- getAnnot "bad"
+    return $
+      mempty &
+      goodAnnot .~ ga &
+      badAnnot  .~ ba
+
     where
-      f name setter a = (\x -> set setter x a) <$> (o Y..: name)
+      getAnnot k = Y.withObject "expected object" (\o -> (o Y..: k) >>= annotParser) v
 
-  parseJSON _ = error "Could not parse file as AnnotSt"
+      f o name setter a = (\x -> set setter x a) <$> (o Y..: name)
 
-encodeAnnotSt :: FilePath -> AnnotSt -> IO ()
-encodeAnnotSt = Y.encodeFile
+      annotParser o = do
+        return mempty
+        >>=
+        f o "init_eq" sanitize
+        >>=
+        f o "always_eq" sanitizeGlob
 
-decodeAnnotSt :: MonadIO m => FilePath -> m AnnotSt
-decodeAnnotSt = Y.decodeFileThrow
+encodeAnnotStFile :: FilePath -> AnnotStFile -> IO ()
+encodeAnnotStFile = Y.encodeFile
+
+decodeAnnotStFile :: MonadIO m => FilePath -> m AnnotStFile
+decodeAnnotStFile = Y.decodeFileThrow

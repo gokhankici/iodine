@@ -47,5 +47,4 @@ flycheck_*.el
 
 /.test-report.txt
 
-*.annot.good
-*.annot.bad
+*.annot

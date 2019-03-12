@@ -18,7 +18,6 @@ import Verylog.Utils
 import qualified Language.Fixpoint.Types        as FT
 
 import           Control.Lens hiding ((<.>))
-import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet        as HS
@@ -26,32 +25,30 @@ import           System.FilePath.Posix
 import           System.Directory
 import           Text.Printf
 
-goodAnnotFile, badAnnotFile :: FilePath -> FilePath
-goodAnnotFile f = takeDirectory f </> "" <.> takeFileName f <.> "annot" <.> "good"
-badAnnotFile  f = takeDirectory f </> "" <.> takeFileName f <.> "annot" <.> "bad"
-
 -- | @.annot.good@ file is concatanated to the annotations defined in the actual file
 --   @.annot.bad@ file is used as it is
 readAnnots :: FilePath -> M ()
 readAnnots f = do
-  liftIO $ printf "Reading from annot files:\n%s\n%s\n" fg fb
-  wf fb $ assign negAnnots
-  wf fg (badStDiff >=> (modifying (fpst.fpAnnotations) . mappend))
+  liftIO $ printf "Reading from annot files:\n%s\n" annotFile
+  c <- liftIO $ doesFileExist annotFile
+  if c
+    then do af <- decodeAnnotStFile annotFile
+            assign negAnnots (af^.badAnnot)
+            badStDiff (af^.goodAnnot) >>=
+              modifying (fpst.fpAnnotations) . mappend
+    else return ()
   where
-    fg = goodAnnotFile f
-    fb = badAnnotFile f
-
-    wf fn act = do
-      c <- liftIO $ doesFileExist fn
-      if c
-        then decodeAnnotSt fn >>= act
-        else return ()
+    annotFile = takeDirectory f </> "" <.> takeFileName f <.> "annot"
 
 -- | Writes the current annotations to the files
 writeAnnots :: FilePath -> M ()
 writeAnnots f = do
-  use (fpst.fpAnnotations) >>= liftIO2 encodeAnnotSt (goodAnnotFile f)
-  use negAnnots            >>= liftIO2 encodeAnnotSt (badAnnotFile f)
+  ga <- use (fpst.fpAnnotations)
+  ba <- use negAnnots
+  let af = mempty & goodAnnot .~ ga & badAnnot .~ ba
+  liftIO2 encodeAnnotStFile annotFile af
+  where
+    annotFile = takeDirectory f </> "" <.> takeFileName f <.> "annot"
 
 toR :: Sol -> RS
 toR sol = goTops $ HM.elems sol
@@ -112,4 +109,3 @@ toR sol = goTops $ HM.elems sol
 
     err :: Show a => a -> b
     err = error . printf "cannot parse %s" . show
-
