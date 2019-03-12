@@ -3,12 +3,13 @@
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE MultiWayIf #-}
 
-module Verylog.Abduction (abduction) where
+module Verylog.Abduction.Abduction (abduction) where
 
 import Prelude hiding (break)
 
 import Verylog.Solver.FP.Solve
 import Verylog.Solver.FP.Types
+import Verylog.Transform.FP.VCGen
 import Verylog.Transform.Utils
 import Verylog.Language.Types
 import Verylog.Utils
@@ -20,7 +21,10 @@ import           Control.Lens
 import           Control.Monad.State.Lazy
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet        as HS
+import qualified Data.Sequence       as SQ
 import           Data.Hashable
+import           Data.List (foldl', intercalate)
+import           Data.Foldable (toList)
 import           System.Random
 import           Text.Printf
 
@@ -28,7 +32,10 @@ import Debug.Trace
 
 type Sol = FT.FixSolution
 type M   = StateT S IO
--- type Ids = HS.HashSet Id
+
+data GlobalMetadata =
+  GlobalMetadata { _gmVariables :: SQ.Seq Id
+                 }
 
 -- state used in the annotation algorithm
 data S = S { _t       :: Double -- temperature
@@ -38,38 +45,64 @@ data S = S { _t       :: Double -- temperature
            , _curStep :: Int    -- current step (between 0 and step)
 
            , _solution :: Sol     -- solution returned by liquid-fixpoint
+           , _isSafe   :: Bool
            , _cost     :: Double  -- the cost of the current annotations & solution
            , _fpst     :: FPSt    -- current solution
 
-           , _cfg     :: FC.Config
+           , _cfg :: FC.Config
+
+           , _globalMd :: GlobalMetadata
+
+           -- , _negAnnots :: AnnotSt
            }
 
+makeLenses ''GlobalMetadata
 makeLenses ''S
 
 --------------------------------------------------------------------------------
 abduction :: FC.Config -> FPSt -> IO (Bool, Sol)
 --------------------------------------------------------------------------------
 abduction fcConfig st = do
-  (_, sol) <- solve fcConfig st
+  (safe, sol) <- solve fcConfig st
   let r = toR sol
   putStrLn $ show r
 
   let initialState =
-        S { _t        = 1.0
-          , _tMin     = 1e-5
-          , _alpha    = 0.1
-          , _step     = 2
-          , _curStep  = 0
-          , _solution = sol
-          , _cost     = calculateCost st sol
-          , _fpst     = st
-          , _cfg      = fcConfig
+        S { _t         = 1.0
+          , _tMin      = 1e-5
+          , _alpha     = 0.1
+          , _step      = 2
+          , _curStep   = 0
+          , _isSafe    = safe
+          , _solution  = sol
+          , _cost      = calculateCost st (safe,sol)
+          , _fpst      = st
+          , _cfg       = fcConfig
+          , _globalMd  = trace (show gmd) gmd
+          -- , _negAnnots = mempty
           }
 
   (isSafe', s') <- runStateT outerLoop initialState
   let sol' = s' ^. solution
+      ast' = s' ^. fpst ^. fpAnnotations
+
+  traceM $ show ast'
 
   return (isSafe', sol')
+
+  where
+    gmd = collectMd (st^.fpABs)
+
+    collectMd :: [AlwaysBlock] -> GlobalMetadata
+    collectMd =
+      let f m a = over gmVariables (upd a) m
+          upd a = let ws = s2sq $ a ^. aMd ^. mRegisters
+                      rs = s2sq $ a ^. aMd ^. mWires
+                  in  (SQ.><) (rs SQ.>< ws)
+      in foldl' f mempty
+
+    s2sq :: HS.HashSet a -> SQ.Seq a
+    s2sq = HS.foldl' (SQ.|>) SQ.empty
 
 outerLoop :: M Bool
 outerLoop = while False ((>) <$> use t <*> use tMin) $ do
@@ -87,35 +120,69 @@ innerLoop :: M Bool
 innerLoop = while False ((>) <$> use step <*> use curStep) $ do
   debug l $ curStep += 1
   fpst' <- sample
-  (safe, sol') <- runSolve fpst'
-  let cost'  = calculateCost fpst' sol'
-  let updAct = updateSol fpst' sol' cost'
-  if safe
-    then break $ updAct >> return True
-    else continue $
-         do p <- acceptanceProb cost'
-            r <- liftIO randomIO
-            when (p > r) updAct
-            return False
+  (safe', sol') <- runSolve fpst'
+  let cost'  = calculateCost fpst' (safe',sol')
+  p <- acceptanceProb cost'
+  traceM $ printf "acceptance prob = %g" p
+  ifM (fmap (p >) randM)
+    (updateSol safe' fpst' sol' cost')
+    (traceM $ printf "skipping solution ::: %s" (show $ fpst'^.fpAnnotations)
+    )
+  ifM (use isSafe)
+    (break $ return True)
+    (continue $ return False)
 
 sample :: M FPSt
 sample = do
-  -- st <- use fpst
-  -- let a = st ^. fpAnnotations
-  -- rs <- toR <$> use solution
-  traceM "Fix sample !!!"
-  use fpst
+  ast' <- use (globalMd.gmVariables)
+          >>=
+          randomSample
+          >>=
+          randomVar
+  toFpSt' ast' <$> use fpst
 
-calculateCost :: FPSt -> Sol -> Double
-calculateCost _ _ = 0.0
+  where
+    randomVar :: Id -> M AnnotSt
+    randomVar v =
+      chooseM
+      (over sanitize     (HS.insert v) <$> use (fpst . fpAnnotations))
+      (over sanitizeGlob (HS.insert v) <$> use (fpst . fpAnnotations))
+      
+calculateCost :: FPSt -> (Bool, Sol) -> Double
+calculateCost st (safe, _) =
+  if   safe
+  then 0.0
+  else costs
+  where
+    costs = initEqTotalCost + alwaysEqTotalCost + extraCost1
 
+    initEqCost        = 1.0 :: Double
+    alwaysEqCost      = 100.0 :: Double
+    initEqTotalCost   = sz ies * initEqCost
+    alwaysEqTotalCost = sz aes * alwaysEqCost
+
+    sz :: HS.HashSet a -> Double
+    sz = fromIntegral . HS.size
+
+    extraCost1 :: Double
+    extraCost1 =
+      let f c v = if | v `HS.member` ies -> c + initEqCost   * 10.0
+                     | v `HS.member` aes -> c + alwaysEqCost ^ (2::Int)
+                     | otherwise         -> c
+      in foldl' f 0.0 (ast^.sinks)
+
+    ast = st ^. fpAnnotations
+    ies = ast ^. sanitize
+    aes = ast ^. sanitizeGlob
 
 -- -----------------------------------------------------------------------------
 -- Helper functions
 -- -----------------------------------------------------------------------------
 
-updateSol :: FPSt -> Sol -> Double -> M ()
-updateSol fpst' sol' cost' = do
+updateSol :: Bool -> FPSt -> Sol -> Double -> M ()
+updateSol safe' fpst' sol' cost' = do
+  traceM $ printf "UPDATING SOLUTION ::: %s" (show $ fpst'^.fpAnnotations)
+  isSafe   .= safe'
   fpst     .= fpst'
   solution .= sol'
   cost     .= cost'
@@ -130,6 +197,18 @@ acceptanceProb newCost = do
   currentTemp <- use t
   return $ exp ( (oldCost - newCost) / currentTemp )
 
+randM :: (Random a, MonadIO m) => m a
+randM = liftIO randomIO
+
+-- | Run one of the actions randomly and return the result
+chooseM :: MonadIO m => m a -> m a -> m a
+chooseM = ifM randM
+
+randomSample :: MonadIO m => SQ.Seq a -> m a
+randomSample sq =
+  if   SQ.length sq == 0
+  then error "randomSample is called with an empty sequence !"
+  else (SQ.index sq) . (`mod` (SQ.length sq)) <$> randM
 
 -- -----------------------------------------------------------------------------
 -- Parsing liquid-fixpoint output
@@ -229,3 +308,13 @@ debug s act = (liftIO $ putStrLn s) >> act
 
 debugM :: MonadIO m => m String -> m a -> m a
 debugM ms act = ms >>= liftIO1 putStrLn >> act
+
+instance Monoid GlobalMetadata where
+  mempty = GlobalMetadata SQ.empty
+  m1 `mappend` m2 =
+    over gmVariables (SQ.>< m2 ^. gmVariables) $
+    m1
+
+instance Show GlobalMetadata where
+  show gm = printf "GlobalMetadata(vars=[%s])"
+            (intercalate ", " (fmap id2Str $ toList (gm^.gmVariables)))

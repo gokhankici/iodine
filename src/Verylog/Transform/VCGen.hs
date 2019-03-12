@@ -3,41 +3,32 @@
 module Verylog.Transform.VCGen ( invs
                                ) where
 
+import Verylog.Language.Types
+import Verylog.Solver.Common
+import Verylog.Transform.TransitionRelation
+import Verylog.Transform.Utils              as U
+
+
 import           Control.Exception
 import           Control.Lens
-import           Control.Monad.State.Lazy
 import           Data.Maybe
 import           Data.List
 import qualified Data.HashSet             as S
-import qualified Data.HashMap.Strict      as M
 import qualified Data.IntMap.Strict       as IM
-
-import           Verylog.Transform.TransitionRelation
-import           Verylog.Transform.Utils as U
-import           Verylog.Language.Types
-
-import           Verylog.Solver.Common
 import           Text.Printf
-
-data PropertyOptions = PropertyOptions { checkTagEq :: Bool
-                                       , checkValEq :: Bool
-                                       }
-
-defaultPropertyOptions :: PropertyOptions
-defaultPropertyOptions = PropertyOptions { checkTagEq = True
-                                         , checkValEq = False
-                                         }
 
 --------------------------------------------------------------------------------
 invs :: AnnotSt -> [AlwaysBlock] -> Constraints
 --------------------------------------------------------------------------------
-invs annots as =
-  foldl' go2 (foldl' go mempty as) nics
+invs annots as = cs2
   where
+    cs1 = foldl' go mempty as
+    cs2 = foldl' go2 cs1 nics
+
     nics = non_interference_checks annots as
 
     go2 c (id1, _, i) =
-      let f Nothing    = Just [i]
+      let f Nothing   = Just [i]
           f (Just is) = Just (i:is)
       in  IM.alter f id1 c
 
@@ -214,7 +205,6 @@ alwaysEqs (AEC{..}) vs subs = Ands (initEq ++ primeEq)
         in case (lookup vl subs, lookup vr subs) of
              (Just el, Just er) -> Just (el, er, o)
              _                  -> Nothing
-                                   
       | f <- fmts
       ]
   
@@ -227,13 +217,18 @@ non_interference_checks annots as = non_int_chk as [] []
     hasCommon :: S.HashSet Id -> S.HashSet Id -> Bool
     hasCommon s1 s2 = not . null $ S.intersection s1 s2  
 
-    non_int_chk :: [AlwaysBlock] -> [(RWSet,AlwaysBlock)] -> [NIC] -> [NIC]
+    non_int_chk :: [AlwaysBlock] -> [AlwaysBlock] -> [NIC] -> [NIC]
     non_int_chk []      _checked cs = cs
     non_int_chk (a1:a1s) checked cs =
-      let cs'                     = foldl' f cs checked
-          rw1@(r1,w1)             = readWriteSet a1
-          f cs_prev ((r2,w2), a2) =
-            let i1 = a1 ^. aId; i2 = a2 ^. aId in
+      let cs' = foldl' f cs checked
+          r1  = a1 ^. aMd ^. mRegReadSet
+          w1  = a1 ^. aMd ^. mRegWriteSet
+          f cs_prev a2 =
+            let i1 = a1 ^. aId
+                i2 = a2 ^. aId
+                r2 = a2 ^. aMd ^. mRegReadSet
+                w2 = a2 ^. aMd ^. mRegWriteSet
+            in
             if   hasCommon w1 w2
             then (i1, i2, non_interference_inv annots a1 a2) :
                  (i2, i1, non_interference_inv annots a2 a1) :
@@ -244,39 +239,7 @@ non_interference_checks annots as = non_int_chk as [] []
                  in  if   hasCommon w2 r1
                      then (i2, i1, non_interference_inv annots a2 a1) : t12
                      else t12
-      in non_int_chk a1s ((rw1, a1):checked) cs'
-
-type RWSet = (S.HashSet Id, S.HashSet Id)
-
-readWriteSet :: AlwaysBlock -> RWSet
-readWriteSet a = let (r,w) = evalState (comp (a^.aStmt) >> get) ([], [])
-                     r'    = readVars r
-                     w'    = writeVars w
-                 in (r' `S.intersection` regs, w' `S.intersection` regs)
-  where
-    us = a^.aSt^.ufs
-
-    regs = S.fromList $ getRegisters a
-
-    -- readVars  v = S.fromList . isReg a $ M.lookupDefault [v] v us
-    -- writeVars v = S.fromList . isReg a $ if M.member v us then [] else [v]
-
-    readVars, writeVars :: [Id] -> S.HashSet Id
-    readVars l = foldl' (\s v -> case M.lookup v us of
-                                   Nothing     -> S.insert v s
-                                   Just (_,vs) -> foldl' (flip S.insert) s vs) S.empty l
-    writeVars = S.fromList
-    
-    comp :: Stmt -> State ([Id],[Id]) ()
-    comp (Block ss)            = sequence_ (comp <$> ss)
-    comp (BlockingAsgn{..})    = do _1 %= (:) rhs
-                                    _2 %= (:) lhs
-    comp (NonBlockingAsgn{..}) = do _1 %= (:) rhs
-                                    _2 %= (:) lhs
-    comp (IfStmt{..})          = do _1 %= (:) ifCond
-                                    comp thenStmt
-                                    comp elseStmt
-    comp Skip                  = return ()
+      in non_int_chk a1s (a1:checked) cs'
 
 --------------------------------------------------------------------------------
 non_interference_inv :: AnnotSt -> AlwaysBlock -> AlwaysBlock -> Inv
@@ -364,6 +327,16 @@ provedProperty annots (PropertyOptions{..}) a =
       | s <- S.toList $ S.filter (isReg a) (annots^.assertEq)
       ]
 
+data PropertyOptions = PropertyOptions { checkTagEq :: Bool
+                                       , checkValEq :: Bool
+                                       }
+
+defaultPropertyOptions :: PropertyOptions
+defaultPropertyOptions = PropertyOptions { checkTagEq = True
+                                         , checkValEq = False
+                                         }
+
+
 -------------------------------------------------------------------------------- 
 -- Helper functions
 -------------------------------------------------------------------------------- 
@@ -400,7 +373,6 @@ isReg a v = (Register v) `elem` (a ^. aSt ^. ports)
 
 -- TODO : is this not necessary ?
 filterSubs :: AlwaysBlock -> [(Id,Expr)] -> [(Id,Expr)]
--- filterSubs a = filter (\(v,_) -> v `S.member` (a^.aMd^.fp_vars))
 filterSubs _ = id
 
 srcLs :: AnnotSt -> [Id]

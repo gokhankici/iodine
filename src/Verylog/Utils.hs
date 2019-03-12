@@ -2,6 +2,7 @@
 
 module Verylog.Utils ( app2
                      , liftIO1, liftIO2
+                     , ifM
                      , while, continue, break, Loop
                      , mapOfSetInsert
                      , silence
@@ -37,6 +38,11 @@ liftIO1 = (.) liftIO
 
 liftIO2 :: MonadIO m => (a -> b -> IO c) -> a -> b -> m c
 liftIO2 = ((.).(.)) liftIO
+
+ifM :: Monad m => m Bool -> m a -> m a -> m a
+ifM mc ma1 ma2 = do
+  c <- mc
+  if c then ma1 else ma2
 
 -- -----------------------------------------------------------------------------
 -- Monad Loops

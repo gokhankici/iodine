@@ -20,12 +20,12 @@ type ParseOutput  = (States, Qualifiers)
 type ABS          = [AlwaysBlock]
 
 -- parse       :: (FilePath, String) -> (States, Qualifiers)
--- flatten     :: States -> ABS
+-- modularize  :: States -> ABS
 -- sanityCheck :: ABS -> ABS
 -- merge       :: (ABS, Qualifiers) -> (ABS, Qualifiers)
 -- toFpSt      :: (ABS, (AnnotSt, Qualifiers)) -> FPSt
 
--- parse --> flatten --> sanityCheck --> merge --> toFpSt --> liquid-fixpoint
+-- parse --> modularize --> sanityCheck --> merge --> toFpSt --> liquid-fixpoint
 
 --------------------------------------------------------------------------------
 pipeline :: ParseInput -> FPSt
@@ -41,7 +41,7 @@ common :: ParseInput -> Intermediary
 common = parse >>> afterParse
 
 afterParse :: ParseOutput -> Intermediary
-afterParse = ( (fst >>> flatten)          -- ABS
+afterParse = ( (fst >>> modularize)       -- ABS
                &&&
                first snd                  -- (AnnotSt, Qualifiers)
              )

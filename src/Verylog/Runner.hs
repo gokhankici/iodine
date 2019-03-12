@@ -9,7 +9,7 @@ module Verylog.Runner ( VerylogArgs(..)
                       , main
                       ) where
 
-import qualified Verylog.Abduction as VA
+import qualified Verylog.Abduction.Abduction as VA
 import           Verylog.Pipeline
 import           Verylog.Utils
 import           Verylog.Solver.FP.Solve

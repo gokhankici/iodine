@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Verylog.Transform.FP.VCGen ( toFpSt
+                                  , toFpSt'
                                   ) where
 
 import           Verylog.Language.Types
@@ -12,7 +13,6 @@ import           Verylog.Transform.VCGen
 import           Control.Monad.State.Lazy
 import           Control.Lens
 import           Data.List
--- import qualified Data.HashSet             as S
 import qualified Data.HashMap.Strict      as M
 import qualified Data.IntMap.Strict       as IM
 import qualified Language.Fixpoint.Types  as FQ
@@ -21,15 +21,13 @@ import qualified Language.Fixpoint.Types  as FQ
 
 type S = State (Int, BindMap)
 
--- toFpSt' :: FPSt -> AnnotSt -> FPSt
--- toFpSt' fpst allAnnots =
---   set fpABs as' .
---   set fpConstraints cs .
---   set fpAnnotations allAnnots $
---   fpst 
---   where
---     as' = updateAnnots allAnnots <$> fpst ^. fpABs
---     cs  = invs allAnnots as'
+toFpSt' :: AnnotSt -> FPSt -> FPSt
+toFpSt' newAnnots st =
+  set fpConstraints cs .
+  set fpAnnotations newAnnots $
+  st
+  where
+    cs = invs newAnnots (st^.fpABs)
 
 toFpSt  :: ([AlwaysBlock], (AnnotSt, [FPQualifier])) -> FPSt
 toFpSt (_as, (allAnnots, allQualifiers)) =

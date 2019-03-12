@@ -26,10 +26,10 @@ import           Control.DeepSeq
 -- IR for the formalism
 --------------------------------------------------------------------------------
 
-data BlockMetadata = BlockMetadata { _mVariables :: S.HashSet Id
-                                   , _mReadSet   :: S.HashSet Id
-                                   , _mWriteSet  :: S.HashSet Id
-                                   , _fp_vars    :: S.HashSet Id
+data BlockMetadata = BlockMetadata { _mRegisters   :: S.HashSet Id
+                                   , _mWires       :: S.HashSet Id
+                                   , _mRegReadSet  :: S.HashSet Id
+                                   , _mRegWriteSet :: S.HashSet Id
                                    }
                    deriving (Generic)
 
@@ -343,15 +343,15 @@ instance Eq AlwaysBlock where
   a1 == a2 = (a1 ^. aId) == (a2 ^. aId)
 
 instance Mo.Monoid BlockMetadata where
-  mempty = BlockMetadata { _mVariables = mempty
-                         , _mReadSet   = mempty
-                         , _mWriteSet  = mempty
-                         , _fp_vars    = mempty
+  mempty = BlockMetadata { _mRegisters   = mempty
+                         , _mWires       = mempty
+                         , _mRegReadSet  = mempty
+                         , _mRegWriteSet = mempty
                          }
-  m1 `mappend` m2 = BlockMetadata { _mVariables = j mVariables
-                                  , _mReadSet   = j mReadSet
-                                  , _mWriteSet  = j mWriteSet
-                                  , _fp_vars    = j fp_vars
+  m1 `mappend` m2 = BlockMetadata { _mRegisters   = j mRegisters
+                                  , _mWires       = j mWires
+                                  , _mRegReadSet  = j mRegReadSet
+                                  , _mRegWriteSet = j mRegWriteSet
                                   }
     where
       j o = (m1^.o) `S.union` (m2^.o)

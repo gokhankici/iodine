@@ -109,7 +109,7 @@ mergeClocks as = groups ++ assigns ++ rest
                , _aId      = n + maxId
                , _aSt      = mconcat $ view aSt <$> gs
                , _aLoc     = ("clk join", "clk join")
-               , _aMd      = mempty
+               , _aMd      = mconcat $ view aMd <$> gs
                }
 
 mergeAssigns :: [AlwaysBlock] -> [AlwaysBlock]
@@ -148,7 +148,7 @@ mergeBlocks abMap nss =
                 , _aId    = n + maxId
                 , _aSt    = mconcat $ view aSt <$> as2
                 , _aLoc   = ("mergeBlocks", "mergeBlocks")
-                , _aMd    = mempty
+                , _aMd    = mconcat $ view aMd <$> as2
                 }
         ns = debug (show ns') ns'
 
