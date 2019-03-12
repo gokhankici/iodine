@@ -21,6 +21,7 @@ import           Data.Hashable
 import qualified Data.Monoid as Mo
 import           GHC.Generics hiding (to)
 import           Control.DeepSeq
+import qualified Data.Yaml  as Y
 
 --------------------------------------------------------------------------------
 -- IR for the formalism
@@ -379,7 +380,7 @@ id2Doc = text . T.unpack
 id2Str :: Id -> String
 id2Str = T.unpack
 
-str2Id :: String -> Id  
+str2Id :: String -> Id
 str2Id = T.pack
 
 idAppend :: Id -> Id -> Id
@@ -387,3 +388,34 @@ idAppend = T.append
 
 idCons :: Char -> Id -> Id
 idCons = T.cons
+
+instance Y.ToJSON AnnotSt where
+  toJSON a = Y.object [ f "init_eq"   sanitize
+                      , f "always_eq" sanitizeGlob
+                      -- , f "sources"   sources
+                      -- , f "sinks"     sinks
+                      -- , f "taint_eq"  taintEq
+                      -- , f "assert_eq" assertEq
+                      ]
+    where
+      f name getter = name Y..= (a ^. getter)
+
+instance Y.FromJSON AnnotSt where
+  parseJSON (Y.Object o) =
+    return mempty
+    -- >>= f "sources"   sources
+    -- >>= f "sinks"     sinks
+    -- >>= f "taint_eq"  taintEq
+    -- >>= f "assert_eq" assertEq
+    >>= f "init_eq"   sanitize
+    >>= f "always_eq" sanitizeGlob
+    where
+      f name setter a = (\x -> set setter x a) <$> (o Y..: name)
+
+  parseJSON _ = error "Could not parse file as AnnotSt"
+
+encodeAnnotSt :: FilePath -> AnnotSt -> IO ()
+encodeAnnotSt = Y.encodeFile
+
+decodeAnnotSt :: MonadIO m => FilePath -> m AnnotSt
+decodeAnnotSt = Y.decodeFileThrow

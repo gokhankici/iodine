@@ -9,7 +9,7 @@ module Verylog.Runner ( VerylogArgs(..)
                       , main
                       ) where
 
-import qualified Verylog.Abduction.Abduction as VA
+import qualified Verylog.Abduction.Runner as VA
 import           Verylog.Pipeline
 import           Verylog.Utils
 import           Verylog.Solver.FP.Solve
@@ -17,7 +17,7 @@ import           Verylog.Language.Parser
 import           Verylog.Language.Types
 import           Verylog.Solver.FP.FQ
 
-import Language.Fixpoint.Types (saveQuery, showpp)
+import Language.Fixpoint.Types (saveQuery)
 import Language.Fixpoint.Types.Config as FC
 
 import Control.Exception
@@ -219,9 +219,8 @@ checkIR (VerylogArgs{..}) = makeSilent $ do
   let fpst = pipeline (fileName, fileContents)
 
   if | vcgen     -> saveQuery cfg (toFqFormat fpst) >> return True
-     | otherwise -> do let act = if abduction then VA.abduction else solve
-                       (safe, sol) <- act cfg fpst
-                       putStrLn (showpp sol)
+     | otherwise -> do let act = if abduction then VA.abduction fileName else solve
+                       (safe, _sol) <- act cfg fpst
                        return safe
   where
     makeSilent = if noFPOutput then silence else id

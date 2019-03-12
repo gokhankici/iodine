@@ -14,5 +14,7 @@ extra-deps:
 - QuickCheck-2.12.6.1
 - hspec-core-2.7.0
 - hspec-discover-2.7.0
+- yaml-0.11.0.0
+- libyaml-0.1.1.0
 
 

@@ -38,6 +38,7 @@ dependencies:
 - cmdargs
 - random
 - text
+- yaml
 
 library:
   source-dirs:           src

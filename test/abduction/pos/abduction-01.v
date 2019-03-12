@@ -1,13 +1,15 @@
-module test(clk);
-   input clk, slow;
-   reg   slow;                  
-   reg   x;                     // @annot{taint_source(x)}
-   reg   y;                     // @annot{taint_sink(y)}
+module test(clk, slow, x);
+   // @annot{taint_source(x)}
+   // @annot{taint_sink(y)}
+
+   input clk, slow, x;
+   reg   y;
 
    always @(posedge clk)
-     if (slow == 1)
-        x <= x;
-     else 
-        y <= x;
-   
+     if (slow == 1) begin
+        y <= y;
+     end else begin
+       y <= x;
+     end
+
 endmodule

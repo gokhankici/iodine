@@ -46,3 +46,6 @@ flycheck_*.el
 .dir-locals.el
 
 /.test-report.txt
+
+*.annot.good
+*.annot.bad
