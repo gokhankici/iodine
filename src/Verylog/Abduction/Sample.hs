@@ -14,7 +14,6 @@ import Verylog.Abduction.Types
 import Verylog.Abduction.Utils
 
 import Verylog.Solver.FP.Types
-import Verylog.Transform.FP.VCGen
 import Verylog.Language.Types
 
 import           Control.Lens
@@ -22,17 +21,16 @@ import qualified Data.HashSet        as HS
 import           Data.List (foldl')
 
 --------------------------------------------------------------------------------
-sample :: M FPSt
+sample :: M AnnotSt
 --------------------------------------------------------------------------------
 sample = do
-  ast' <- use (globalMd.gmVariables)
-          >>=
-          randomSample
-          >>=
-          randomVar
-          >>=
-          badStDiff
-  toFpSt' ast' <$> use fpst
+  use (globalMd.gmVariables)
+    >>=
+    randomSample
+    >>=
+    randomVar
+    >>=
+    badStDiff
   where
     randomVar :: Id -> M AnnotSt
     randomVar v =
@@ -50,16 +48,22 @@ acceptanceProb newCost = do
 
 
 --------------------------------------------------------------------------------
-calculateCost :: FPSt -> (Bool, Sol) -> Double
+calculateCost :: AnnotSt -> (Bool, Sol) -> M Double
 --------------------------------------------------------------------------------
-calculateCost st (safe, _) =
-  if   safe
-  then 0.0
-  else costs
+calculateCost newAnnots (safe, _) = do
+  snks <- use (fpst.fpAnnotations.sinks)
+
+  let extraCost1 =
+        let f c v = if | v `HS.member` ies -> c + initEqCost   * 10.0
+                       | v `HS.member` aes -> c + alwaysEqCost ^ (2::Int)
+                       | otherwise         -> c
+        in foldl' f 0.0 snks
+
+  return $ if   safe
+           then 0.0
+           else initEqTotalCost + alwaysEqTotalCost + extraCost1
 
   where
-    costs = initEqTotalCost + alwaysEqTotalCost + extraCost1
-
     initEqCost        = 1.0 :: Double
     alwaysEqCost      = 100.0 :: Double
     initEqTotalCost   = sz ies * initEqCost
@@ -68,13 +72,5 @@ calculateCost st (safe, _) =
     sz :: HS.HashSet a -> Double
     sz = fromIntegral . HS.size
 
-    extraCost1 :: Double
-    extraCost1 =
-      let f c v = if | v `HS.member` ies -> c + initEqCost   * 10.0
-                     | v `HS.member` aes -> c + alwaysEqCost ^ (2::Int)
-                     | otherwise         -> c
-      in foldl' f 0.0 (ast^.sinks)
-
-    ast = st ^. fpAnnotations
-    ies = ast ^. sanitize
-    aes = ast ^. sanitizeGlob
+    ies = newAnnots ^. sanitize
+    aes = newAnnots ^. sanitizeGlob

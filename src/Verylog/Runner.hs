@@ -155,7 +155,12 @@ normalizePaths (VerylogArgs{..}) = do
 -- -----------------------------------------------------------------------------
 generateIR :: VerylogArgs -> IO VerylogArgs
 -- -----------------------------------------------------------------------------
-generateIR (VerylogArgs{..}) = runPreProcessor >> runIVL >> appendAnnots >> return result
+generateIR (VerylogArgs{..}) = do
+  runPreProcessor
+  runIVL
+  appendAnnots
+  return result
+
   where
     -- run ivlpp preprocessor on the given verilog file
     runPreProcessor = withCurrentDirectory verilogDir $ do

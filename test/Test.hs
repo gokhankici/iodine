@@ -10,6 +10,7 @@ import qualified Verylog.Runner as R
 
 import Control.Lens hiding (simple, (<.>))
 import Control.Monad
+import GHC.Generics hiding (to, moduleName)
 import System.Console.CmdArgs.Explicit
 import System.Environment
 import System.Exit
@@ -17,7 +18,7 @@ import System.FilePath.Posix
 import Test.Hspec
 import Test.Hspec.Core.Runner
 import Test.Hspec.Core.Spec
-import GHC.Generics hiding (to, moduleName)
+import Text.Printf
 
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
@@ -27,6 +28,7 @@ data TestArgs = TestArgs { _verbose      :: Bool
                          , _iodineArgs   :: [String]
                          , _hspecArgs    :: [String] -- rest of the positional arguments
                          , _runAbduction :: Bool
+                         , _dryRun       :: Bool
                          }
               deriving (Generic, Show)
 
@@ -39,8 +41,10 @@ testArgs = mode programName def detailsText (flagArg argUpd "HSPEC_ARG") flags
               "This is passed to the Iodine script directly."
             , flagNone ["a", "abduction"] (set runAbduction True)
               "Only run the abduction tests, otherwise they are disabled."
-            ,  flagNone ["v", "verbose"] (set verbose True)
+            , flagNone ["v", "verbose"] (set verbose True)
               "Display both stdout & stderr of a test."
+            , flagNone ["dry-run"] (set dryRun True)
+              "Print the calls to Iodine"
             , flagNone ["h", "help"] (set help True)
               "Displays this help message."
             ]
@@ -57,6 +61,7 @@ testArgs = mode programName def detailsText (flagArg argUpd "HSPEC_ARG") flags
                    , _iodineArgs   = []
                    , _hspecArgs    = []
                    , _runAbduction = False
+                   , _dryRun       = False
                    }
 
 parseOpts :: IO TestArgs
@@ -264,7 +269,7 @@ main = do
   va <- updateDef . invalidate <$> R.parseArgs ("" : "" : opts ^. iodineArgs)
 
   readConfig defaultConfig (opts^.hspecArgs)
-    >>= withArgs [] . runSpec (spec va)
+    >>= withArgs [] . runSpec (spec opts va)
     >>= evaluateSummary
   where
     invalidate va = va { R.fileName   = undefined
@@ -273,8 +278,8 @@ main = do
 
 type Runner = UnitTest -> Spec
 
-spec :: R.VerylogArgs -> Spec
-spec va = sequential $ do
+spec :: TestArgs -> R.VerylogArgs -> Spec
+spec ta va = sequential $ do
   simple r testDir
   negative r testDir
   mips r $ mipsDir parserDir
@@ -282,7 +287,7 @@ spec va = sequential $ do
   major r parserDir
   where
     testDir   = "test"
-    r         = runUnitTest va
+    r         = runUnitTest ta va
     parserDir = R.iverilogDir va
 
 -- default unit test
@@ -298,9 +303,11 @@ benchmarkDir, mipsDir :: FilePath -> FilePath
 benchmarkDir p = p </> "benchmarks"
 mipsDir p      = benchmarkDir p </> "472-mips-pipelined"
 
-runUnitTest :: R.VerylogArgs -> Runner
-runUnitTest va (UnitTest{..}) =
-  it testName $ R.run va' `shouldReturn` (testType == Succ)
+runUnitTest :: TestArgs -> R.VerylogArgs -> Runner
+runUnitTest ta va (UnitTest{..}) =
+  if   ta ^. dryRun
+  then it testName $ (printf "./iodine %s %s\n" verilogFile moduleName :: IO ())
+  else it testName $ R.run va' `shouldReturn` (testType == Succ)
   where
     va' = va { R.fileName   = verilogFile
              , R.moduleName = moduleName

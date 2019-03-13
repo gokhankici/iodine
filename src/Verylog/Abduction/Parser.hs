@@ -50,6 +50,8 @@ writeAnnots f = do
   where
     annotFile = takeDirectory f </> "" <.> takeFileName f <.> "annot"
 
+type RS = HS.HashSet R
+
 toR :: Sol -> RS
 toR sol = goTops $ HM.elems sol
   where

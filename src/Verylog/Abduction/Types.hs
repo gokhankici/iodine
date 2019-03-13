@@ -74,8 +74,6 @@ data R = TagEq    { varName :: Id }
        | NoTaint  { varName :: Id }
        deriving (Eq)
 
-type RS = HS.HashSet R
-
 instance Show R where
   show (TagEq    {..}) = printf "tag_eq(%s)" varName
   show (ValueEq  {..}) = printf "val_eq(%s)" varName
