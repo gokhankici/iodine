@@ -24,6 +24,7 @@ import           Control.Monad.State.Lazy
 import qualified Data.HashSet        as HS
 import qualified Data.Sequence       as SQ
 import           Data.List (foldl')
+import           System.IO
 import           Text.Printf
 
 --------------------------------------------------------------------------------
@@ -51,8 +52,6 @@ abduction fn fcConfig st = do
     act = do
       -- load the good and bad annotations
       readAnnots fn
-      -- use (fpst.fpAnnotations) >>= debugM . printf "pos annots:\n%s" . show
-      -- use negAnnots >>= debugM . printf "neg annots:\n%s" . show
 
       (safe, sol) <- use fpst >>= runSolve
 
@@ -101,8 +100,33 @@ innerLoop = while False ((>) <$> use step <*> use curStep) $ do
     (debugM $ printf "skipping solution\n%s" (show $ fpst'^.fpAnnotations)
     )
   ifM (use isSafe)
-    (break $ return True)
+    askToStop
     (continue $ return False)
+
+askToStop :: M (Loop, Bool)
+askToStop = do
+  printGoodAnnot
+  c <- yesno "Exit ?"
+  if c
+    then break $ return True
+    else continue $ return False
+
+printGoodAnnot :: M ()
+printGoodAnnot =
+  use (fpst.fpAnnotations) >>=
+  debugM . printf "pos annots:\n%s" . show
+
+yesno :: MonadIO m => String -> m Bool
+yesno prompt = do
+          liftIO $ putStr $ prompt ++ " [y/n]: "
+          liftIO $ hFlush stdout
+          str <- liftIO getLine
+          case str of
+            "y" -> return True
+            "n" -> return False
+            _   -> do
+              liftIO $ putStrLn "Invalid input."
+              yesno prompt
 
 -- -----------------------------------------------------------------------------
 -- Helper functions
@@ -110,7 +134,6 @@ innerLoop = while False ((>) <$> use step <*> use curStep) $ do
 
 updateSol :: Bool -> FPSt -> Sol -> Double -> M ()
 updateSol safe' fpst' sol' cost' = do
-  debugM $ printf "UPDATING SOLUTION\n%s" (show $ fpst'^.fpAnnotations)
   isSafe   .= safe'
   fpst     .= fpst'
   solution .= sol'

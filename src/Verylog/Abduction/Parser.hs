@@ -15,12 +15,12 @@ import Verylog.Language.Types
 import Verylog.Solver.FP.Types
 import Verylog.Utils
 
-import qualified Language.Fixpoint.Types        as FT
+import qualified Language.Fixpoint.Types as FT
 
-import           Control.Lens hiding ((<.>))
+import           Control.Lens           hiding ((<.>))
 import           Control.Monad.IO.Class
-import qualified Data.HashMap.Strict as HM
-import qualified Data.HashSet        as HS
+import qualified Data.HashMap.Strict    as HM
+import qualified Data.HashSet           as HS
 import           System.FilePath.Posix
 import           System.Directory
 import           Text.Printf
@@ -71,11 +71,11 @@ toR sol = goTops $ HM.elems sol
          | sameVar     -> TagEq v1
          | not sameVar -> TagEq2 v1 v2
       where
-        diffRun    = dr f1 f2
-        sameVar    = v1 == v2
-        bothTag    = taggedVar f1 && taggedVar f2
-        (f1, v1)   = parseVarName . str2Id $ FT.symbolSafeString s1
-        (f2, v2)   = parseVarName . str2Id $ FT.symbolSafeString s2
+        diffRun  = dr f1 f2
+        sameVar  = v1 == v2
+        bothTag  = taggedVar f1 && taggedVar f2
+        (f1, v1) = parseVarName . str2Id $ FT.symbolSafeString s1
+        (f2, v2) = parseVarName . str2Id $ FT.symbolSafeString s2
 
     go e@(FT.PIff (FT.EVar s1) e2) =
       if taggedVar f1 && not b then NoTaint v1 else err e

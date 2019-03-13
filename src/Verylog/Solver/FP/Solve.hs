@@ -29,18 +29,22 @@ solve cfg fpst = do
   let finfo = toFqFormat fpst
   res <- silence $ F.solve cfg finfo
   let stat = FT.resStatus res
-  colorStrLn (getColor stat) (render $ FT.resultDoc $ fmap fst stat)
-  printResult fpst res
+  withColor (getColor stat) $ putStr (render $ FT.resultDoc $ fmap fst stat)
+  putStrLn ""
+  printUnsafeResult fpst res
   return ( FT.isSafe res
          , FT.resSolution res
          )
+  where
+    getColor (FT.Safe) = Green
+    getColor (_)       = Red
 
 -- -----------------------------------------------------------------------------
 -- Printing results
 -- -----------------------------------------------------------------------------
 
-printResult :: FPSt -> FT.Result (Integer, HornId) -> IO ()
-printResult fpst (FT.Result{..}) =
+printUnsafeResult :: FPSt -> FT.Result (Integer, HornId) -> IO ()
+printUnsafeResult fpst (FT.Result{..}) =
   case resStatus of
     FT.Unsafe ids -> do
       let m        = errMap ids
@@ -62,15 +66,9 @@ printResult fpst (FT.Result{..}) =
     altr cid t Nothing  = Just $ S.singleton (cid, t)
     altr cid t (Just s) = Just $ S.insert (cid, t) s
 
-colorStrLn   :: Color -> String -> IO ()
-colorStrLn c = withColor c . putStrLn
-
 withColor :: Color -> IO () -> IO ()
 withColor c act = do
   setSGR [ SetConsoleIntensity BoldIntensity, SetColor Foreground Vivid c]
   act
-  setSGR [ Reset]
-
-getColor :: FT.FixResult a -> Color
-getColor (FT.Safe) = Green
-getColor (_) = Red
+  --setSGR [ Reset]
+  setSGR []
