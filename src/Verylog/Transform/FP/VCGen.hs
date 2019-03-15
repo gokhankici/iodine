@@ -14,11 +14,14 @@ import           Control.Monad.State.Lazy
 import           Control.Lens
 import           Data.List
 import qualified Data.HashMap.Strict      as M
+import qualified Data.Sequence            as SQ
+import qualified Data.Foldable            as F
 import qualified Data.IntMap.Strict       as IM
 import qualified Language.Fixpoint.Types  as FQ
 
 -- import Debug.Trace
 
+type ABS = SQ.Seq AlwaysBlock
 type S = State (Int, BindMap)
 
 toFpSt' :: AnnotSt -> FPSt -> FPSt
@@ -29,12 +32,11 @@ toFpSt' newAnnots st =
   where
     cs = invs newAnnots (st^.fpABs)
 
-toFpSt  :: ([AlwaysBlock], (AnnotSt, [FPQualifier])) -> FPSt
+toFpSt  :: (ABS, (AnnotSt, [FPQualifier])) -> FPSt
 toFpSt (_as, (allAnnots, allQualifiers)) =
   FPSt { _fpConstraints = cs
        , _fpABs         = as
        , _fpBinds       = bs'
-       , _fpUFs         = M.unions $ (view (aSt . ufs)) <$> as
        , _fpQualifiers  = allQualifiers
        , _fpAnnotations = allAnnots
        }
@@ -42,10 +44,11 @@ toFpSt (_as, (allAnnots, allQualifiers)) =
     -- as  = updateFPVars <$> _as
     as = _as
     cs  = invs allAnnots as
-    bs  = getBinds as $ concat $ IM.elems cs
+    bs  = getBinds as $ mconcat $ IM.elems cs
     ni  = M.size bs + 1
-    ts  = makeBothTags $ concatMap qualifVars allQualifiers
-    bs' = foldl' (\m (n,name) -> h m n name) bs (zip [ni..] ts)
+    ts  = makeBothTags $
+          foldl' (\acc q -> SQ.fromList (qualifVars q) SQ.>< acc) mempty allQualifiers
+    bs' = foldl' (\m (n,name) -> h m n name) bs (zip [ni..] (F.toList ts))
     h m i name =
       let f v Nothing  = Just v
           f _ (Just v) = Just v
@@ -56,12 +59,12 @@ toFpSt (_as, (allAnnots, allQualifiers)) =
                             }) name m
 
 
-getBinds :: [AlwaysBlock] -> [Inv] -> BindMap
+getBinds :: ABS -> SQ.Seq Inv -> BindMap
 getBinds as cs = evalState comp (length constants + 1, m)
   where
     comp = do sequence_ (getBind <$> cs)
-              let is = (makeInvArgs fmt <$> as) -- ++ (makeInvArgs fmt{primedVar=True} <$> as)
-              getBindsFromExps $ map Var $ concat is
+              let is = (makeInvArgs fmt <$> as)
+              getBindsFromExps $ fmap Var $ F.foldl' (SQ.><) mempty is
               use _2
 
     m = foldr constBind M.empty (zip [1..] constants)
@@ -89,9 +92,7 @@ getBindsFromExp :: Expr -> S ()
 getBindsFromExp (BinOp{..}) = getBindsFromExps [expL, expR]
 getBindsFromExp (Ands es)   = getBindsFromExps es
 getBindsFromExp (Ite{..})   = getBindsFromExps [cnd, expThen, expElse]
-getBindsFromExp (KV{..})    = getBindsFromExps (Var <$> vs) >> getBindsFromExps es
-  where
-    (vs,es) = unzip kvSubs
+getBindsFromExp (KV{..})    = getBindsFromExps (Var . fst <$> kvSubs) >> getBindsFromExps (snd <$> kvSubs)
 getBindsFromExp (Var v)     = do
   bindingExists <- uses _2 (M.member v)
   when (not bindingExists) $ do
@@ -106,5 +107,5 @@ getBindsFromExp (UFCheck{..})    =
 getBindsFromExp (Number _)       = return ()
 getBindsFromExp (Boolean _)      = return ()
 
-getBindsFromExps :: [Expr] -> S ()
-getBindsFromExps = sequence_ . (map getBindsFromExp)
+getBindsFromExps :: (Traversable t) => t Expr -> S ()
+getBindsFromExps = sequence_ . (fmap getBindsFromExp)

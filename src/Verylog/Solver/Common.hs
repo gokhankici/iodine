@@ -18,7 +18,7 @@ import qualified Data.IntMap.Strict        as IM
 import           GHC.Generics
 import qualified Text.PrettyPrint.HughesPJ as PP
 import           Text.Printf
-
+import           Data.Sequence             as SQ
 
 -- -----------------------------------------------------------------------------
 -- data types
@@ -46,7 +46,7 @@ data Inv = Horn { hBody :: Expr -- body of the horn clause
                 }
            deriving (Show, Generic)
 
-type Constraints = IM.IntMap [Inv]
+type Constraints = IM.IntMap (SQ.Seq Inv)
 
 data Expr = BinOp     { bOp   :: BinOp
                       , expL  :: Expr
@@ -58,7 +58,7 @@ data Expr = BinOp     { bOp   :: BinOp
                       , expElse :: Expr
                       }
           | KV        { kvId   :: Int
-                      , kvSubs :: [(Id,Expr)]
+                      , kvSubs :: SQ.Seq (Id,Expr)
                       }
           | Var       Id
           | Boolean   Bool

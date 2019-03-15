@@ -7,17 +7,19 @@ module Verylog.Transform.Modularize ( modularize
 
 import           Control.Lens hiding (mapping)
 import           Control.Monad.State.Lazy
-import qualified Data.HashMap.Strict        as HM
 import qualified Data.HashSet               as HS
-import           Data.List (foldl')
+import           Data.Foldable
+import qualified Data.Sequence as SQ
 
 import Verylog.Language.Types
+
+type ABS = SQ.Seq AlwaysBlock
 
 type States = (St, AnnotSt)
 
 -- | modularize the module hierarchy
-modularize :: States -> [AlwaysBlock]
-modularize input = evalState (m_flattenToAlways input []) 0
+modularize :: States -> ABS
+modularize input = evalState (m_flattenToAlways input mempty) 0
 
 --------------------------------------------------------------------------------
 -- Flattening the Verilog file
@@ -25,10 +27,10 @@ modularize input = evalState (m_flattenToAlways input []) 0
 
 type HS = State Int
 
-m_flattenToAlways :: States -> [AlwaysBlock] -> HS [AlwaysBlock]
+m_flattenToAlways :: States -> ABS -> HS ABS
 m_flattenToAlways (st, ast) = flip (foldM (\as ir -> flattenIR st ir as)) (st^.irs)
   where
-    flattenIR :: St -> IR -> [AlwaysBlock] -> HS [AlwaysBlock]
+    flattenIR :: St -> IR -> ABS -> HS ABS
     flattenIR stt (Always{..}) l = do
       i <- get
       put (i+1)
@@ -40,7 +42,7 @@ m_flattenToAlways (st, ast) = flip (foldM (\as ir -> flattenIR st ir as)) (st^.i
                     , _aMd      = buildMetadata stt' alwaysStmt
                     , _aLoc     = alwaysLoc
                     }
-      return (a:l)
+      return $ l SQ.|> a
     flattenIR _  (ModuleInst{..}) l =
       m_flattenToAlways (modInstSt, ast) l
 
@@ -48,20 +50,13 @@ m_flattenToAlways (st, ast) = flip (foldM (\as ir -> flattenIR st ir as)) (st^.i
 filterSt :: Stmt -> St -> St
 filterSt s st =
   over ports (filterVars vars') .
-  set  ufs   ufs' .
-  set  irs   [] $
+  set  irs   mempty $
   st
   where
-    vars0 = HS.fromList $ foldVariables s -- all variables used in the statement
-    ufs'  = filterMap vars0 (st^.ufs)
-    vars' = vars0 `HS.union` (HS.fromList $ concat $ snd <$> HM.elems ufs')
+    vars' = foldVariablesSet s -- all variables used in the statement
 
--- | Keep the keys that are present in the given set
-filterMap :: HS.HashSet Id -> UFMap -> UFMap
-filterMap toKeep = HM.filterWithKey (\k _ -> HS.member k toKeep)
-
-filterVars :: HS.HashSet Id -> [Var] -> [Var]
-filterVars toKeep = filter (\v -> HS.member (varName v) toKeep)
+filterVars :: HS.HashSet Id -> SQ.Seq Var -> SQ.Seq Var
+filterVars toKeep = SQ.filter (\v -> HS.member (varName v) toKeep)
 
 --------------------------------------------------------------------------------
 -- Flattening the Verilog file
@@ -77,34 +72,26 @@ buildMetadata st stmt =
   where
     (rs,ws) = foldl' f (mempty, mempty) (st^.ports)
 
-    (regReadSet, regWriteSet) = readWriteSet rs st stmt
+    (regReadSet, regWriteSet) = readWriteSet rs stmt
 
     f (regs, wires) (Register r) = (HS.insert r regs, wires)
     f (regs, wires) (Wire w)     = (regs, HS.insert w wires)
 
-readWriteSet :: HS.HashSet Id -> St -> Stmt -> (HS.HashSet Id, HS.HashSet Id)
-readWriteSet regs st stmt =
-  let (r,w) = evalState (comp stmt >> get) ([], [])
-      r'    = readVars r
-      w'    = writeVars w
-  in (r' `HS.intersection` regs, w' `HS.intersection` regs)
+type S2 = (HS.HashSet Id, HS.HashSet Id)
+
+readWriteSet :: HS.HashSet Id -> Stmt -> S2 
+readWriteSet regs stmt =
+  let (r,w) = evalState (comp stmt >> get) (mempty, mempty)
+  in (r `HS.intersection` regs, w `HS.intersection` regs)
 
   where
-    us = st^.ufs
-
-    readVars, writeVars :: [Id] -> HS.HashSet Id
-    readVars l = foldl' (\s v -> case HM.lookup v us of
-                                   Nothing     -> HS.insert v s
-                                   Just (_,vs) -> foldl' (flip HS.insert) s vs) HS.empty l
-    writeVars = HS.fromList
-    
-    comp :: Stmt -> State ([Id],[Id]) ()
+    comp :: Stmt -> State S2 ()
     comp (Block ss)            = sequence_ (comp <$> ss)
-    comp (BlockingAsgn{..})    = do _1 %= (:) rhs
-                                    _2 %= (:) lhs
-    comp (NonBlockingAsgn{..}) = do _1 %= (:) rhs
-                                    _2 %= (:) lhs
-    comp (IfStmt{..})          = do _1 %= (:) ifCond
+    comp (BlockingAsgn{..})    = do _1 %= HS.union (foldVariablesSet rhs)
+                                    _2 %= HS.insert lhs
+    comp (NonBlockingAsgn{..}) = do _1 %= HS.union (foldVariablesSet rhs)
+                                    _2 %= HS.insert lhs
+    comp (IfStmt{..})          = do _1 %= HS.union (foldVariablesSet ifCond)
                                     comp thenStmt
                                     comp elseStmt
     comp Skip                  = return ()

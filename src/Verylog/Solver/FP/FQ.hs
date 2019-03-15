@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Verylog.Solver.FP.FQ ( toFqFormat
@@ -17,6 +18,8 @@ import qualified Data.HashSet               as HS
 import qualified Data.HashMap.Strict        as M
 import qualified Data.IntMap.Strict         as IM
 import           Text.Printf
+import qualified Data.Foldable              as F
+import qualified Data.Sequence              as SQ
 
 import qualified Language.Fixpoint.Types    as FQT
 import           Language.Fixpoint.Types    hiding (Expr(..), KV)
@@ -71,9 +74,9 @@ toFqFormat fpst =
       axiomEnv    = AEnv [] [] M.empty
       dataDecls   = []
 
-      custom n (QualifImp l rs) = custom1 n (id2Str l) (id2Str <$> rs)
-      custom n (QualifPairs vs) = custom2 n (id2Str <$> vs)
-      custom n (QualifIff l rs) = custom3 n (id2Str l) (id2Str <$> rs)
+      custom n (QualifImp l rs) = custom1 n (id2Str l) (F.toList $ id2Str <$> rs)
+      custom n (QualifPairs vs) = custom2 n (F.toList $ id2Str <$> vs)
+      custom n (QualifIff l rs) = custom3 n (id2Str l) (F.toList $ id2Str <$> rs)
       custom _ (QualifAssume _) = []
 
       custom1 n l rs =
@@ -122,10 +125,10 @@ toFqFormat fpst =
   in  fi cns wfs binders gConsts dConsts cuts qualifiers bindMds highOrBinds highOrQuals assrts axiomEnv dataDecls 
 
 makeConstraints :: FPSt -> [SubC HornId]
-makeConstraints fpst = snd $ IM.foldl' gos (0, []) (fpst ^. fpConstraints)
+makeConstraints fpst = snd $ IM.foldl' gos (0, mempty) (fpst ^. fpConstraints)
   where
-    gos :: (Integer, [SubC HornId]) -> [Inv] -> (Integer, [SubC HornId])
-    gos = L.foldl' go
+    gos :: (Integer, [SubC HornId]) -> SQ.Seq Inv -> (Integer, [SubC HornId])
+    gos = F.foldl' go
 
     go :: (Integer, [SubC HornId]) -> Inv -> (Integer, [SubC HornId])
     go (n, subcs) horn = (n+1, (mc (n, horn)):subcs)
@@ -135,21 +138,23 @@ makeConstraints fpst = snd $ IM.foldl' gos (0, []) (fpst ^. fpConstraints)
     helper bdy' hd n hId =
       let bdy = Ands [eqs, bdy']
       in  mkSubC
-          (env [bdy,hd])
+          (env (bdy SQ.<| hd SQ.<| mempty))
           (RR FInt (Reft (symbol "v", convertExpr bdy)))
           (RR FInt (Reft (symbol "v", convertExpr hd)))
           (Just n)              -- id
           []                    -- tags
           hId                   -- metadata
 
-    env es = insertsIBindEnv (getBindIds fpst es) emptyIBindEnv
+    env es = insertsIBindEnv (F.toList $ getBindIds fpst es) emptyIBindEnv
 
     eqs = Ands [ BinOp IFF (Var x1t) (Var x2t)
                | q       <- fpst ^. fpQualifiers
                , (x1,x2) <- case q of
                               QualifAssume vs -> twoPairs vs
                               _               -> []
-               , (x1t, x2t) <- zip (makeBothTags [x1]) (makeBothTags [x2])
+               , (x1t, x2t) <- zip
+                               (F.toList $ makeBothTags $ SQ.singleton x1)
+                               (F.toList $ makeBothTags $ SQ.singleton x2)
                ]
 
 
@@ -157,8 +162,8 @@ makeWFConstraints :: FPSt -> [WfC HornId]
 makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
   where
     mwf a@(AB{..}) =
-      let allAs = HS.toList . HS.fromList $ makeInvArgs fmt a ++ extraEnv fpst
-          ids   = getBindIds fpst (Var <$> allAs)
+      let allAs = seqNub $ makeInvArgs fmt a SQ.>< extraEnv fpst
+          ids   = F.toList $ getBindIds fpst (Var <$> allAs)
           i     = a ^. aId
       in wfC
          (insertsIBindEnv ids emptyIBindEnv)
@@ -197,11 +202,11 @@ convertExpr (Ite{..}) = pIte c el er
     c  = convertExpr cnd
     el = convertExpr expThen
     er = convertExpr expElse
-convertExpr (KV{..})      = FQT.PKVar
-                            (FQT.KV $ symbol (makeInv kvId))
-                            (mkSubst $ f <$> kvSubs)
+convertExpr (KV{..}) = FQT.PKVar
+                       (FQT.KV $ symbol (makeInv kvId))
+                       (mkSubst $ F.foldr' f [] kvSubs)
   where
-    f (v,e) = (symbol v, convertExpr e)
+    f (v,e) acc = (symbol v, convertExpr e) : acc
 convertExpr (Var v)       = eVar v
 convertExpr (UFCheck{..}) =
   let (largs, rargs) = unzip ufArgs
@@ -215,29 +220,25 @@ convertExpr (UFCheck{..}) =
            ]
 convertExpr e = FQT.EVar $ FQT.symbol $ getConstantName e
 
--- allBindIds :: FPSt -> [Int]
--- allBindIds fpst = bindId <$> M.elems (fpst ^. fpBinds)
-
-getBindIds :: FPSt -> [Expr] -> [Int]
+getBindIds :: FPSt -> SQ.Seq Expr -> SQ.Seq Int
 getBindIds fpst es = runReader (mapM getBindId ids) fpst
   where
-    ids   = HS.toList idSet
-    idSet = foldr (\e s -> s `HS.union` getIds e ) HS.empty es
+    ids   = set2seq $ F.foldl' (\s e -> s `HS.union` getIds e ) HS.empty es
 
     getBindId   :: Id -> Reader FPSt Int
     getBindId v = views fpBinds (bindId . (M.lookupDefault (errMsg v) v))
 
     errMsg v = throw $ PassError $ printf "cannot find %s in binders" v
 
-    helper []      = HS.fromList $ extraEnv fpst
+    helper []      = seq2set $ extraEnv fpst
     helper (e:es') = L.foldl' (\s e' -> getIds e' `HS.union` s) (getIds e) es'
 
     getIds :: Expr -> HS.HashSet Id
     getIds (BinOp{..})      = getIds expL `HS.union` getIds expR
     getIds (Ands es')       = helper es'
     getIds (Ite{..})        = getIds cnd `HS.union` getIds expThen `HS.union` getIds expElse
-    getIds (KV{..})         = let (vs,es') = unzip kvSubs
-                              in HS.fromList vs `HS.union` helper es'
+    getIds (KV{..})         = let f acc (v,e) = (getIds e) `HS.union` (HS.insert v acc)
+                              in F.foldl' f mempty kvSubs
     getIds (Var v)          = HS.singleton v
     getIds (UFCheck{..})    = 
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs
@@ -245,23 +246,32 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
       in HS.fromList $ n1:n2:as1 ++ as2
     getIds e                = HS.singleton $ getConstantName e
 
+type UFAcc = (Int, [(Symbol, Sort)])
 
 getUFGlobals :: FPSt -> SEnv Sort
-getUFGlobals fpst = fromListSEnv $ snd $ M.foldr mkGlobF (0, []) (fpst^.fpUFs)
+getUFGlobals fpst = fromListSEnv $ snd $ L.foldl' goStmt (0, []) ((^.aStmt) <$> fpst^.fpABs)
   where
-    mkGlobF :: (Id, [Id]) -> (Int, [(Symbol, Sort)]) -> (Int, [(Symbol, Sort)])
-    mkGlobF (fn, args) (n,l) =
-      let arity = length args
+    goStmt :: UFAcc -> Stmt -> UFAcc
+    goStmt acc s = let ves = stmtCollectVExpr s
+                   in F.foldl' goExpr acc ves
+
+    goExpr :: UFAcc -> VExpr -> UFAcc
+    goExpr acc (VVar{..})     = acc
+    goExpr (!n, !l) ve@(VUF{..}) =
+      let args  = vexprPortSeq ve
+          arity = F.length args
           s     = if   arity > 0
                   then mkFFunc n (replicate (arity+1) FInt)
                   else FInt
-          g     = (symbol fn, s)
-      in (n+1, g:l)
-    
+          g     = (symbol vFuncName, s)
+          n'    = n + 1
+          l'    = g : l
+      in n' `seq` l' `seq` (n', l')
 
-extraEnv :: FPSt -> [Id]
-extraEnv fpst = makeBothTags $ HS.toList . HS.fromList $ l1 ++ l2
+extraEnv :: FPSt -> SQ.Seq Id
+extraEnv fpst = makeBothTags . set2seq $ s1 `HS.union` s2
   where
-    l1 = concatMap qualifVars (fpst ^. fpQualifiers)
-    l2 = HS.toList $ fpst ^. fpAnnotations ^. sources
+    s1      = F.foldl' h mempty (fpst ^. fpQualifiers)
+    s2      = fpst ^. fpAnnotations ^. sources
+    h acc q = F.foldl' (flip HS.insert) acc (qualifVars q)
 

@@ -13,6 +13,7 @@ import qualified Data.HashSet               as HS
 import qualified Data.IntSet                as IS
 import           Data.List
 import           Text.Printf
+import qualified Data.Sequence as SQ
 -- import           Debug.Trace
 
 import Verylog.Language.Types
@@ -25,13 +26,14 @@ data PassSt = PassSt { _bas    :: HM.HashMap Id Int
 
 makeLenses ''PassSt
 
+type ABS = SQ.Seq AlwaysBlock
 type S = State PassSt
 
 freshKeepErrs :: S ()
 freshKeepErrs = bas .= HM.empty >> nbas .= HM.empty
 
 --------------------------------------------------------------------------------
-sanityCheck :: [AlwaysBlock] -> [AlwaysBlock]  
+sanityCheck :: ABS -> ABS
 --------------------------------------------------------------------------------
 sanityCheck =
   check1 >>>
@@ -42,14 +44,14 @@ sanityCheck =
   --   printCount as = trace (printf "# blocks before merge: %d" (length as)) as
 
 --------------------------------------------------------------------------------
-check1    :: [AlwaysBlock] -> [AlwaysBlock]
+check1    :: ABS -> ABS
 --------------------------------------------------------------------------------
 check1 as = evalState comp (PassSt { _bas    = HM.empty
                                    , _nbas   = HM.empty
                                    , _errors = []
                                    })
   where
-    comp :: S [AlwaysBlock]
+    comp :: S ABS
     comp = do checkAssignments as
               es <- use errors
               case es of
@@ -57,7 +59,7 @@ check1 as = evalState comp (PassSt { _bas    = HM.empty
                 (e:_) -> throw e
 
 --------------------------------------------------------------------------------
-checkAssignments :: [AlwaysBlock] -> S ()
+checkAssignments :: ABS -> S ()
 --------------------------------------------------------------------------------
 checkAssignments as = freshKeepErrs >> mapM_ (checkStmt . view aStmt) as
   where
@@ -97,12 +99,12 @@ checkAssignments as = freshKeepErrs >> mapM_ (checkStmt . view aStmt) as
       let d1 = HM.intersection newThBAs  newElNBAs
       let d2 = HM.intersection newThNBAs newElBAs
 
-      let pickFirstKey = fst . head . HM.toList 
+      let pickFirstKey = fst . head . HM.toList
 
       when (not $ HM.null d1) $
         addError $ printf "different types of assignments to %s" (pickFirstKey d1)
 
-      when (not $ HM.null d2) $ 
+      when (not $ HM.null d2) $
         addError $ printf "different types of assignments to %s" (pickFirstKey d2)
 
       bas  .= HM.unionWith max thBAs  elBAs
@@ -110,7 +112,7 @@ checkAssignments as = freshKeepErrs >> mapM_ (checkStmt . view aStmt) as
 
 
 --------------------------------------------------------------------------------
-checkAssignmentTypes :: [AlwaysBlock] -> [AlwaysBlock]
+checkAssignmentTypes :: ABS -> ABS
 --------------------------------------------------------------------------------
 checkAssignmentTypes as =
   if   all rightAsgn as
@@ -139,7 +141,7 @@ checkAssignmentTypes as =
     h f s            = f s
 
 --------------------------------------------------------------------------------
-varSingleUpdate :: [AlwaysBlock] -> [AlwaysBlock]
+varSingleUpdate :: ABS -> ABS
 --------------------------------------------------------------------------------
 varSingleUpdate as =
   case duplicateUpdates of
@@ -154,13 +156,13 @@ varSingleUpdate as =
     updateMap = foldl' (HM.unionWith IS.union) HM.empty (h2 <$> as)
 
     h2 a = HM.fromList [ (l, IS.singleton (a^.aId)) | l <- HS.toList $ getLhss (a^.aStmt) ]
-  
+
 --------------------------------------------------------------------------------
 -- Helper functions
 --------------------------------------------------------------------------------
 incr     :: Id -> HM.HashMap Id Int -> HM.HashMap Id Int
 incr v m = HM.alter f v m
-  where 
+  where
     f Nothing = Just 1
     f n       = (+1) <$> n
 

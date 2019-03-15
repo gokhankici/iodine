@@ -12,12 +12,14 @@ import Verylog.Transform.Merge
 import Verylog.Transform.Modularize
 import Verylog.Transform.SanityCheck
 
+import Data.Sequence
+
+type ABS          = Seq AlwaysBlock
 type States       = (St, AnnotSt)
 type Qualifiers   = [FPQualifier]
 type Intermediary = (ABS, (AnnotSt, Qualifiers))
 type ParseInput   = (FilePath, String)
 type ParseOutput  = (States, Qualifiers)
-type ABS          = [AlwaysBlock]
 
 -- parse       :: (FilePath, String) -> (States, Qualifiers)
 -- modularize  :: States -> ABS
@@ -33,7 +35,7 @@ pipeline :: ParseInput -> FPSt
 pipeline = common >>> toFpSt
 
 --------------------------------------------------------------------------------
-pipeline' :: ParseInput -> [AlwaysBlock]
+pipeline' :: ParseInput -> ABS
 --------------------------------------------------------------------------------
 pipeline' = common >>> fst
 

@@ -16,6 +16,7 @@ import           Data.Char
 import           Data.List
 import qualified Data.HashSet as HS
 import qualified Data.Text as T
+import qualified Data.Sequence as SQ
 
 data VarFormat = VarFormat { taggedVar   :: Bool
                            , leftVar     :: Bool
@@ -102,25 +103,37 @@ isTag :: Id -> Bool
 -- isTag v = isPrefixOf "VLT" v || isPrefixOf "VRT" v
 isTag = taggedVar . fst . parseVarName
 
-allArgs        :: VarFormat -> St -> [Id]
-allArgs f st = let ps = map varName $ filter isRegister (st^.ports)
-                 in (makeVarName f <$> ps) ++ (makeVarName f{taggedVar=True} <$> ps)
 
-makeInvArgs     :: VarFormat -> AlwaysBlock -> [Id]
-makeInvArgs f a = allArgs f{leftVar=True} st ++ allArgs f{rightVar=True} st
+allArgs        :: VarFormat -> St -> SQ.Seq Id
+allArgs f st = let ps = fmap varName $ SQ.filter isRegister (st^.ports)
+                 in (makeVarName f <$> ps) SQ.>< (makeVarName f{taggedVar=True} <$> ps)
+
+makeInvArgs     :: VarFormat -> AlwaysBlock -> SQ.Seq Id
+makeInvArgs f a = allArgs f{leftVar=True} st SQ.>< allArgs f{rightVar=True} st
   where
     st = a^.aSt
 
-makeInvTags     :: VarFormat -> AlwaysBlock -> [Id]
-makeInvTags f a = allTags f{leftVar=True} ++ allTags f{rightVar=True}
+makeInvTags     :: VarFormat -> AlwaysBlock -> SQ.Seq Id
+makeInvTags f a = allTags f{leftVar=True} SQ.>< allTags f{rightVar=True}
   where
     st         = a^.aSt
-    rs         = map varName $ filter isRegister (st^.ports)
+    rs         = fmap varName $ SQ.filter isRegister (st^.ports)
     allTags f' = makeVarName f'{taggedVar=True} <$> rs
 
-makeBothTags :: [Id] -> [Id]
-makeBothTags vs = [mk fmt{leftVar=True}, mk fmt{rightVar=True}] <*> vs
+
+makeBothTag :: Id -> SQ.Seq Id
+makeBothTag v = mk fmt{leftVar=True} v  SQ.<|
+                mk fmt{rightVar=True} v SQ.<|
+                mempty
   where
+    mk f = makeVarName f{taggedVar=True}
+
+makeBothTags :: SQ.Seq Id -> SQ.Seq Id
+makeBothTags vs = foldl' h mempty vs
+  where
+    h acc v = mk fmt{leftVar=True} v
+              SQ.<| mk fmt{rightVar=True} v
+              SQ.<| acc
     mk f = makeVarName f{taggedVar=True}
 
 trc         :: Show b => String -> b -> a -> a

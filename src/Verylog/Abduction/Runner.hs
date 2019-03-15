@@ -24,7 +24,7 @@ import           Control.Lens
 import           Control.Monad.State.Lazy
 import qualified Data.HashSet        as HS
 import qualified Data.Sequence       as SQ
-import           Data.List (foldl')
+import qualified Data.Foldable       as F
 import           System.IO
 import           Text.Printf
 
@@ -68,13 +68,13 @@ abduction fn fcConfig st = do
                 return b
         else return True
 
-    collectMd :: [AlwaysBlock] -> GlobalMetadata
+    collectMd :: SQ.Seq AlwaysBlock -> GlobalMetadata
     collectMd =
       let f m a = over gmVariables (upd a) m
           upd a = let ws = s2sq $ a ^. aMd ^. mRegisters
                       rs = s2sq $ a ^. aMd ^. mWires
                   in  (SQ.><) (rs SQ.>< ws)
-      in foldl' f mempty
+      in F.foldl' f mempty
 
     s2sq :: HS.HashSet a -> SQ.Seq a
     s2sq = HS.foldl' (SQ.|>) SQ.empty

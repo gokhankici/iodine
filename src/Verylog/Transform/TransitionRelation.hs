@@ -10,10 +10,13 @@ import           Control.Lens
 import qualified Data.HashMap.Strict      as M
 import qualified Data.HashSet             as S
 import           Data.List
+import           Data.Foldable
+import qualified Data.Sequence as SQ
 
 import           Verylog.Transform.Utils hiding (fmt)
 import           Verylog.Language.Types
 import           Verylog.Solver.Common
+
 
 type AsgnQueue = M.HashMap Id Int
 
@@ -29,9 +32,9 @@ makeLenses ''TRSt
 
 type S = State TRSt
 
-data Asgn = BA | NBA  
+data Asgn = BA | NBA
 
-type Updates = [(Id, Expr)]
+type Updates = SQ.Seq (Id, Expr)
 
 --------------------------------------------------------------------------------
 next :: VarFormat -> AlwaysBlock -> (Expr,Updates)
@@ -45,66 +48,81 @@ next fmt a = evalState comp initSt
                   , _ifConds = S.empty
                   , _errs    = []
                   }
+    comp = do
+      es1 <- nextStmt (a^.aStmt)
 
-    comp = do es1 <- nextStmt (a^.aStmt)
+      ps  <- uses (trSt . ports) (fmap varName) -- . filter isRegister)
+      as  <- use trAs
 
-              ps  <- uses (trSt . ports) (map varName) -- . filter isRegister)
-              as  <- use trAs
+      -- -- set the primed vars for the lhs of the assignments
+      let up1 =
+            M.foldlWithKey'
+            (\acc v n ->
+               if   v `elem` ps
+               then (,)
+                    (makeVarName fmt{taggedVar=True} v)
+                    (makeVar     fmt{taggedVar=True, varId=Just n} v)
+                    SQ.<|
+                    (,)
+                    (makeVarName fmt v)
+                    (makeVar     fmt{varId=Just n} v)
+                    SQ.<|
+                    acc
+               else acc)
+            SQ.empty
+            as                  -- blocking assignments
 
-              -- set the primed vars for the lhs of the assignments
-              let up1 = concat [ [ (,)
-                                   (makeVarName fmt{taggedVar=True} v)
-                                   (makeVar     fmt{taggedVar=True, varId=Just n} v)
-                                 , (,)
-                                   (makeVarName fmt v)
-                                   (makeVar     fmt{varId=Just n} v)
-                                 ]
-                               | (v,n) <- M.toList as -- blocking assignments
-                               , v `elem` ps
-                               ]
+      -- set the primed vars for the untouched variables
+      let up2 =
+            foldl'
+            (\acc v ->
+               if not $ M.member v as -- not updated variables
+               then (,)
+                    (makeVarName fmt{taggedVar=True} v)
+                    (makeVar     fmt{taggedVar=True} v) -- vt' = vt
+                    SQ.<|
+                    (,)
+                    (makeVarName fmt v)
+                    (makeVar     fmt v) -- v' = v
+                    SQ.<|
+                    acc
+               else acc
+            )
+            SQ.empty
+            ps
 
-              -- set the primed vars for the untouched variables
-              let up2 = concat [ [ (,)
-                                   (makeVarName fmt{taggedVar=True} v)
-                                   (makeVar     fmt{taggedVar=True} v) -- vt' = vt
-                                 , (,)
-                                   (makeVarName fmt v)
-                                   (makeVar     fmt v) -- v' = v
-                                 ]
-                               | v <- ps \\ M.keys as -- not updated variables
-                               ]
-
-              errors <- use errs
-              case errors of
-                []  -> return (Ands es1, up1 ++ up2)
-                e:_ -> throw e
+      errors <- use errs
+      case errors of
+        []  -> return (Ands (toList es1), up1 SQ.>< up2)
+        e:_ -> throw e
 
 --------------------------------------------------------------------------------
-nextStmt :: Stmt -> S [Expr]
+nextStmt :: Stmt -> S (SQ.Seq Expr)
 --------------------------------------------------------------------------------
-nextStmt (Block{..})           = sequence (nextStmt <$> blockStmts) >>= return . concat
+nextStmt (Block{..})           = foldl' (SQ.><) mempty <$> sequence (nextStmt <$> blockStmts)
 nextStmt (BlockingAsgn{..})    = nextAsgn BA  lhs rhs
 nextStmt (NonBlockingAsgn{..}) = nextAsgn NBA lhs rhs
-nextStmt (IfStmt{..})          = do
-  -- ---------------------------------------------------------------------------
-  -- ASSUMPTION(S):
-  -- 1. the types of assignments to a variable is the same in both branches
-  -- 2. at most one assignment to a single variable
-  -- ---------------------------------------------------------------------------
-  fmt <- use trFmt
+nextStmt Skip                  = return mempty
 
-  n <- getLastVarRHS fmt ifCond
+-- ---------------------------------------------------------------------------
+-- ASSUMPTION(S):
+-- 1. the types of assignments to a variable is the same in both branches
+-- 2. at most one assignment to a single variable
+-- ---------------------------------------------------------------------------
+nextStmt (IfStmt{..}) = do
+  fmt <- use trFmt
+  n <- getLastVarRHS fmt (vVarName ifCond)
   let condTrue  = BinOp GE n (Number 1)
 
   -- if condition is the value of an uninterpreted function,
   -- add a check that equates left & right runs for the value
   condUFCheck <- if rightVar fmt
                  then uf_eq ifCond
-                 else return []
+                 else return mempty
 
   -- store old if conds, and calculate the new one
   oldIfConds <- use ifConds
-  cvs <- ifCondVars ifCond 
+  let cvs = ifCondVars ifCond
   ifConds %= S.union cvs
 
   -- store the current state before running either branch
@@ -116,7 +134,7 @@ nextStmt (IfStmt{..})          = do
 
   -- set back the old state
   setSt oldSt
-  
+
   -- run the else branch,
   elseClauses   <- nextStmt elseStmt
   (elAs, elBAs) <- getSt
@@ -131,50 +149,59 @@ nextStmt (IfStmt{..})          = do
   let thDiff = branchDif thAs elAs
       elDiff = branchDif elAs thAs
 
-  let th  = Ands $ thenClauses ++ phiNodes fmt thAs thDiff
-      el  = Ands $ elseClauses ++ phiNodes fmt elAs elDiff
+  let th  = Ands . toList $ thenClauses SQ.>< phiNodes fmt thAs thDiff
+      el  = Ands . toList $ elseClauses SQ.>< phiNodes fmt elAs elDiff
       ite = Ite condTrue th el
 
-  return $ condUFCheck ++ [ite]
+  return $ condUFCheck SQ.|> ite
 
   where
     -- returns the variables changed in one branch but not in other
-    branchDif myQ otherQ = M.differenceWith
-                           (\otherN myN -> if myN < otherN   -- if I don't have the latest number
-                                           then Just otherN  -- add another equality to match that
-                                           else Nothing      -- otherwise, skip
-                           ) otherQ myQ
+    branchDif myQ otherQ =
+      M.differenceWith
+      (\otherN myN ->
+         if myN < otherN   -- if I don't have the latest number
+         then Just otherN  -- add another equality to match that
+         else Nothing      -- otherwise, skip
+      ) otherQ myQ
 
     getSt :: S (AsgnQueue, AsgnQueue)
     getSt = (,) <$> use trAs <*> use trBAs
 
-    setSt          :: (AsgnQueue, AsgnQueue) -> S ()
+    setSt :: (AsgnQueue, AsgnQueue) -> S ()
     setSt (as,bas) = trAs .= as >> trBAs .= bas
-    
-    phiNodes :: VarFormat -> AsgnQueue -> AsgnQueue -> [Expr]
-    phiNodes fmt q qDiff = [ BinOp EQU
-                             (makeVar fmt'{varId=Just n} v)
-                             (makeVar fmt'{varId=M.lookup v q} v)
-                           | (v,n) <- M.toList qDiff
-                           , fmt' <- [fmt, fmt{taggedVar=True}]
-                           ]
-    ifCondVars v = varDeps v >>= return . S.fromList
 
-nextStmt Skip                  = return []
+    phiNodes :: VarFormat -> AsgnQueue -> AsgnQueue -> SQ.Seq Expr
+    phiNodes fmt q qDiff =
+      let fmtT = fmt{taggedVar=True}
+      in  M.foldlWithKey'
+          (\acc v n ->
+             BinOp EQU
+             (makeVar fmt{varId=Just n} v)
+             (makeVar fmt{varId=M.lookup v q} v)
+             SQ.<|
+             BinOp EQU
+             (makeVar fmtT{varId=Just n} v)
+             (makeVar fmtT{varId=M.lookup v q} v)
+             SQ.<|
+            acc
+          ) mempty qDiff
+
+    ifCondVars = seq2set . varDeps
 
 --------------------------------------------------------------------------------
-nextAsgn :: Asgn -> Id -> Id -> S [Expr]
+nextAsgn :: Asgn -> Id -> VExpr -> S (SQ.Seq Expr)
 --------------------------------------------------------------------------------
 nextAsgn a l r = do es1 <- uf_eq r
                     es2 <- asgn
-                    return $ es1 ++ es2
+                    return $ es1 SQ.>< es2
   where
     ----------------------------------------
-    asgn :: S [Expr]
+    asgn :: S (SQ.Seq Expr)
     ----------------------------------------
     asgn = do fmt <- use trFmt
 
-              rhs   <- getLastVarRHS fmt r
+              rhs   <- getLastVarRHS fmt (vVarName r)
               t_rhs <- tagRhs
 
               -- use a fresh var for the assignment
@@ -184,27 +211,30 @@ nextAsgn a l r = do es1 <- uf_eq r
 
               lhs   <- getLastVarLHS fmt            l
               t_lhs <- getLastVarLHS (mkTagged fmt) l
-  
-              return [ BinOp EQU t_lhs t_rhs -- update the tag   of lhs
-                     , BinOp EQU lhs rhs     -- update the value of lhs
-                     ]
+
+              return $
+                BinOp EQU t_lhs t_rhs   -- update the tag   of lhs
+                SQ.<| BinOp EQU lhs rhs -- update the value of lhs
+                SQ.<| mempty
 
     ----------------------------------------
     tagRhs :: S Expr
     ----------------------------------------
-    tagRhs = do c <- isUF r
-                fmt' <- uses trFmt mkTagged
-                ts1 <- if c
-                       then ufTagRhs
-                       else getLastVarRHS fmt' r 
-                ts2 <- (uses ifConds S.toList) >>= mapM (getLastVarRHS fmt')
-                case ts2 of
-                  [] -> return ts1 
-                  _  -> case nub $ plusVars (ts1:ts2) of -- add each unique operand only once
-                          []        -> error "TransitionRelation.tagRhs : this is weird"
-                          (es1:ess) -> return $ foldr (BinOp OR) es1 ess
-                
+    tagRhs = do
+      fmt' <- uses trFmt mkTagged
+      ts1  <- case r of
+                VUF{..}  -> ufTagRhs
+                VVar{..} -> getLastVarRHS fmt' vVarName
+      ts2 <- (uses ifConds S.toList) >>= mapM (getLastVarRHS fmt')
+      case ts2 of
+        [] -> return ts1
+        _  -> case nub $ plusVars (ts1:ts2) of -- add each unique operand only once
+                []        -> error "TransitionRelation.tagRhs : this is weird"
+                (es1:ess) -> return $ foldr (BinOp OR) es1 ess
+
+    ----------------------------------------
     plusVars :: [Expr] -> [Expr]
+    ----------------------------------------
     plusVars es = concatMap f es
       where
         f e = case e of
@@ -214,82 +244,71 @@ nextAsgn a l r = do es1 <- uf_eq r
     ----------------------------------------
     ufTagRhs :: S Expr
     ----------------------------------------
-    ufTagRhs = do fmt <- uses trFmt mkTagged
-                  vs <- ufAtomsRHS fmt r
-                  case vs of
-                    []     -> return $ Boolean False -- rhs is constant, no tag propagation needed
-                    v:rest -> return $ foldr (BinOp OR) v rest
+    ufTagRhs = do
+      fmt <- uses trFmt mkTagged
+      vs <- ufAtomsRHS fmt r
+      case SQ.viewl vs of
+        SQ.EmptyL    -> return $ Boolean False -- rhs is constant, no tag propagation needed
+        v SQ.:< rest -> return $ foldr (BinOp OR) v rest
 
     mkTagged fmt = fmt{taggedVar=True}
 
 
-----------------------------------------
-varDeps :: Id -> S [Id]
-----------------------------------------
--- recursively look into the given variables arguments
--- the returned list only contain ports
-varDeps v = do c <- isUF v
-               if c
-                 then snd <$> uses (trSt.ufs) (M.lookupDefault err v)
-                 else return [v]
-  where
-    err = throw (PassError $ "could not find " ++ id2Str v ++ " in ufs")
+-- | Recursively look into the given variables arguments.
+-- The returned list only contain ports.
+varDeps :: VExpr -> SQ.Seq Id
+varDeps (VVar{..}) = SQ.singleton vVarName
+varDeps (VUF{..})  = foldl' (\acc v -> acc SQ.>< varDeps v) mempty vFuncArgs
 
-----------------------------------------
-ufAtomsRHS :: VarFormat -> Id -> S [Expr]
-----------------------------------------
--- arguments of the uf formatted with fmt
-ufAtomsRHS fmt u = do c <- isUF u
-                      when (not c) $ errs %= (:) err
-                      atoms <- varDeps u
-                      sequence $ getLastVarRHS fmt <$> atoms
-  where
-    err = throw (PassError $ "could not find " ++ id2Str u ++ " in ufs")
-             
+-- | Arguments of the uf formatted with fmt
+ufAtomsRHS :: VarFormat -> VExpr -> S (SQ.Seq Expr)
+ufAtomsRHS _   v@(VVar{..}) = errs %= (:) (PassError $ "ufAtomsRHS called with a variable " ++ show v)
+                              >> return mempty
+ufAtomsRHS fmt uf@(VUF{..}) = sequence $ getLastVarRHS fmt <$> varDeps uf
 
-----------------------------------------
-uf_eq :: Id -> S [Expr]
-----------------------------------------
-uf_eq u = do c <- uses (trSt . ufs) (M.lookup u)
-             case c of
-               Nothing      -> return []
-               Just (fn, _) ->
-                 do fmt <- use trFmt
-                    let fmtL = fmt{leftVar=True,  rightVar=False}
-                        fmtR = fmt{leftVar=False, rightVar=True}
+-- | Return a UFCheck expression
+uf_eq :: VExpr -> S (SQ.Seq Expr)
+uf_eq (VVar{..}) = return mempty
+uf_eq uf@(VUF{..}) = do
+  fmt <- use trFmt
+  let fmtL = fmt{leftVar=True,  rightVar=False}
+      fmtR = fmt{leftVar=False, rightVar=True}
+  varsL <- ufAtomsRHS fmtL uf
+  varsR <- ufAtomsRHS fmtR uf
+  let lhs = SQ.zip varsL varsR
+      rhs = (makeVar fmtL vVarName, makeVar fmtR vVarName)
+  return $ return
+    UFCheck { ufFunc  = vFuncName
+            , ufArgs  = toList lhs
+            , ufNames = rhs
+            }
 
-                    varsL <- ufAtomsRHS fmtL u
-                    varsR <- ufAtomsRHS fmtR u
+-- --------------------------------------------------------------------------------
+-- -- helper functions
+-- --------------------------------------------------------------------------------
 
-                    let lhs = zip varsL varsR
-                        rhs = (makeVar fmtL u, makeVar fmtR u)
-                    return [UFCheck { ufFunc  = fn
-                                    , ufArgs  = lhs
-                                    , ufNames = rhs
-                                    }]
-                    
---------------------------------------------------------------------------------
--- helper functions
---------------------------------------------------------------------------------
-
-isUF :: Id -> S Bool
-isUF v = uses (trSt . ufs) (M.member v)
-
-getLastVarRHS       :: VarFormat -> Id -> S Expr
+-- | Returned the last blocking assignment to the variable
+getLastVarRHS :: VarFormat -> Id -> S Expr
 getLastVarRHS fmt v = do mi <- uses trBAs (M.lookup v)
                          return $ makeVar fmt{varId=mi} v
 
+-- | Returned the last assignment (blocking or non-blocking) to the variable
 getLastVarLHS       :: VarFormat -> Id -> S Expr
 getLastVarLHS fmt v = do mi <- uses trAs (M.lookup v)
                          return $ makeVar fmt{varId=mi} v
 
+-- | Increment the blocking assignment index of the variable
 incrBA :: Id -> S ()
 incrBA v = do trAs  <~ uses trAs  (M.alter updateInd v)
               trBAs <~ uses trBAs (M.alter updateInd v)
 
+-- | Increment the non-blocking assignment index of the variable
 incrNBA :: Id -> S ()
 incrNBA v = trAs  <~ uses trAs  (M.alter updateInd v)
 
+-- | Increment the Maybe integer
+-- Nothing -> Just 1
+-- Just n  -> Just (n + 1)
 updateInd         :: Maybe Int -> Maybe Int
 updateInd Nothing = Just 1
 updateInd m       = (+ 1) <$> m

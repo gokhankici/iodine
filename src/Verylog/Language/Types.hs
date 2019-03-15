@@ -22,6 +22,8 @@ import qualified Data.Monoid as Mo
 import           GHC.Generics hiding (to)
 import           Control.DeepSeq
 import qualified Data.Yaml  as Y
+import qualified Data.Sequence as SQ
+import           Data.Foldable
 
 --------------------------------------------------------------------------------
 -- IR for the formalism
@@ -49,21 +51,21 @@ data AlwaysBlock = AB { _aEvent   :: Event
 
 type Id = T.Text
 
-data Port = Input  { portName :: ! Id }
-          | Output { portName :: ! Id }
+data Port = Input  { portName :: Id }
+          | Output { portName :: Id }
           deriving (Eq, Generic)
 
-data Var = Register { varName :: ! Id }
-         | Wire     { varName :: ! Id }
+data Var = Register { varName :: Id }
+         | Wire     { varName :: Id }
          deriving (Eq, Generic)
 
-data IR = Always     { event      :: ! Event
-                     , alwaysStmt :: ! Stmt
-                     , alwaysLoc  :: ! (Id, Id) -- Module & instance name
+data IR = Always     { event      :: Event
+                     , alwaysStmt :: Stmt
+                     , alwaysLoc  :: (Id, Id) -- Module & instance name
                      }
-        | ModuleInst { modInstName :: ! Id
-                     , modParams   :: ! [Port] -- formal parameters
-                     , modInstSt   :: ! St
+        | ModuleInst { modInstName :: Id
+                     , modParams   :: [Port] -- formal parameters
+                     , modInstSt   :: St
                      }
         deriving (Generic)
 
@@ -73,33 +75,40 @@ data Event = Star
            | Assign
            deriving (Eq, Generic)
 
-data Stmt = Block           { blockStmts :: ! [Stmt] }
-          | BlockingAsgn    { lhs        :: ! Id
-                            , rhs        :: ! Id
+-- Verilog expression
+data VExpr = VVar { vVarName  :: Id }
+           | VUF  { vVarName  :: Id
+                  , vFuncName :: Id
+                  , vFuncArgs :: (SQ.Seq VExpr)
+                  }
+           deriving (Eq, Generic)
+
+data Stmt = Block           { blockStmts :: [Stmt] }
+          | BlockingAsgn    { lhs        :: Id
+                            , rhs        :: VExpr
                             }
-          | NonBlockingAsgn { lhs        :: ! Id
-                            , rhs        :: ! Id
+          | NonBlockingAsgn { lhs        :: Id
+                            , rhs        :: VExpr
                             }
-          | IfStmt          { ifCond     :: ! Id
-                            , thenStmt   :: ! Stmt
-                            , elseStmt   :: ! Stmt
+          | IfStmt          { ifCond     :: VExpr
+                            , thenStmt   :: Stmt
+                            , elseStmt   :: Stmt
                             }
           | Skip
           deriving (Generic)
 
 type UFMap = M.HashMap Id (Id, [Id])
 
-data Annotation
-  = Source       Id
-  | Sink         Id
-  | Sanitize     [Id]
-  | SanitizeMod  { annotModuleName :: Id
-                 , annotVarName    :: Id
-                 }
-  | SanitizeGlob Id
-  | TaintEq      Id
-  | AssertEq     Id
-  deriving (Show)
+data Annotation = Source       Id
+                | Sink         Id
+                | Sanitize     [Id]
+                | SanitizeMod  { annotModuleName :: Id
+                               , annotVarName    :: Id
+                               }
+                | SanitizeGlob Id
+                | TaintEq      Id
+                | AssertEq     Id
+                deriving (Show)
 
 data AnnotSt = AnnotSt { _sources      :: S.HashSet Id
                        , _sinks        :: S.HashSet Id
@@ -115,9 +124,8 @@ data AnnotStFile = AnnotStFile { _goodAnnot :: AnnotSt
                                }
                  deriving (Generic)
 
-data St = St { _ports :: [Var]
-             , _ufs   :: UFMap
-             , _irs   :: [IR]
+data St = St { _ports :: SQ.Seq Var
+             , _irs   :: SQ.Seq IR
              }
           deriving (Generic)
 
@@ -131,7 +139,6 @@ emptyAnnotSt = AnnotSt { _sources      = mempty
                        }
 emptySt :: St
 emptySt = St { _ports = mempty
-             , _ufs   = mempty
              , _irs   = mempty
              }
 
@@ -144,14 +151,14 @@ makeLenses ''AlwaysBlock
 done_atom :: Id
 done_atom = "done"
 
-runIRs :: (IR -> State St a) -> State St [a]
-runIRs f = use irs >>= sequence . (map f)
+runIRs :: (IR -> State St a) -> State St (SQ.Seq a)
+runIRs f = use irs >>= sequence . (fmap f)
 
 runIRs_ :: (IR -> State St a) -> State St ()
-runIRs_ f = use irs >>= sequence_ . (map f)
+runIRs_ f = use irs >>= sequence_ . (fmap f)
 
-readIRs :: St -> (IR -> Reader St a) -> [a]
-readIRs st f = st^.irs.to (map (r . f))
+readIRs :: St -> (IR -> Reader St a) -> SQ.Seq a
+readIRs st f = st^.irs.to (fmap (r . f))
   where
     r m = runReader m st
 
@@ -191,15 +198,19 @@ instance PPrint Stmt where
   toDoc (Block [])     = brackets empty
   toDoc (Block (s:ss)) = vcat $ (lbrack <+> toDoc s) : (((comma <+>) . toDoc) <$> ss) ++ [rbrack]
   toDoc (BlockingAsgn{..}) =
-    text "b_asn(" <> id2Doc lhs <> comma <+> id2Doc rhs <> rparen
+    text "b_asn(" <> id2Doc lhs <> comma <+> toDoc rhs <> rparen
   toDoc (NonBlockingAsgn{..}) =
-    text "nb_asn(" <> id2Doc lhs <> comma <+> id2Doc rhs <> rparen
-  toDoc (IfStmt{..}) = text "ite" <> vcat [ lparen <+> id2Doc ifCond
+    text "nb_asn(" <> id2Doc lhs <> comma <+> toDoc rhs <> rparen
+  toDoc (IfStmt{..}) = text "ite" <> vcat [ lparen <+> toDoc ifCond
                                           , comma  <+> toDoc thenStmt
                                           , comma  <+> toDoc elseStmt
                                           , rparen
                                           ]
   toDoc Skip = text "skip"
+
+instance PPrint VExpr where
+  toDoc (VVar v)   = id2Doc v
+  toDoc (VUF {..}) = id2Doc vFuncName <> parens (hsep $ punctuate comma (toDoc <$> toList vFuncArgs))
 
 instance PPrint Event where
   toDoc Star          = text "event1(star)"
@@ -207,19 +218,24 @@ instance PPrint Event where
   toDoc (PosEdge clk) = text "event2(posedge," <> id2Doc clk <> rparen
   toDoc (NegEdge clk) = text "event2(negedge," <> id2Doc clk <> rparen
 
+instance PPrint T.Text where
+  toDoc = text . T.unpack
+
 instance PPrint a => PPrint [a] where
   toDoc as = brackets $ hsep $ punctuate comma (map toDoc as)
+
+instance PPrint a => PPrint (SQ.Seq a) where
+  toDoc as = brackets $ hsep $ punctuate comma (toList $ fmap toDoc as)
 
 instance PPrint Var where
   toDoc (Register r) = text "register" <> parens (id2Doc r)
   toDoc (Wire w)     = text "wire" <> parens (id2Doc w)
 
 instance PPrint St where
-  toDoc st = vcat $ stDoc : space : st^.irs.to (map toDoc)
+  toDoc st = vcat $ stDoc : space : st^.irs.(to (fmap toDoc)).(to toList)
     where
       stDoc = text "St" <+>
-              vcat [ lbrace <+> text "ports" <+> equals <+> st^.ports.to         toDoc
-                   , comma  <+> text "ufs  " <+> equals <+> st^.ufs.to           printMap
+              vcat [ lbrace <+> text "ports" <+> equals <+> st^.ports.to toDoc
                    , rbrace
                    ]
 
@@ -228,7 +244,6 @@ instance PPrint AlwaysBlock where
                                    , comment "mod name " <+> id2Doc (a^.aLoc^._1)    <> comma
                                    , comment "inst name" <+> id2Doc (a^.aLoc^._2)    <> comma
                                    , comment "ports    " <+> toDoc (a^.aSt^.ports)   <> comma
-                                   , comment "ufs      " <+> printMap  (a^.aSt^.ufs) <> comma
                                    , toDoc (a^.aEvent)                               <> comma
                                    , toDoc (a^.aStmt)
                                    ] <> text ")."
@@ -260,6 +275,8 @@ printMap = brackets
   where
     mapKV (k,(f, l)) = "(" ++ id2Str k ++ ", " ++ id2Str f ++ ", [" ++ (intercalate ", " $ id2Str <$> l) ++ "])"
 
+instance Show VExpr where
+  show = pprint
 instance Show IR where
   show = pprint
 instance Show Stmt where
@@ -274,6 +291,7 @@ instance Show AlwaysBlock where
   show = pprint
 
 instance NFData Event
+instance NFData VExpr
 instance NFData Stmt
 instance NFData Var
 instance NFData Port
@@ -297,15 +315,11 @@ instance SG.Semigroup AnnotSt where
 
 instance SG.Semigroup St where
   m1 <> m2 =
-    St { _ports = jn_list ports
-       , _ufs   = (m1 ^. ufs) Mo.<> (m2 ^. ufs)
+    St { _ports = jn_seq ports
        , _irs   = (m1 ^. irs) Mo.<> (m2 ^. irs)
        }
     where
-      jn_list fld =
-        S.toList $
-        S.fromList (m1 ^. fld) Mo.<>
-        S.fromList (m2 ^. fld)
+      jn_seq fld = seqNub $ (m1 ^. fld) SQ.>< (m2 ^. fld)
 
 instance Mo.Monoid AnnotSt where
   mempty  = emptyAnnotSt
@@ -315,23 +329,35 @@ instance Mo.Monoid St where
   mempty  = emptySt
   mappend = (SG.<>)
 
-getRegisters :: AlwaysBlock -> [Id]
-getRegisters a =
-  map varName $ filter isRegister (a ^. aSt ^. ports)
+getRegisters :: AlwaysBlock -> SQ.Seq Id
+getRegisters a = fmap varName $ SQ.filter isRegister (a ^. aSt ^. ports)
 
 isRegister :: Var -> Bool
 isRegister (Register _) = True
 isRegister (Wire _)     = False
 
+type IdSeq = SQ.Seq Id
+
 class FoldVariables a where
-  foldVariables :: a -> [Id]
+  foldVariables :: a -> IdSeq
+
+  foldVariablesSet :: a -> S.HashSet Id
+  foldVariablesSet = foldl' (flip S.insert) mempty . foldVariables
+
+instance FoldVariables VExpr where
+  foldVariables (VVar v)   = SQ.singleton v
+  foldVariables (VUF {..}) = foldl' f SQ.empty vFuncArgs
+    where
+      f vs a = let vs2 = foldVariables a in seq vs2 (vs SQ.>< vs2)
 
 instance FoldVariables Stmt where
-  foldVariables (Block ss)            = concatMap foldVariables ss
-  foldVariables (BlockingAsgn l r)    = [l, r]
-  foldVariables (NonBlockingAsgn l r) = [l, r]
-  foldVariables (IfStmt c t e)        = [c] ++ concatMap foldVariables [t,e]
-  foldVariables Skip                  = []
+  foldVariables Skip                  = SQ.empty
+  foldVariables (BlockingAsgn l r)    = l SQ.<| foldVariables r
+  foldVariables (NonBlockingAsgn l r) = l SQ.<| foldVariables r
+  foldVariables (IfStmt c t e)        = foldVariables c SQ.><
+                                        foldVariables t SQ.><
+                                        foldVariables e
+  foldVariables (Block ss)            = foldl' (SQ.><) SQ.empty (foldVariables <$> ss)
 
 instance FoldVariables IR where
   foldVariables (Always _ s _) = foldVariables s
@@ -438,3 +464,30 @@ encodeAnnotStFile = Y.encodeFile
 
 decodeAnnotStFile :: MonadIO m => FilePath -> m AnnotStFile
 decodeAnnotStFile = Y.decodeFileThrow
+
+vexprPortSeq :: VExpr -> IdSeq
+vexprPortSeq = foldVariables
+
+vexprPortSet :: VExpr -> S.HashSet Id
+vexprPortSet = foldVariablesSet
+
+stmtCollectVExpr :: Stmt -> SQ.Seq VExpr
+stmtCollectVExpr (Block{..}) = go blockStmts
+  where
+    go []     = mempty
+    go (s:ss) = stmtCollectVExpr s SQ.>< go ss
+stmtCollectVExpr (BlockingAsgn{..}) = SQ.singleton rhs
+stmtCollectVExpr (NonBlockingAsgn{..}) = SQ.singleton rhs
+stmtCollectVExpr (IfStmt{..}) = ifCond SQ.<|
+                                stmtCollectVExpr thenStmt SQ.><
+                                stmtCollectVExpr elseStmt
+stmtCollectVExpr Skip = mempty
+
+seqNub :: (Hashable a, Eq a) => SQ.Seq a -> SQ.Seq a
+seqNub = set2seq . seq2set
+
+set2seq :: S.HashSet a -> SQ.Seq a
+set2seq = S.foldl' (SQ.|>) mempty
+
+seq2set :: (Hashable a, Eq a) => SQ.Seq a -> S.HashSet a
+seq2set = foldl' (flip S.insert) mempty

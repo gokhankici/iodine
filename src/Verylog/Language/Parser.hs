@@ -20,13 +20,13 @@ import           Data.Char (isLetter, isDigit)
 import           Data.Hashable
 import qualified Data.HashMap.Strict        as M
 import qualified Data.HashSet               as S
-import qualified Data.List                  as Li
 import qualified Data.Text                  as T
 import           Data.Typeable
 import           Text.Megaparsec            as MP hiding (parse, State(..))
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import           Text.Printf
+import qualified Data.Sequence              as SQ
 
 import Verylog.Utils
 import Verylog.Language.Types
@@ -149,13 +149,6 @@ makeState (topIR@(TopModule{..}):as) = resultState -- trace (show (resultState^.
   where
     resultState = evalState comp emptyParseSt
 
-    flattenUFs   :: UFMap -> UFMap
-    flattenUFs m = let varDeps :: Id -> [Id]
-                       varDeps v = case M.lookup v m of
-                                     Nothing        -> [v]
-                                     Just (_, args) -> concatMap varDeps args
-                   in M.mapWithKey (\k (f, _) -> (f, varDeps k)) m
-
     loc = ("TOPLEVEL", "TOPLEVEL") :: (Id, Id)
 
     comp = do
@@ -164,8 +157,7 @@ makeState (topIR@(TopModule{..}):as) = resultState -- trace (show (resultState^.
 
       -- collect ports and ufs
       collectNonTaint topIR
-      st . ports <~ uses parsePorts S.toList
-      st . ufs   <~ uses parseUFs   flattenUFs
+      st . ports <~ uses parsePorts set2seq
 
       -- update taint info of st
       annots . sources      <~ use parseSources
@@ -187,7 +179,7 @@ makeState (topIR@(TopModule{..}):as) = resultState -- trace (show (resultState^.
       annots . taintEq %= S.union (S.fromList topWireInputs)
 
       -- create intermediary IR from parse IR
-      st . irs <~ uses st (makeIntermediaryIR loc mBehaviors mGates)
+      st . irs <~ makeIntermediaryIR loc mBehaviors mGates
 
       -- do some sanity checks
       sanityChecks
@@ -196,11 +188,14 @@ makeState (topIR@(TopModule{..}):as) = resultState -- trace (show (resultState^.
 
 makeState _ = throw (PassError "First ir is not a toplevel module !")
 
-sanityChecks :: State ParseSt ()
+type P = State ParseSt
+
+sanityChecks :: P ()
 sanityChecks = do
   -- make sure we have at least one source and a sink
   srcs <- uses parseSources S.toList
   snks <- uses parseSinks   S.toList
+  snkSet <- use parseSinks
   when (null srcs || null snks) $
     throw (PassError "Source or sink taint information is missing")
 
@@ -220,38 +215,36 @@ sanityChecks = do
 
   -- check if source and sink variables actually exist, and
   -- make sure source or sink variables are registers
-  rs  <- uses (st . ports) (map varName . filter isRegister)
-  -- let src_dif = srcs Li.\\ rs
-  -- when (src_dif /= [] || snk_dif /= []) $
-  let snk_dif = snks Li.\\ rs
-  when (snk_dif /= []) $
+  rs  <- uses (st . ports) (seq2set . fmap varName . SQ.filter isRegister)
+  let snk_dif = snkSet `S.difference` rs
+  when (not $ S.null snk_dif) $
     error $
     printf "Taint variable is not a register !\n  sinks: %s\n"
     (show snk_dif)
 
 
 -----------------------------------------------------------------------------------
-collectTaint :: ParseIR -> State ParseSt ()
+collectTaint :: ParseIR -> P ()
 -----------------------------------------------------------------------------------
 collectTaint (TopModule{..}) = sanitizeSubmodules mGates
 collectTaint (PQualifier _) = return ()
 collectTaint (PAnnotation annot)  = fromAnnot annot
   where
-    fromAnnot :: Annotation -> State ParseSt ()
+    fromAnnot :: Annotation -> P ()
     fromAnnot (Source s)        = parseSources      %= S.insert s
     fromAnnot (Sink s)          = parseSinks        %= S.insert s
     fromAnnot (TaintEq s)       = parseTaintEq      %= S.insert s
     fromAnnot (AssertEq s)      = parseAssertEq     %= S.insert s
     fromAnnot (Sanitize s)      = parseSanitize     %= S.union (S.fromList s)
-    fromAnnot (SanitizeGlob s)  = do parseSanitizeGlob %= S.insert s
-                                     parseSanitize     %= S.insert s
+    fromAnnot (SanitizeGlob s)  = parseSanitizeGlob %= S.insert s >>
+                                  parseSanitize     %= S.insert s
     fromAnnot (SanitizeMod{..}) = parseModSanitize %= mapOfSetInsert annotModuleName annotVarName
 
 -- figures out which variables to sanitize inside the module instantiations
-sanitizeSubmodules       :: [ParseGate] -> State ParseSt ()
+sanitizeSubmodules       :: [ParseGate] -> P ()
 sanitizeSubmodules gates = sequence_ $ sanitizeInst <$> gates
   where
-    sanitizeInst                   :: ParseGate -> State ParseSt ()
+    sanitizeInst :: ParseGate -> P ()
     sanitizeInst (PContAsgn _ _)   = return ()
     sanitizeInst (PModuleInst{..}) = do
       sanitizeSubmodules pmInstGates
@@ -268,13 +261,13 @@ sanitizeSubmodules gates = sequence_ $ sanitizeInst <$> gates
 
 
 -----------------------------------------------------------------------------------
-collectNonTaint :: ParseIR -> State ParseSt ()
+collectNonTaint :: ParseIR -> P ()
 -----------------------------------------------------------------------------------
 collectNonTaint (TopModule{..}) = collectPortAndUFs mPorts mGates mUFs
 collectNonTaint _               = error "collectNonTaint is called without top module"
 
 -- collect ports and ufs
-collectPortAndUFs :: [ParseVar] -> [ParseGate] -> [ParseUF] -> State ParseSt ()
+collectPortAndUFs :: [ParseVar] -> [ParseGate] -> [ParseUF] -> P ()
 collectPortAndUFs vs gs us = do
   sequence_ $ (\v -> parsePorts %= S.insert (toVar v)) <$> vs
   sequence_ $
@@ -291,40 +284,75 @@ collectPortAndUFs vs gs us = do
     toVar (PRegister r) = Register r
 
 
------------------------------------------------------------------------------------
-makeIntermediaryIR :: Loc -> [ParseBehavior] -> [ParseGate] -> St -> [IR]
------------------------------------------------------------------------------------
 type Loc = (Id, Id)
+-----------------------------------------------------------------------------------
+makeIntermediaryIR :: Loc -> [ParseBehavior] -> [ParseGate] -> P (SQ.Seq IR)
+-----------------------------------------------------------------------------------
+makeIntermediaryIR loc alwaysBlocks gates = do
+  irs1 <- mapM (always2IR loc) $ SQ.fromList alwaysBlocks
+  irs2 <- mapM (gate2IR loc) $ SQ.fromList gates
+  return $ irs1 SQ.>< irs2
 
-makeIntermediaryIR loc alwaysBlocks gates topSt =
-  (always2IR loc <$> alwaysBlocks) ++ (gate2IR loc topSt <$> gates)
+always2IR :: Loc -> ParseBehavior -> P IR
+always2IR loc (PAlways ev stmt) = do
+  s <- makeStmt stmt
+  return $ Always (makeEvent ev) s loc
 
-gate2IR                           :: Loc -> St -> ParseGate -> IR
-gate2IR loc _ (PContAsgn l r)     = Always Assign (BlockingAsgn l r) loc
-gate2IR _ topSt (PModuleInst{..}) =
-  ModuleInst{ modInstName = pmInstName
-            , modParams   = toPort <$> pmInstPorts
-            , modInstSt   = set irs (makeIntermediaryIR loc' pmInstBehaviors pmInstGates topSt) topSt
-            }
+makeStmt :: ParseStmt -> P Stmt
+makeStmt (PBlock ss)            = Block <$> mapM makeStmt ss
+makeStmt (PBlockingAsgn l r)    = BlockingAsgn
+                                  <$> checkLhsIsVar l
+                                  <*> makeExpr r
+makeStmt (PNonBlockingAsgn l r) = NonBlockingAsgn 
+                                  <$> checkLhsIsVar l
+                                  <*> makeExpr r
+makeStmt (PIfStmt cond th el)   = IfStmt
+                                  <$> makeExpr cond
+                                  <*> makeStmt th
+                                  <*> makeStmt el
+makeStmt PSkip                  = return Skip
+
+gate2IR :: Loc -> ParseGate -> P IR
+gate2IR loc (PContAsgn l r) = do
+  l' <- checkLhsIsVar l
+  r' <- makeExpr r
+  return $ Always Assign (BlockingAsgn l' r') loc
+gate2IR _ (PModuleInst{..}) = do
+  irs' <- makeIntermediaryIR loc' pmInstBehaviors pmInstGates
+  st' <- uses st (set irs irs')
+  return $
+    ModuleInst{ modInstName = pmInstName
+              , modParams   = toPort <$> pmInstPorts
+              , modInstSt   = st'
+              }
   where
     toPort (PInput x)  = Input x
     toPort (POutput x) = Output x
     loc' = (pmModuleName, pmInstName)
 
-always2IR                       :: Loc -> ParseBehavior -> IR
-always2IR loc (PAlways ev stmt) = Always (makeEvent ev) (makeStmt stmt) loc
-
-makeEvent                :: ParseEvent -> Event
+makeEvent :: ParseEvent -> Event
 makeEvent PStar          = Star
 makeEvent (PPosEdge clk) = PosEdge clk
 makeEvent (PNegEdge clk) = NegEdge clk
 
-makeStmt                        :: ParseStmt -> Stmt
-makeStmt (PBlock ss)            = Block (makeStmt <$> ss)
-makeStmt (PBlockingAsgn l r)    = BlockingAsgn l r
-makeStmt (PNonBlockingAsgn l r) = NonBlockingAsgn l r
-makeStmt (PIfStmt cond th el)   = IfStmt cond (makeStmt th) (makeStmt el)
-makeStmt  PSkip                 = Skip
+makeExpr :: Id -> P VExpr
+makeExpr v = do
+  res <- uses parseUFs (M.lookup v)
+  case res of
+    Nothing       -> return (VVar v)
+    Just (fn, as) -> do
+      as' <- SQ.fromList <$> mapM makeExpr as
+      return $ VUF { vVarName  = v
+                   , vFuncName = fn
+                   , vFuncArgs = as'
+                   }
+
+checkLhsIsVar :: Id -> P Id
+checkLhsIsVar l = do
+  res <- uses parseUFs (M.lookup l)
+  case res of
+    Nothing -> return l
+    _       -> error $ printf "lhs '%s' is a function!" l
 
 --------------------------------------------------------------------------------
 -- | Top-Level Expression Parser

@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -21,7 +22,10 @@ import           Data.Graph.Inductive.Graph hiding ((&))
 import           Text.Printf
 import           Debug.Trace
 
-type ABS        = [AlwaysBlock]
+import qualified Data.Sequence as SQ
+import qualified Data.Foldable as F
+
+type ABS        = SQ.Seq AlwaysBlock
 type Qualifiers = [FPQualifier]
 
 merge :: (ABS, Qualifiers) -> ABS
@@ -47,20 +51,20 @@ merge =
 mergeEquals :: (ABS, Qualifiers) -> (ABS, Qualifiers)
 mergeEquals (as, allQualifiers) = (as', allQualifiers)
   where
-    as' = rest ++ newclocks1 ++ newclocks2
+    as' = rest SQ.>< newclocks1 SQ.>< newclocks2
 
-    (clocks, rest) = partition ((==) NonBlocking . eventToAssignType . view aEvent) as
+    (clocks, rest) = SQ.partition ((==) NonBlocking . eventToAssignType . view aEvent) as
 
     newclocks1 = mergeBlocks abMap iss
     newclocks2 = let toRemove = concat iss
-                 in  filter (not . flip elem toRemove . view aId) clocks
+                 in  SQ.filter (not . flip elem toRemove . view aId) clocks
 
     ws  = writeSets clocks
     vss = foldl' (\acc -> \case
                      QualifPairs vs -> vs:acc
                      _              -> acc) [] allQualifiers
 
-    abMap = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
+    abMap = abs2Map as
     iss =
       let iss1 =
             [ IM.foldMapWithKey
@@ -70,15 +74,15 @@ mergeEquals (as, allQualifiers) = (as', allQualifiers)
             ]
       in  filter ((> 1) . length) iss1
                      
-mergeAssignsAndStars :: [AlwaysBlock] -> [AlwaysBlock]
+mergeAssignsAndStars :: ABS -> ABS
 mergeAssignsAndStars as = res
   where
     _res = mergeBlocksG abMap g'
-    res  = debug ("merge all:\n" ++ intercalate "\n\n" (show . view aStmt <$> _res)) _res
+    res  = debug ("merge all:\n" ++ intercalate "\n\n" (show . view aStmt <$> (F.toList _res))) _res
 
-    abMap = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
+    abMap = abs2Map as
     rs    = readSets as
-    ws    = writeSets $ filter ((/=) NonBlocking . eventToAssignType . view aEvent) as
+    ws    = writeSets $ SQ.filter ((/=) NonBlocking . eventToAssignType . view aEvent) as
     g     = makeGraphFromRWSet abMap rs ws
 
     g' = if hasCycle g then error "mergeAssignsAndStars: has a cycle" else g
@@ -112,13 +116,13 @@ mergeClocks as = groups ++ assigns ++ rest
                , _aMd      = mconcat $ view aMd <$> gs
                }
 
-mergeAssigns :: [AlwaysBlock] -> [AlwaysBlock]
+mergeAssigns :: ABS -> ABS
 mergeAssigns as = as'
   where
-    assigns = filter ((==) Continuous . eventToAssignType . view aEvent) as
+    assigns = SQ.filter ((==) Continuous . eventToAssignType . view aEvent) as
     rs      = readSets as
     ws      = writeSets assigns
-    abMap   = IM.fromList $ (\a -> (a ^. aId, a)) <$> as
+    abMap   = abs2Map as
     g       = makeGraphFromRWSet abMap rs ws
     g'      = if hasCycle g then error "mergeAssigns: has a cycle" else g
     as'     = mergeBlocksG abMap g'
@@ -140,26 +144,26 @@ printBlocks as = f <$> as
 -----------------------------------------------------------------------------------
 -- Helper functions
 -----------------------------------------------------------------------------------
-mergeBlocks :: AM -> [[Node]] -> [AlwaysBlock]
-mergeBlocks abMap nss = 
-  [ let as2 = (abMap IM.!) <$> ns
-        a' = AB { _aEvent = (last as2) ^. aEvent
-                , _aStmt  = Block $ view aStmt <$> as2
-                , _aId    = n + maxId
-                , _aSt    = mconcat $ view aSt <$> as2
-                , _aLoc   = ("mergeBlocks", "mergeBlocks")
-                , _aMd    = mconcat $ view aMd <$> as2
-                }
-        ns = debug (show ns') ns'
-
-    in a'
-  | (n, ns') <- zip [1..] nss
-  ]
+mergeBlocks :: AM -> [[Node]] -> ABS
+mergeBlocks abMap nss = go (1, mempty) nss
   where
     maxId = fst $ IM.findMax abMap
 
+    go :: (Int, ABS) -> [[Node]] -> ABS
+    go (_, acc) [] = acc
+    go (!n, !acc) (ns':rest) =
+      let as2 = (abMap IM.!) <$> ns
+          a'  = AB { _aEvent = (last as2) ^. aEvent
+                   , _aStmt  = Block $ view aStmt <$> as2
+                   , _aId    = n + maxId
+                   , _aSt    = mconcat $ view aSt <$> as2
+                   , _aLoc   = ("mergeBlocks", "mergeBlocks")
+                   , _aMd    = mconcat $ view aMd <$> as2
+                   }
+          ns  = debug (show ns') ns'
+     in go (n+1, acc SQ.|> a') rest
 
-mergeBlocksG :: AM -> G -> [AlwaysBlock]
+mergeBlocksG :: AM -> G -> ABS
 mergeBlocksG abMap g = mergeBlocks abMap (pathsToNonAssignsG g)
 
 debug :: String -> a -> a
@@ -169,3 +173,5 @@ debug str n = if   enabled
   where
     enabled = False
 
+abs2Map :: ABS -> IM.IntMap AlwaysBlock
+abs2Map = F.foldl' (\acc a -> IM.insert (a^.aId) a acc) mempty

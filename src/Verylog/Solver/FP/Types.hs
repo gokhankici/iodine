@@ -5,12 +5,12 @@
 
 module Verylog.Solver.FP.Types where
 
-import           Verylog.Language.Types hiding (St, ufs)
+import           Verylog.Language.Types hiding (St)
 import           Verylog.Solver.Common
-
 import           Control.DeepSeq
 import           Control.Exception
 import           Control.Lens
+import           Data.Sequence
 import qualified Data.HashMap.Strict        as M
 import           GHC.Generics hiding (to)
 import qualified Language.Fixpoint.Types    as FQ
@@ -44,9 +44,8 @@ data UFConst = UFConst { ufConstName  :: Id
 type BindMap = M.HashMap Id FQBind
 
 data FPSt = FPSt { _fpConstraints :: Constraints
-                 , _fpABs         :: [AlwaysBlock]
+                 , _fpABs         :: Seq AlwaysBlock
                  , _fpBinds       :: BindMap
-                 , _fpUFs         :: UFMap
                  , _fpQualifiers  :: [FPQualifier]
                  , _fpAnnotations :: AnnotSt
                  }

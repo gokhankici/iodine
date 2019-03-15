@@ -23,13 +23,15 @@ module Verylog.Transform.DFG
 import           Verylog.Language.Types
 import           Verylog.Transform.Utils
 
-import           Control.Lens            hiding (mapping, pre)
-import qualified Data.HashSet            as HS
-import qualified Data.HashMap.Strict     as HM
-import qualified Data.IntMap.Strict      as IM
-import qualified Data.IntSet             as IS
+import           Control.Lens        hiding (mapping, pre)
+import qualified Data.HashSet        as HS
+import qualified Data.HashMap.Strict as HM
+import qualified Data.IntMap.Strict  as IM
+import qualified Data.IntSet         as IS
 import           Text.Printf
 import           Data.Monoid
+import qualified Data.Sequence       as SQ
+import qualified Data.Foldable       as F
 
 import Data.Graph.Inductive.Graph
 import Data.Graph.Inductive.PatriciaTree
@@ -43,16 +45,16 @@ wireTaints :: AlwaysBlock -> [Id] -> [Id]
 wireTaints a srcs =  rs ++ (HS.toList $ worklist a (assignmentMap a) ws)
   where
     (rs,ws) = let f p (rss,wss) =
-                    let l = filter (\p' -> varName p' == p) prts
-                    in case l of
-                         []             -> error $ printf "cannot find %s in ports" p
-                         (Register _):_ -> (p:rss, wss)
-                         (Wire _):_     -> (rss, p:wss)
+                    let l = SQ.filter (\p' -> varName p' == p) prts
+                    in case SQ.viewl l of
+                         SQ.EmptyL            -> error $ printf "cannot find %s in ports" p
+                         (Register _) SQ.:< _ -> (p:rss, wss)
+                         (Wire _)     SQ.:< _ -> (rss, p:wss)
               in  foldr f ([],[]) srcs
     prts    = a ^. aSt ^. ports
 
 assignmentMap :: AlwaysBlock -> M
-assignmentMap a = stmt2Assignments (a ^. aStmt) (a ^. aSt ^. ufs)
+assignmentMap a = stmt2Assignments (a ^. aStmt)
 
 worklist :: AlwaysBlock -> M -> [Id] -> S
 worklist a assignments wl = h (wl, HS.empty, HS.empty)
@@ -79,28 +81,28 @@ worklist a assignments wl = h (wl, HS.empty, HS.empty)
                             _          -> s)
            HS.empty (a ^. aSt ^. ports)
 
-stmt2Assignments :: Stmt -> UFMap -> M
-stmt2Assignments s unintFuncs = h [] s
+stmt2Assignments :: Stmt -> M
+stmt2Assignments s = h mempty s
   where
-    h :: [Id] -> Stmt -> M
+    h :: IdSeq -> Stmt -> M
     h _ Skip                  = HM.empty
-    h l (BlockingAsgn{..})    = h2 (l2ls rhs ++ l) lhs HM.empty
-    h l (NonBlockingAsgn{..}) = h2 (l2ls rhs ++ l) lhs HM.empty
+    h l (BlockingAsgn{..})    = h2 (l2ls rhs SQ.>< l) lhs HM.empty
+    h l (NonBlockingAsgn{..}) = h2 (l2ls rhs SQ.>< l) lhs HM.empty
     h l (IfStmt{..})          = HM.unionWith HS.union
-                                (h (l2ls ifCond ++ l) thenStmt)
-                                (h (l2ls ifCond ++ l) elseStmt)
+                                (h (l2ls ifCond SQ.>< l) thenStmt)
+                                (h (l2ls ifCond SQ.>< l) elseStmt)
     h l (Block{..})           = foldr (HM.unionWith HS.union) HM.empty (h l <$> blockStmts)
 
-    h2 :: [Id] -> Id -> M -> M
-    h2 ls r m = foldr (\l m' -> HM.alter (\ml -> case ml of
-                                             Nothing -> Just $ HS.singleton r
-                                             Just rs -> Just $ HS.insert r rs
-                                         ) l m') m ls
+    h2 :: IdSeq -> Id -> M -> M
+    h2 ls r m = F.foldl' (\m' l -> HM.alter
+                           (\ml -> case ml of
+                                     Nothing -> Just $ HS.singleton r
+                                     Just rs -> Just $ HS.insert r rs
+                           ) l m'
+                         ) m ls
 
-    l2ls   :: Id -> [Id]
-    l2ls l = case HM.lookup l unintFuncs of
-               Nothing     -> [l]
-               Just (_,ls) -> ls
+    l2ls :: VExpr -> IdSeq
+    l2ls = vexprPortSeq
 
 
 type S = HS.HashSet Id
@@ -123,11 +125,12 @@ type M2 = HM.HashMap Id IS.IntSet
 hasCycle :: Gr a b -> Bool
 hasCycle g = any ((>= 2) . length) (scc g)
 
-readSets :: [AlwaysBlock] -> RWS
-readSets as = IM.fromList $ (\a -> (a ^. aId, getRhss (a ^. aSt ^. ufs) (a ^. aStmt))) <$> as
+readSets :: SQ.Seq AlwaysBlock -> RWS
+readSets as = F.foldl' (\acc a -> IM.insert (a^.aId) (getRhss (a^.aStmt)) acc) mempty as
 
-writeSets :: [AlwaysBlock] -> RWS
-writeSets as = IM.fromList $ (\a -> (a ^. aId, getLhss (a ^. aStmt))) <$> as
+
+writeSets :: SQ.Seq AlwaysBlock -> RWS
+writeSets as = F.foldl' (\acc a -> IM.insert (a^.aId) (getLhss (a^.aStmt)) acc) mempty as
 
 pathsToNonAssignsG :: G -> [[Node]]
 pathsToNonAssignsG g =
@@ -203,19 +206,14 @@ makeGraphFromRWSet abMap rs ws = mkGraph allNs es
          HM.empty
          ws
 
-getRhss :: UFMap -> Stmt -> S
-getRhss us s = h s
+getRhss :: Stmt -> S
+getRhss = go
   where
-    h Skip                  = HS.empty
-    h (BlockingAsgn{..})    = lukap rhs
-    h (NonBlockingAsgn{..}) = lukap rhs
-    h (IfStmt{..})          = lukap ifCond <> foldMap h [thenStmt, elseStmt]
-    h (Block{..})           = foldMap h blockStmts
-
-    lukap :: Id -> S
-    lukap v = case HM.lookup v us of
-                Nothing     -> HS.singleton v
-                Just (_,vs) -> HS.fromList vs
+    go Skip                  = HS.empty
+    go (BlockingAsgn{..})    = vexprPortSet rhs
+    go (NonBlockingAsgn{..}) = vexprPortSet rhs
+    go (IfStmt{..})          = vexprPortSet ifCond <> foldMap go [thenStmt, elseStmt]
+    go (Block{..})           = foldMap go blockStmts
 
 eventToAssignType             :: Event -> AssignType
 eventToAssignType Assign      = Continuous
