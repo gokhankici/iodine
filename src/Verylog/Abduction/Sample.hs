@@ -19,6 +19,7 @@ import Verylog.Language.Types
 import           Control.Lens
 import qualified Data.HashSet        as HS
 import           Data.List (foldl')
+-- import           Data.Sequence
 
 --------------------------------------------------------------------------------
 sample :: M AnnotSt
@@ -35,8 +36,8 @@ sample = do
     randomVar :: Id -> M AnnotSt
     randomVar v =
       chooseM
-      (over sanitize     (HS.insert v) <$> use (fpst . fpAnnotations))
-      (over sanitizeGlob (HS.insert v) <$> use (fpst . fpAnnotations))
+      (over sanitize     (HS.insert v) <$> use (currentFPSt . fpAnnotations))
+      (over sanitizeGlob (HS.insert v) <$> use (currentFPSt . fpAnnotations))
 
 --------------------------------------------------------------------------------
 acceptanceProb :: Double -> M Double
@@ -51,7 +52,7 @@ acceptanceProb newCost = do
 calculateCost :: AnnotSt -> (Bool, Sol) -> M Double
 --------------------------------------------------------------------------------
 calculateCost newAnnots (safe, _) = do
-  snks <- use (fpst.fpAnnotations.sinks)
+  snks <- use (currentFPSt.fpAnnotations.sinks)
 
   let extraCost1 =
         let f c v = if | v `HS.member` ies -> c + initEqCost   * 10.0

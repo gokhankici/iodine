@@ -15,15 +15,17 @@ import qualified Data.HashMap.Strict        as M
 import           GHC.Generics hiding (to)
 import qualified Language.Fixpoint.Types    as FQ
 
-data FPQualifier = QualifImp    { qualifLhs  :: Id
-                                , qualifRhss :: [Id]
-                                }
-                 | QualifIff    { qualifLhs  :: Id
-                                , qualifRhss :: [Id]
-                                }
-                 | QualifPairs  { qualifEqs    :: [Id] }
-                 | QualifAssume { qualifAssume :: [Id] }
-                 deriving (Generic, Show)
+type FPQualifier = FPQualifierA Id
+data FPQualifierA a =
+    QualifImp    { qualifLhs  :: a
+                 , qualifRhss :: [a]
+                 }
+  | QualifIff    { qualifLhs  :: a
+                 , qualifRhss :: [a]
+                 }
+  | QualifPairs  { qualifEqs    :: [a] }
+  | QualifAssume { qualifAssume :: [a] }
+  deriving (Generic, Show)
 
 data FQBind = FQBind { bindId   :: Int
                      , bindName :: Id
@@ -43,22 +45,24 @@ data UFConst = UFConst { ufConstName  :: Id
 
 type BindMap = M.HashMap Id FQBind
 
-data FPSt = FPSt { _fpConstraints :: Constraints
-                 , _fpABs         :: Seq AlwaysBlock
-                 , _fpBinds       :: BindMap
-                 , _fpQualifiers  :: [FPQualifier]
-                 , _fpAnnotations :: AnnotSt
-                 }
-            deriving (Generic)
+type FPSt = FPStA Id
+data FPStA a =
+  FPSt { _fpConstraints :: Constraints
+       , _fpABs         :: Seq (AlwaysBlockA a)
+       , _fpBinds       :: BindMap
+       , _fpQualifiers  :: [FPQualifier]
+       , _fpAnnotations :: AnnotStA a
+       }
+  deriving (Generic)
 
-makeLenses ''FPSt
+makeLenses ''FPStA
 
-instance Show FPSt where
+instance PPrint a => Show (FPStA a) where
   show fpst = show (fpst ^. fpABs)
 
 instance NFData FQBind
-instance NFData FPSt
-instance NFData FPQualifier
+instance NFData a => NFData (FPStA a)
+instance NFData a => NFData (FPQualifierA a)
 
 idFromExp :: Expr -> Id
 idFromExp (Var v) = v

@@ -103,6 +103,7 @@ mergeClocks as = groups ++ assigns ++ rest
 
     maxId = maximum $ (view aId) <$> as
 
+    mergeGroup :: [AlwaysBlock] -> Int -> [AlwaysBlock]
     mergeGroup gs n = if null gs then [] else [a]
       where
         event' = let e = head gs ^. aEvent

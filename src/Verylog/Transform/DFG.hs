@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -45,7 +46,7 @@ wireTaints :: AlwaysBlock -> [Id] -> [Id]
 wireTaints a srcs =  rs ++ (HS.toList $ worklist a (assignmentMap a) ws)
   where
     (rs,ws) = let f p (rss,wss) =
-                    let l = SQ.filter (\p' -> varName p' == p) prts
+                    let l :: SQ.Seq Var = SQ.filter (\p' -> varName p' == p) prts
                     in case SQ.viewl l of
                          SQ.EmptyL            -> error $ printf "cannot find %s in ports" p
                          (Register _) SQ.:< _ -> (p:rss, wss)
@@ -215,7 +216,7 @@ getRhss = go
     go (IfStmt{..})          = vexprPortSet ifCond <> foldMap go [thenStmt, elseStmt]
     go (Block{..})           = foldMap go blockStmts
 
-eventToAssignType             :: Event -> AssignType
+eventToAssignType :: EventA a -> AssignType
 eventToAssignType Assign      = Continuous
 eventToAssignType Star        = Blocking
 eventToAssignType (PosEdge _) = NonBlocking

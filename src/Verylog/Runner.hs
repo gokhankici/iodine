@@ -7,15 +7,17 @@ module Verylog.Runner ( VerylogArgs(..)
                       , parseArgs
                       , run
                       , main
+                      , test
                       ) where
 
-import qualified Verylog.Abduction.Runner as VA
-import           Verylog.Pipeline
-import           Verylog.Utils
-import           Verylog.Solver.FP.Solve
+import qualified Verylog.Abduction.Runner as VAR
 import           Verylog.Language.Parser
 import           Verylog.Language.Types
+import           Verylog.Pipeline
 import           Verylog.Solver.FP.FQ
+import           Verylog.Solver.FP.Solve
+import           Verylog.Transform.FP.VCGen
+import           Verylog.Utils
 
 import Language.Fixpoint.Types (saveQuery)
 import Language.Fixpoint.Types.Config as FC
@@ -30,6 +32,9 @@ import System.FilePath.Posix
 import System.IO
 import System.Process
 import Text.Printf
+
+-- import Debug.Trace
+import Control.DeepSeq
 
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
@@ -219,14 +224,17 @@ generateIR (VerylogArgs{..}) = do
 -- -----------------------------------------------------------------------------
 checkIR :: VerylogArgs -> IO Bool
 -- -----------------------------------------------------------------------------
-checkIR (VerylogArgs{..}) = makeSilent $ do
+checkIR (VerylogArgs{..}) = do
   fileContents <- readFile fileName
-  let fpst = pipeline (fileName, fileContents)
+  let pipelineInput = (fileName, fileContents)
+      fpst          = pipeline pipelineInput
 
   if | vcgen     -> saveQuery cfg (toFqFormat fpst) >> return True
-     | otherwise -> do let act = if abduction then VA.abduction fileName else solve
-                       (safe, _sol) <- act cfg fpst
+     | abduction -> do let input = VAR.runner' $ pipeline' pipelineInput
+                       (safe, _) <- solve cfg $ toFpSt input
                        return safe
+     | otherwise -> makeSilent $ fmap fst (solve cfg fpst)
+
   where
     makeSilent = if noFPOutput then silence else id
     cfg = defConfig { eliminate   = Some
@@ -251,3 +259,18 @@ passHandle (CycleError{..}) = do
   hPutStrLn stderr "Cycle is written to /tmp/cycle.dot"
   hPutStrLn stderr cycleErrorStr
   return False
+
+-- | This is for testing in ghci ... Has to be removed at some point.
+test :: IO ()
+test =  do
+  a' <- normalizePaths a >>= generateIR
+  let fn = fileName a'
+  fileContents <- readFile fn
+  let pipelineInput = (fn, fileContents)
+  let result = VAR.runner' $ pipeline' pipelineInput
+  result `deepseq` return ()
+  where
+    a = verylogArgs { fileName   = "./test/abduction/pos/abduction-01.v"
+                    , moduleName = "test"
+                    , abduction  = True
+                    }

@@ -35,7 +35,7 @@ readAnnots f = do
     then do af <- decodeAnnotStFile annotFile
             assign negAnnots (af^.badAnnot)
             badStDiff (af^.goodAnnot) >>=
-              modifying (fpst.fpAnnotations) . mappend
+              modifying (currentFPSt.fpAnnotations) . mappend
     else return ()
   where
     annotFile = takeDirectory f </> "" <.> takeFileName f <.> "annot"
@@ -43,7 +43,7 @@ readAnnots f = do
 -- | Writes the current annotations to the files
 writeAnnots :: FilePath -> M ()
 writeAnnots f = do
-  ga <- use (fpst.fpAnnotations)
+  ga <- use (currentFPSt.fpAnnotations)
   ba <- use negAnnots
   let af = mempty & goodAnnot .~ ga & badAnnot .~ ba
   liftIO2 encodeAnnotStFile annotFile af

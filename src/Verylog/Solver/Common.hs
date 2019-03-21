@@ -4,7 +4,9 @@
 
 module Verylog.Solver.Common where
 
-import Verylog.Language.Types
+import Verylog.Language.Types ( Id
+                              , AlwaysBlockA , aId
+                              )
 
 import Language.Fixpoint.Types ( Fixpoint(..)
                                , Loc(..)
@@ -110,7 +112,7 @@ nextPred = "next"
 invPred :: [Char]
 invPred  = "inv"
 
-makeInvPred   :: AlwaysBlock -> String
+makeInvPred   :: AlwaysBlockA a -> String
 makeInvPred a = makeInv (a^.aId)
 
 makeInv :: Int -> String

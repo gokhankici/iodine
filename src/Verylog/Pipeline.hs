@@ -4,22 +4,14 @@ module Verylog.Pipeline ( pipeline
 
 import Control.Arrow
 
+import Verylog.Types
+
 import Verylog.Language.Parser
-import Verylog.Language.Types
 import Verylog.Solver.FP.Types
 import Verylog.Transform.FP.VCGen
 import Verylog.Transform.Merge
 import Verylog.Transform.Modularize
 import Verylog.Transform.SanityCheck
-
-import Data.Sequence
-
-type ABS          = Seq AlwaysBlock
-type States       = (St, AnnotSt)
-type Qualifiers   = [FPQualifier]
-type Intermediary = (ABS, (AnnotSt, Qualifiers))
-type ParseInput   = (FilePath, String)
-type ParseOutput  = (States, Qualifiers)
 
 -- parse       :: (FilePath, String) -> (States, Qualifiers)
 -- modularize  :: States -> ABS
@@ -35,9 +27,9 @@ pipeline :: ParseInput -> FPSt
 pipeline = common >>> toFpSt
 
 --------------------------------------------------------------------------------
-pipeline' :: ParseInput -> ABS
+pipeline' :: ParseInput -> Intermediary
 --------------------------------------------------------------------------------
-pipeline' = common >>> fst
+pipeline' = common
 
 common :: ParseInput -> Intermediary
 common = parse >>> afterParse

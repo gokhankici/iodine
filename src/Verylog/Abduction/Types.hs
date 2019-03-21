@@ -34,10 +34,10 @@ data S = S { _t       :: Double -- temperature
            , _step    :: Int    -- # steps taken in each temperature
            , _curStep :: Int    -- current step (between 0 and step)
 
-           , _solution :: Sol     -- solution returned by liquid-fixpoint
-           , _isSafe   :: Bool
-           , _cost     :: Double  -- the cost of the current annotations & solution
-           , _fpst     :: FPSt    -- current solution
+           , _solution    :: Sol     -- solution returned by liquid-fixpoint
+           , _isSafe      :: Bool
+           , _cost        :: Double  -- the cost of the current annotations & solution
+           , _currentFPSt :: FPSt    -- current solution
 
            , _cfg :: FC.Config
 

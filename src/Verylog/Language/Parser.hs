@@ -99,7 +99,7 @@ data ParseSt = ParseSt { _parseSources      :: S.HashSet Id
                        , _parseTaintEq      :: S.HashSet Id
                        , _parseAssertEq     :: S.HashSet Id
                        , _parseModSanitize  :: M.HashMap Id (S.HashSet Id)
-                       , _parseUFs          :: UFMap
+                       , _parseUFs          :: M.HashMap Id (Id, [Id])
                        , _st                :: St
                        , _annots            :: AnnotSt
                        }

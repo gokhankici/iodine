@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE MultiWayIf #-}
 
@@ -90,7 +91,7 @@ tag_reset_inv annots a =
       if | n `S.member` srcs -> (mk True  <$> makeBothTag n) SQ.>< acc
          | isRegister var    -> (mk False <$> makeBothTag n) SQ.>< acc
          | otherwise         -> acc
-      where n = varName var
+      where n :: Id = varName var
 
 
 --------------------------------------------------------------------------------
@@ -237,8 +238,8 @@ non_interference_checks annots as = non_int_chk as mempty mempty
               f cs_prev a2 =
                 let i1 = a1 ^. aId
                     i2 = a2 ^. aId
-                    r2 = a2 ^. aMd ^. mRegReadSet
-                    w2 = a2 ^. aMd ^. mRegWriteSet
+                    r2 :: S.HashSet Id = a2 ^. aMd ^. mRegReadSet
+                    w2 :: S.HashSet Id = a2 ^. aMd ^. mRegWriteSet
                 in
                 if   hasCommon w1 w2
                 then cs_prev SQ.|>
@@ -276,7 +277,7 @@ non_interference_inv annots a1 a2 =
 
     updates2_1 =
       S.foldl'
-      (\acc var -> let v = varName var in
+      (\acc var -> let v :: Id = varName var in
           (n_lvar v,  lvar v) SQ.<|  -- l' = l
           (n_rvar v,  rvar v) SQ.<|  -- r' = r
           (n_ltvar v, ltvar v) SQ.<| -- lt' = lt
@@ -288,7 +289,7 @@ non_interference_inv annots a1 a2 =
 
     updates2_2 =
       S.foldl'
-      (\acc var -> let p = varName var in
+      (\acc var -> let p :: Id = varName var in
           foldl' (\acc2 v -> lukap v SQ.<| acc2) acc (primes p)
       )
       mempty

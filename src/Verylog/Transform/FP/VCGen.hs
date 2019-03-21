@@ -33,7 +33,7 @@ toFpSt' newAnnots st =
     cs = invs newAnnots (st^.fpABs)
 
 toFpSt  :: (ABS, (AnnotSt, [FPQualifier])) -> FPSt
-toFpSt (_as, (allAnnots, allQualifiers)) =
+toFpSt (as, (allAnnots, allQualifiers)) =
   FPSt { _fpConstraints = cs
        , _fpABs         = as
        , _fpBinds       = bs'
@@ -41,8 +41,6 @@ toFpSt (_as, (allAnnots, allQualifiers)) =
        , _fpAnnotations = allAnnots
        }
   where
-    -- as  = updateFPVars <$> _as
-    as = _as
     cs  = invs allAnnots as
     bs  = getBinds as $ mconcat $ IM.elems cs
     ni  = M.size bs + 1
