@@ -52,7 +52,6 @@ library:
   - -fwarn-incomplete-record-updates
   - -fwarn-incomplete-uni-patterns
   - -fwarn-missing-signatures
-  - -fwarn-monomorphism-restriction
   - -fwarn-name-shadowing
   - -fwarn-orphans
   - -fwarn-overlapping-patterns

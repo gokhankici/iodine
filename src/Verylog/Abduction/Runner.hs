@@ -9,7 +9,7 @@ module Verylog.Abduction.Runner ( runner
 import Verylog.Abduction.Graph
 import Verylog.Abduction.RandomSearch
 import Verylog.Abduction.Types
-import Verylog.Abduction.Utils
+-- import Verylog.Abduction.Utils
 
 import Verylog.Language.Types
 import Verylog.Abduction.Transform
@@ -18,7 +18,7 @@ import Verylog.Solver.FP.Types
 
 import qualified Language.Fixpoint.Types.Config as FC
 
-import Control.Lens
+-- import Control.Lens
 import Data.Functor.Compose
 import Data.Functor.Product
 import Data.Sequence
@@ -31,22 +31,23 @@ runner = abduction
 --------------------------------------------------------------------------------
 runner' :: Intermediary -> Intermediary
 --------------------------------------------------------------------------------
-runner' input = result
+runner' input = removeId (as', newAnnots)
   where
-    _st :: AbductionTransformState
-    (inputWithIndex@(as', _), _st) =
-      over _1 fromProduct $ giveUniqueId $ toProduct input
-
-    st = debug (show _st) _st
+    inputWithIndex@(as', _) = giveId input
     newAnnots = updateAnnotations inputWithIndex
-
-    result = fromProduct $ undoUniqueId (toProduct (as', newAnnots), st)
 
 
 --------------------------------------------------------------------------------
 -- Helper Functions
 --------------------------------------------------------------------------------
 
+giveId :: IntermediaryA Id -> IntermediaryA (Id, Int)
+giveId = fromProduct . giveUniqueId . toProduct
+
+removeId :: IntermediaryA (Id, Int) -> IntermediaryA Id
+removeId = fromProduct . undoUniqueId . toProduct
+
+-- MyProduct = (Seq (AlwaysBlock a), (AnnotSt a, [FPQualifier a]))
 type MyProduct a = Product (Compose Seq AlwaysBlockA) (Product (AnnotStA) (Compose [] FPQualifierA)) a
 
 toProduct :: IntermediaryA a -> MyProduct a

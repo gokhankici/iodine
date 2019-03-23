@@ -67,21 +67,22 @@ instance Show GlobalMetadata where
   show gm = printf "GlobalMetadata(vars=[%s])"
             (intercalate ", " (fmap id2Str $ toList (gm^.gmVariables)))
 
-data R = TagEq    { varName :: Id }
-       | ValueEq  { varName :: Id }
-       | TagEq2   { varName :: Id, var2Name :: Id }
-       | ValueEq2 { varName :: Id, var2Name :: Id }
-       | NoTaint  { varName :: Id }
-       deriving (Eq)
+data AbductionAnnot a =
+    TagEq    { varName :: a }
+  | ValueEq  { varName :: a }
+  | TagEq2   { varName :: a, var2Name :: a }
+  | ValueEq2 { varName :: a, var2Name :: a }
+  | NoTaint  { varName :: a }
+  deriving (Eq)
 
-instance Show R where
-  show (TagEq    {..}) = printf "tag_eq(%s)" varName
-  show (ValueEq  {..}) = printf "val_eq(%s)" varName
-  show (TagEq2   {..}) = printf "tag_eq(%s, %s)" varName var2Name
-  show (ValueEq2 {..}) = printf "val_eq(%s, %s)" varName var2Name
-  show (NoTaint  {..}) = printf "no_taint(%s)" varName
+instance Show a => Show (AbductionAnnot a) where
+  show (TagEq    {..}) = printf "tag_eq(%s)" (show varName)
+  show (ValueEq  {..}) = printf "val_eq(%s)" (show varName)
+  show (TagEq2   {..}) = printf "tag_eq(%s, %s)" (show varName) (show var2Name)
+  show (ValueEq2 {..}) = printf "val_eq(%s, %s)" (show varName) (show var2Name)
+  show (NoTaint  {..}) = printf "no_taint(%s)" (show varName)
 
-instance Hashable R where
+instance Hashable a => Hashable (AbductionAnnot a) where
   hashWithSalt n (TagEq v1)       = hashWithSalt n ("te", v1)
   hashWithSalt n (ValueEq v1)     = hashWithSalt n ("ve", v1)
   hashWithSalt n (TagEq2 v1 v2)   = hashWithSalt n ("te2", v1, v2)

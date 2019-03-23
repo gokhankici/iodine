@@ -15,9 +15,10 @@ import qualified Language.Fixpoint.Types.Config as FC
 
 import           Control.Lens hiding ((<.>))
 import           Data.List
-import qualified Data.Map.Strict as M
+import qualified Data.Map.Strict      as M
+import qualified Data.HashMap.Strict  as HM
 import           Data.Maybe
-import qualified Data.Set        as S
+import qualified Data.Set             as S
 import           System.Console.ANSI
 import           Text.PrettyPrint
 import           Text.Printf
@@ -52,6 +53,7 @@ printUnsafeResult fpst (FT.Result{..}) =
       sequence_ $ (flip map) (M.assocs m) $ \(aid, cids) -> do
         withColor Blue $ printf "Failed constraint ids: %s\n" (show $ S.toList cids)
         print $ view aStmt $ findAB aid
+      printSolution resSolution
     _          -> return ()
   where
     errMap cids = foldr (\(cid,hid) m ->
@@ -65,6 +67,14 @@ printUnsafeResult fpst (FT.Result{..}) =
 
     altr cid t Nothing  = Just $ S.singleton (cid, t)
     altr cid t (Just s) = Just $ S.insert (cid, t) s
+
+printSolution :: FT.FixSolution -> IO ()
+printSolution sol = do
+  withColor Blue $ putStrLn "\nFixpoint output:"
+  mapM_ (putStrLn . FT.showpp) $ nub $ HM.elems sol >>= getExprs
+  where
+    getExprs (FT.PAnd es) = es >>= getExprs
+    getExprs e            = [e]
 
 withColor :: Color -> IO () -> IO ()
 withColor c act = do

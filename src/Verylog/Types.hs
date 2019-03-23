@@ -13,6 +13,6 @@ type Qualifiers a = [FPQualifierA a]
 type ParseInput   = (FilePath, String)
 type ParseOutput  = (States, Qualifiers Id)
 
-type Intermediary      = IntermediaryA Id
-type IntermediaryA a   = (ABS a, IntermediaryA_2 a)
-type IntermediaryA_2 a = (AnnotStA a, Qualifiers a)
+type Intermediary       = IntermediaryA Id
+type IntermediaryA a    = (ABS a, IntermediaryA_St a)
+type IntermediaryA_St a = (AnnotStA a, Qualifiers a)

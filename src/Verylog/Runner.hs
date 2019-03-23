@@ -17,7 +17,6 @@ import           Verylog.Pipeline
 import           Verylog.Solver.FP.FQ
 import           Verylog.Solver.FP.Solve
 import           Verylog.Transform.FP.VCGen
-import           Verylog.Utils
 
 import Language.Fixpoint.Types (saveQuery)
 import Language.Fixpoint.Types.Config as FC
@@ -233,10 +232,9 @@ checkIR (VerylogArgs{..}) = do
      | abduction -> do let input = VAR.runner' $ pipeline' pipelineInput
                        (safe, _) <- solve cfg $ toFpSt input
                        return safe
-     | otherwise -> makeSilent $ fmap fst (solve cfg fpst)
+     | otherwise -> fmap fst (solve cfg fpst)
 
   where
-    makeSilent = if noFPOutput then silence else id
     cfg = defConfig { eliminate   = Some
                     , save        = not noSave
                     , srcFile     = fileName
@@ -270,7 +268,7 @@ test =  do
   let result = VAR.runner' $ pipeline' pipelineInput
   result `deepseq` return ()
   where
-    a = verylogArgs { fileName   = "./test/abduction/pos/abduction-01.v"
+    a = verylogArgs { fileName   = "./test/abduction/pos/abduction-03.v"
                     , moduleName = "test"
                     , abduction  = True
                     }

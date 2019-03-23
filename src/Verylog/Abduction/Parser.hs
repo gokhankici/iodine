@@ -50,6 +50,7 @@ writeAnnots f = do
   where
     annotFile = takeDirectory f </> "" <.> takeFileName f <.> "annot"
 
+type R  = AbductionAnnot Id
 type RS = HS.HashSet R
 
 toR :: Sol -> RS
