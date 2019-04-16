@@ -1,0 +1,8 @@
+:set -fwarn-unused-binds -fwarn-unused-imports -fwarn-orphans
+:set -isrc:test:app-fp
+
+:def docs_ const $ return $ unlines [":!stack haddock"]
+:def docs  const $ return $ unlines [":!stack haddock --open"]
+:def test  const $ return $ unlines ["Test.main"]
+
+:set prompt "\ESC[34mλ> \ESC[m"

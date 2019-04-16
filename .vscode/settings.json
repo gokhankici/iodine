@@ -1,9 +1,17 @@
 {
-    
     "files.exclude": {
+        "**/.stack-work*": true,
+        "**/.liquid": true,
         "**/.log*" : true,
         "**/old-src" : true,
         "**/.*.pl" : true,
-        "**/*~" : true
+        "**/*~" : true,
     },
+
+    "files.watcherExclude": {
+        "**/.stack-work*": true,
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/*/**": true
+    }
 }
