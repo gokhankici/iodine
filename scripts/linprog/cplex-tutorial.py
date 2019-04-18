@@ -1,3 +1,5 @@
+#!/usr/bin/env python3.6
+
 import cplex
 from cplex.exceptions import CplexError
 import sys
