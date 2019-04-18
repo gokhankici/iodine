@@ -5,12 +5,12 @@ from   utils import *
 
 tests = [
     { "edges":        [(0,3), (1,3), (2,3), (3,4)],
-      "must_eq":      set([3]),
-      "cannot_be_eq": set([])
+      "must_eq":      [3],
+      "cannot_be_eq": []
     },
     { "edges":        [(0,1), (1,2), (2,3), (3,1), (3,4)],
-      "must_eq":      set([3]),
-      "cannot_be_eq": set([])
+      "must_eq":      [3],
+      "cannot_be_eq": []
     }
 ]
 

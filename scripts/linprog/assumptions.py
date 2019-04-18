@@ -185,7 +185,7 @@ class CplexAssumptionSolver(AssumptionSolver):
         # the variables of nodes that cannot be marked has to be zero
         indices1 = [ self.edge_id[v]
                      for v in self.cannot_be_eq
-                     if len(g.succ[v]) > 0 ]
+                     if len(self.g.succ[v]) > 0 ]
         prob.linear_constraints.add(lin_expr = [[indices1, [1] * len(indices1)]],
                                     senses   = "E",
                                     rhs      = [0])
