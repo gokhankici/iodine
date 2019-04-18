@@ -7,6 +7,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 module Verylog.Abduction.Transform ( giveUniqueId
+                                   , giveUniqueId'
                                    , undoUniqueId
                                    ) where
 import Verylog.Language.Types
@@ -29,7 +30,7 @@ import qualified Data.Graph.Inductive as Gr
 -- -----------------------------------------------------------------------------
 -- Type of the state
 -- -----------------------------------------------------------------------------
-newtype M m k v = M (m k v)
+newtype M m k v = M { unM :: (m k v) }
 
 data UniqueIdState a i =
   UniqueIdState { _counter    :: i
@@ -55,6 +56,17 @@ giveUniqueId fa = evalState (runM uid fa) $
                                 , _idMap      = genericMap_empty
                                 -- , _reverseMap = genericMap_empty
                                 }
+
+giveUniqueId' :: (UniqueId a, MyIndex i, IRMonad f)
+              => f a
+              -> (f (a, i), HM.HashMap a i)
+giveUniqueId' fa = (a, unM $ s ^. idMap)
+  where
+    (a, s) = runState (runM uid fa) $
+             UniqueIdState { _counter    = initialIndex
+                           , _idMap      = genericMap_empty
+                           -- , _reverseMap = genericMap_empty
+                           }
 
 -- | Undos the @giveUniqueId@ operation.
 undoUniqueId :: (UniqueId a, IRMonad f)

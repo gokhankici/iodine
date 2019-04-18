@@ -5,6 +5,8 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 module Verylog.Abduction.Graph ( updateAnnotations
+                               , toAbductionGraph
+                               , G, E, EdgeData(..)
                                ) where
 
 import Verylog.Types

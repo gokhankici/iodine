@@ -39,6 +39,8 @@ dependencies:
 - random
 - text
 - yaml
+- aeson
+- bytestring
 
 library:
   source-dirs:           src

@@ -48,3 +48,5 @@ flycheck_*.el
 /.test-report.txt
 
 *.annot
+
+/cplex.json

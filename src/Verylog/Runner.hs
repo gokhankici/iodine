@@ -16,7 +16,7 @@ import           Verylog.Language.Types
 import           Verylog.Pipeline
 import           Verylog.Solver.FP.FQ
 import           Verylog.Solver.FP.Solve
-import           Verylog.Transform.FP.VCGen
+-- import           Verylog.Transform.FP.VCGen
 
 import Language.Fixpoint.Types (saveQuery)
 import Language.Fixpoint.Types.Config as FC
@@ -229,9 +229,11 @@ checkIR (VerylogArgs{..}) = do
       fpst          = pipeline pipelineInput
 
   if | vcgen     -> saveQuery cfg (toFqFormat fpst) >> return True
-     | abduction -> do let input = VAR.runner' $ pipeline' pipelineInput
-                       (safe, _) <- solve cfg $ toFpSt input
-                       return safe
+     | abduction -> do let i = pipeline' pipelineInput
+                       -- let input = VAR.runner' $ i
+                       -- (safe, _) <- solve cfg $ toFpSt input
+                       VAR.runner3 i
+                       return True
      | otherwise -> fmap fst (solve cfg fpst)
 
   where

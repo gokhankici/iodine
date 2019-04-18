@@ -2,6 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Verylog.Abduction.Types where
 
@@ -19,6 +20,7 @@ import           Data.Hashable
 import           Data.List (intercalate)
 import           Data.Foldable (toList)
 import           Text.Printf
+import qualified Data.Aeson as J
 
 type Sol = FT.FixSolution
 type M   = StateT S IO
@@ -83,8 +85,22 @@ instance Show a => Show (AbductionAnnot a) where
   show (NoTaint  {..}) = printf "no_taint(%s)" (show varName)
 
 instance Hashable a => Hashable (AbductionAnnot a) where
-  hashWithSalt n (TagEq v1)       = hashWithSalt n ("te", v1)
-  hashWithSalt n (ValueEq v1)     = hashWithSalt n ("ve", v1)
-  hashWithSalt n (TagEq2 v1 v2)   = hashWithSalt n ("te2", v1, v2)
-  hashWithSalt n (ValueEq2 v1 v2) = hashWithSalt n ("te2", v1, v2)
-  hashWithSalt n (NoTaint v1)     = hashWithSalt n ("nt", v1)
+  hashWithSalt n (TagEq v1)       = hashWithSalt n ("te"  :: String, v1)
+  hashWithSalt n (ValueEq v1)     = hashWithSalt n ("ve"  :: String, v1)
+  hashWithSalt n (TagEq2 v1 v2)   = hashWithSalt n ("te2" :: String, v1, v2)
+  hashWithSalt n (ValueEq2 v1 v2) = hashWithSalt n ("te2" :: String, v1, v2)
+  hashWithSalt n (NoTaint v1)     = hashWithSalt n ("nt"  :: String, v1)
+
+data CplexInput =
+  CplexInput { cplexEdges      :: [(Int, Int)]
+             , cplexMustEq     :: [Int]
+             , cplexCannotBeEq :: [Int]
+             , cplexMapping    :: [(Id, Int)]
+             }
+
+instance J.ToJSON CplexInput where
+  toJSON CplexInput{..} = J.object [ "edges"        J..= J.toJSON cplexEdges
+                                   , "must_eq"      J..= J.toJSON cplexMustEq
+                                   , "cannot_be_eq" J..= J.toJSON cplexCannotBeEq
+                                   , "mapping"      J..= J.toJSON cplexMapping
+                                   ]

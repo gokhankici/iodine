@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
+# vim: set foldmethod=marker:
 
 import sys
 import warnings
+import json
 import numpy          as np
 import networkx       as nx
 import collections
@@ -55,6 +57,7 @@ class AssumptionSolver:
                     worklist.append(u)
                     done.add(u)
 
+# scipy solver {{{
 class ScipyAssumptionSolver(AssumptionSolver):
     def __init__(self, g, must_eq, cannot_be_eq):
         super(ScipyAssumptionSolver, self).__init__(g, must_eq, cannot_be_eq)
@@ -149,6 +152,7 @@ class ScipyAssumptionSolver(AssumptionSolver):
         else:
             debug(result)
             return {v : int(round(result.x[self.edge_id[v]])) for v in self.shadow_nodes}
+# }}}
 
 class CplexAssumptionSolver(AssumptionSolver):
     def __init__(self, g, must_eq, cannot_be_eq):
@@ -230,7 +234,7 @@ def suggest_assumptions(g, must_eq, cannot_be_eq):
     defaultSolver = CplexAssumptionSolver(g, must_eq, cannot_be_eq)
     return defaultSolver.suggest_assumptions()
 
-def main(test_no):
+def main2(test_no):
     test = get_test(test_no)
     if test is None:
         return
@@ -243,6 +247,30 @@ def main(test_no):
     else:
         print("No solution exists...")
 
+def main(filename):
+    with open(filename, 'r') as f:
+        data         = json.load(f)
+        edges        = [ (l[0], l[1]) for l in data["edges"] ]
+        must_eq      = data["must_eq"]
+        cannot_be_eq = data["cannot_be_eq"]
+        names        = { l[1] : l[0] for l in data["mapping"] }
+
+    print("edges: {}".format(edges))
+    g = make_test_graph(edges)
+    result = suggest_assumptions(g, must_eq, cannot_be_eq)
+    if result:
+        print("Marked nodes:\n")
+        for v,n in result.items():
+            if n > 0:
+                print(names[v])
+    else:
+        print("No solution exists...")
+
 if __name__ == "__main__":
-    test_no = 0 if len(sys.argv) <= 1 else int(sys.argv[1])
-    main(test_no)
+    # test_no = 0 if len(sys.argv) <= 1 else int(sys.argv[1])
+    # main(test_no)
+    if len(sys.argv) < 2:
+        print("usage: assumptions.py <cplex.json>")
+        sys.exit(1)
+    else:
+        main(sys.argv[1])
