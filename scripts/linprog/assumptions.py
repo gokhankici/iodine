@@ -10,6 +10,7 @@ import collections
 from   scipy.optimize import linprog
 from   scipy.sparse   import csr_matrix, csc_matrix, vstack, hstack
 import cplex
+import subprocess
 
 from flow_capacity import get_edge_capacities
 from utils         import *
@@ -161,6 +162,7 @@ class CplexAssumptionSolver(AssumptionSolver):
     def suggest_assumptions(self):
         prob = cplex.Cplex()
         prob.set_results_stream(None)
+        prob.set_log_stream(None)
 
         # objective is to minimize
         prob.objective.set_sense(prob.objective.sense.minimize)
@@ -220,11 +222,12 @@ class CplexAssumptionSolver(AssumptionSolver):
                                         rhs      = [0])
 
         prob.solve()
+        prob.write("assumptions.lp")
         sol = prob.solution
         status = sol.get_status_string()
         if status == "optimal":
             values = sol.get_values()
-            return {v : int(round(values[self.edge_id[v]])) for v in self.shadow_nodes}
+            return {v : values[self.edge_id[v]] for v in self.shadow_nodes}
         else:
             print("linprog failed: {}".format(status))
             sys.exit(1)
@@ -243,32 +246,50 @@ def main2(test_no):
     g = make_test_graph(edges)
     result = suggest_assumptions(g, must_eq, cannot_be_eq)
     if result:
-        print("Marked nodes:\n{}".format([v for v,n in result.items() if n > 0]))
+        print("Marked nodes:\n{}".format([v for v,n in result.items() if int(round(n)) > 0]))
+        return result
     else:
         print("No solution exists...")
 
-def main(filename):
+def parse_file(filename):
     with open(filename, 'r') as f:
         data         = json.load(f)
-        edges        = [ (l[0], l[1]) for l in data["edges"] ]
+        edges        = [ (l[0], l[1]) for l in data["edges"] if l[0] != l[1] ]
         must_eq      = data["must_eq"]
-        cannot_be_eq = data["cannot_be_eq"]
-        names        = { l[1] : l[0] for l in data["mapping"] }
+        names        = { l[0] : l[1] for l in data["mapping"] }
+        inv_name     = { l[0] : l[1] for l in data["mapping"] }
+        cannot_be_eq = [ inv_name[v] for v in data["cannot_be_eq"] ]
+    return (edges, must_eq, cannot_be_eq, names)
 
-    print("edges: {}".format(edges))
+def visualize_graph():
+    rc = subprocess.run(["dot", "-Tpdf", "cplex.dot", "-o", "cplex.pdf"])
+    if rc.returncode != 0:
+        print("error while running dot")
+        sys.exit(1)
+
+def write_dot_file(g, names):
+    g2 = nx.relabel_nodes(g, names, copy=True)
+    with open("cplex.dot", "w") as f:
+        f.write(export_to_dot(g2).to_string())
+    # visualize_graph()
+
+def main(filename):
+    edges, must_eq, cannot_be_eq, names = parse_file(filename)
     g = make_test_graph(edges)
+    def l2s(l):
+        return ", ".join(l)
+    write_dot_file(g, names)
     result = suggest_assumptions(g, must_eq, cannot_be_eq)
     if result:
-        print("Marked nodes:\n")
-        for v,n in result.items():
-            if n > 0:
-                print(names[v])
+        print("Must equal   :")
+        for v in sorted([names[v] for v in must_eq]):
+            print("  {}".format(v))
+        print("Marked nodes : {}".format(l2s([names[v] for v,n in result.items() if round(n) > 0])))
     else:
         print("No solution exists...")
+    return result
 
 if __name__ == "__main__":
-    # test_no = 0 if len(sys.argv) <= 1 else int(sys.argv[1])
-    # main(test_no)
     if len(sys.argv) < 2:
         print("usage: assumptions.py <cplex.json>")
         sys.exit(1)

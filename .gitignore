@@ -49,4 +49,4 @@ flycheck_*.el
 
 *.annot
 
-/cplex.json
+cplex.json

@@ -3,6 +3,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Verylog.Abduction.Graph ( updateAnnotations
                                , toAbductionGraph
@@ -18,20 +19,18 @@ import qualified Data.HashSet             as HS
 import qualified Data.IntSet              as IS
 import           Data.Foldable
 import qualified Data.Graph.Inductive     as Gr
-import qualified Data.Graph.Inductive.Dot as DotGr
 import qualified Data.Sequence            as SQ
 import           GHC.Generics hiding (to)
 import           Text.Printf
+import qualified Data.Aeson as J
 
 -- the following are for testing !!!
 import GHC.IO.Unsafe
-import System.Directory
-import System.FilePath.Posix
 
 -- Graph types
 data EdgeData = Direct
               | Implicit
-              deriving (Eq, Generic)
+              deriving (Eq, Show, Generic)
 
 type N   = Gr.Node
 -- type Adj = Gr.Adj E
@@ -64,14 +63,7 @@ findSolution (annots, qualifiers) g = unsafePerformIO act `seq` result
 
 
 toAbductionGraph :: ABS I -> G
-toAbductionGraph as = unsafePerformIO act `seq` g
-  where
-    act = do
-      -- putStrLn $ Gr.prettify g
-      home <- getHomeDirectory
-      writeFile (home </> "play/tmp/g.dot") (showGraph g)
-
-    g = foldl' goAB Gr.empty as
+toAbductionGraph as = foldl' goAB Gr.empty as
 
 -- -----------------------------------------------------------------------------
 -- Graph Construction
@@ -138,21 +130,14 @@ bfsM g nodes f = evalStateT go (IS.empty, nodes)
             lift (f n)
           go
 
-instance Show EdgeData where
-  show Direct   = "D"
-  show Implicit = "I"
+instance J.ToJSON EdgeData where
+  toJSON Direct   = J.toJSON ("Direct"   :: String)
+  toJSON Implicit = J.toJSON ("Implicit" :: String)
 
-showGraph :: G -> String
-showGraph g = DotGr.showDot $ DotGr.fglToDotGeneric g goNode goEdge attrs
-  where
-    goNode = id2Str
-    directEdge   = "Edge::Direct"
-    implicitEdge = "Edge::Implicit"
-    goEdge Direct   = directEdge
-    goEdge Implicit = implicitEdge
-
-    attrs as@[("label", l)] =
-      if | l == directEdge   -> [ ("style", "solid") ]
-         | l == implicitEdge -> [ ("style", "dotted") ]
-         | otherwise         -> as
-    attrs _ = error "unrecognized attributes"
+instance J.FromJSON EdgeData where
+  parseJSON (J.String s) =
+    case s of
+      "Direct"   -> return Direct
+      "Implicit" -> return Implicit
+      _          -> fail $ printf "Cannot parse %s into EdgeData" s
+  parseJSON _ = fail "Got an error while parsing EdgeData: Expecting a string"

@@ -8,7 +8,7 @@ module stalling_cpu(clk);
    //=============
 
    // @annot{sanitize_glob(IF_instr)}
-   // @annot{sanitize_glob(Stall)}
+   // @annot{sanitize(Stall)}
 
    reg [1:0]  Stall;
    wire  Stallw;

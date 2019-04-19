@@ -26,7 +26,6 @@ import Data.Sequence
 
 import           Control.Lens
 import qualified Data.Aeson               as J
-import qualified Data.HashMap.Strict      as HM
 import qualified Data.HashSet             as HS
 import qualified Data.Graph.Inductive     as Gr
 import qualified Data.IntSet              as IS
@@ -47,12 +46,14 @@ runner' input = removeId (as', newAnnots)
     newAnnots = updateAnnotations inputWithIndex
 
 runner3 :: Intermediary -> IO ()
-runner3 input = B.writeFile "cplex.json" $ J.encode ci
+runner3 input = do B.writeFile "cplex.json" $ J.encode ci
+                   printGraph
   where
-    (res, m)      = giveUniqueId' $ toProduct input
-    (as, (st, _)) = fromProduct res
+    (as, (st, _)) = giveId input
     g             = toAbductionGraph as
-    ci            = toCplexInput g st m
+    ci            = toCplexInput g st
+    printGraph    = B.writeFile "graph.json" $
+                    J.encode (Gr.labNodes g, Gr.labEdges g)
 
 --------------------------------------------------------------------------------
 -- Helper Functions
@@ -72,20 +73,22 @@ toProduct (as, (annots, qualifiers)) = Pair (Compose as) (Pair annots (Compose q
 
 fromProduct :: MyProduct a -> IntermediaryA a
 fromProduct (Pair (Compose as) (Pair annots (Compose qualifiers))) = (as, (annots, qualifiers))
-                  
-toCplexInput :: G -> AnnotStA (Id, Int) -> HM.HashMap Id Int -> CplexInput
-toCplexInput g st m = CplexInput{..}
+
+toCplexInput :: G -> AnnotStA (Id, Int) -> CplexInput
+toCplexInput g st = CplexInput{..}
   where
     sinksIds        = [ n | (_, n) <- HS.toList $ st ^. sinks ]
     cplexEdges      = [ (u,v) | (u,v,_) <- Gr.labEdges g ]
     cplexMustEq     = go sinksIds
     cplexCannotBeEq = []
-    cplexMapping    = HM.toList m
+    cplexMapping    = Gr.labNodes g
 
     go :: [Int] -> [Int]
     go is =
       let initSt = ( IS.fromList is -- worklist
-                   , IS.fromList is -- seen nodes
+                   , ( IS.empty     -- direct seen nodes
+                     , IS.empty     -- implicit seen nodes
+                     )
                    , IS.empty       -- results
                    )
           loop = do
@@ -94,12 +97,18 @@ toCplexInput g st m = CplexInput{..}
               then return ()
               else do let v = IS.findMin w
                       _1  %= IS.delete v -- remove node from worklist
-                      forM_ (Gr.lpre g v) $ \(u, typ) -> do
-                        isSeen <- uses _2 (IS.member u) -- check if parent is seen
-                        when (not isSeen) $ do
-                          _2 %= IS.insert u -- mark node as seen
-                          case typ of
-                            Direct   -> _1 %= IS.insert u -- add node to the worklist
-                            Implicit -> _3 %= IS.insert u -- add node to the result
+                      let vParents = Gr.lpre g v
+                      forM_ vParents $ \(u, typ) -> do
+                        case typ of
+                          Direct   -> do c <- uses (_2 . _1) (IS.member u) -- check if seen directly before
+                                         if c
+                                           then return ()
+                                           else do _2 . _1 %= IS.insert u -- mark node as seen directly
+                                                   _1      %= IS.insert u -- add node to the workset
+                          Implicit -> do c <- uses (_2 . _2) (IS.member u) -- check if seen implicitly before
+                                         if c
+                                           then return ()
+                                           else do _2 . _2 %= IS.insert u -- mark node as seen implicitly
+                                                   _3      %= IS.insert u -- add node to the results
                       loop
       in IS.toList $ (execState loop initSt) ^. _3

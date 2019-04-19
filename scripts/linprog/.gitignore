@@ -7,3 +7,8 @@ __pycache__/
 
 # cplex files
 *.lp
+cplex.dot
+cplex.pdf
+cplex.png
+
+graph.json
