@@ -102,15 +102,3 @@ class CplexFlowCapSolver:
 def get_edge_capacities(g):
     defaultSolver = CplexFlowCapSolver()
     return defaultSolver.get_edge_capacities(g)
-
-# ##############################################################################
-# ##############################################################################
-# ##############################################################################
-
-if __name__ == "__main__":
-    edges = [(0,3), (1,3), (2,3),
-             (3,4)]
-    g   = make_test_graph(edges)
-    cap = get_edge_capacities(g)
-    print_graph(g)
-    print(cap)

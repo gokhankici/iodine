@@ -7,11 +7,12 @@
 
 module Verylog.Abduction.Graph ( updateAnnotations
                                , toAbductionGraph
-                               , G, E, EdgeData(..)
+                               , G, E
                                ) where
 
 import Verylog.Types
 import Verylog.Language.Types
+import Verylog.Abduction.Types
 
 import           Control.Lens
 import           Control.Monad.State.Lazy
@@ -20,18 +21,12 @@ import qualified Data.IntSet              as IS
 import           Data.Foldable
 import qualified Data.Graph.Inductive     as Gr
 import qualified Data.Sequence            as SQ
-import           GHC.Generics hiding (to)
 import           Text.Printf
-import qualified Data.Aeson as J
 
 -- the following are for testing !!!
 import GHC.IO.Unsafe
 
 -- Graph types
-data EdgeData = Direct
-              | Implicit
-              deriving (Eq, Show, Generic)
-
 type N   = Gr.Node
 -- type Adj = Gr.Adj E
 type V   = Id
@@ -130,14 +125,3 @@ bfsM g nodes f = evalStateT go (IS.empty, nodes)
             lift (f n)
           go
 
-instance J.ToJSON EdgeData where
-  toJSON Direct   = J.toJSON ("Direct"   :: String)
-  toJSON Implicit = J.toJSON ("Implicit" :: String)
-
-instance J.FromJSON EdgeData where
-  parseJSON (J.String s) =
-    case s of
-      "Direct"   -> return Direct
-      "Implicit" -> return Implicit
-      _          -> fail $ printf "Cannot parse %s into EdgeData" s
-  parseJSON _ = fail "Got an error while parsing EdgeData: Expecting a string"

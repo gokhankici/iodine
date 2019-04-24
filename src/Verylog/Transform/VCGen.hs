@@ -407,7 +407,7 @@ isReg :: AlwaysBlock -> Id -> Bool
 isReg a v = (Register v) `elem` (a ^. aSt ^. ports)
 
 srcLs :: AnnotSt -> SQ.Seq Id
-srcLs = view (sources . to set2seq)
+srcLs = view (sources . to f2seq)
 
 mylookup :: (Eq a) => a -> SQ.Seq (a, b) -> Maybe b
 mylookup a = go

@@ -223,7 +223,7 @@ convertExpr e = FQT.EVar $ FQT.symbol $ getConstantName e
 getBindIds :: FPSt -> SQ.Seq Expr -> SQ.Seq Int
 getBindIds fpst es = runReader (mapM getBindId ids) fpst
   where
-    ids   = set2seq $ F.foldl' (\s e -> s `HS.union` getIds e ) HS.empty es
+    ids   = f2seq $ F.foldl' (\s e -> s `HS.union` getIds e ) HS.empty es
 
     getBindId   :: Id -> Reader FPSt Int
     getBindId v = views fpBinds (bindId . (M.lookupDefault (errMsg v) v))
@@ -269,7 +269,7 @@ getUFGlobals fpst = fromListSEnv $ snd $ L.foldl' goStmt (0, []) ((^.aStmt) <$> 
       in n' `seq` l' `seq` (n', l')
 
 extraEnv :: FPSt -> SQ.Seq Id
-extraEnv fpst = makeBothTags . set2seq $ s1 `HS.union` s2
+extraEnv fpst = makeBothTags . f2seq $ s1 `HS.union` s2
   where
     s1      = F.foldl' h mempty (fpst ^. fpQualifiers)
     s2      = fpst ^. fpAnnotations ^. sources

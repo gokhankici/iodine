@@ -507,10 +507,10 @@ stmtCollectVExpr (IfStmt{..}) = ifCond SQ.<|
 stmtCollectVExpr Skip = mempty
 
 seqNub :: (Hashable a, Eq a) => SQ.Seq a -> SQ.Seq a
-seqNub = set2seq . seq2set
+seqNub = f2seq . seq2set
 
-set2seq :: S.HashSet a -> SQ.Seq a
-set2seq = S.foldl' (SQ.|>) mempty
+f2seq :: Foldable t => t a -> SQ.Seq a
+f2seq = foldl' (SQ.|>) mempty
 
 seq2set :: (Hashable a, Eq a) => SQ.Seq a -> S.HashSet a
 seq2set = foldl' (flip S.insert) mempty

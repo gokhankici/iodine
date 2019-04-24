@@ -157,7 +157,7 @@ makeState (topIR@(TopModule{..}):as) = resultState -- trace (show (resultState^.
 
       -- collect ports and ufs
       collectNonTaint topIR
-      st . ports <~ uses parsePorts set2seq
+      st . ports <~ uses parsePorts f2seq
 
       -- update taint info of st
       annots . sources      <~ use parseSources

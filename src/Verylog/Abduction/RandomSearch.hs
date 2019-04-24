@@ -71,8 +71,8 @@ abduction fn fcConfig st = do
     collectMd :: SQ.Seq AlwaysBlock -> GlobalMetadata
     collectMd =
       let f m a = over gmVariables (upd a) m
-          upd a = let ws :: SQ.Seq Id = set2seq $ a ^. aMd ^. mRegisters
-                      rs :: SQ.Seq Id = set2seq $ a ^. aMd ^. mWires
+          upd a = let ws :: SQ.Seq Id = f2seq $ a ^. aMd ^. mRegisters
+                      rs :: SQ.Seq Id = f2seq $ a ^. aMd ^. mWires
                   in  (SQ.><) (rs SQ.>< ws)
       in F.foldl' f mempty
 

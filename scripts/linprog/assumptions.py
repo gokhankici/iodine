@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.6
 # vim: set foldmethod=marker:
 
 import sys
 import warnings
-import json
 import numpy          as np
 import networkx       as nx
 import collections
@@ -11,6 +10,7 @@ from   scipy.optimize import linprog
 from   scipy.sparse   import csr_matrix, csc_matrix, vstack, hstack
 import cplex
 import subprocess
+import time
 
 from flow_capacity import get_edge_capacities
 from utils         import *
@@ -167,6 +167,8 @@ class CplexAssumptionSolver(AssumptionSolver):
         # objective is to minimize
         prob.objective.set_sense(prob.objective.sense.minimize)
 
+        t0 = time.perf_counter()
+
         # compute objective coefficients
         obj = [0] * self.edge_count
         for v in self.shadow_nodes:
@@ -222,9 +224,13 @@ class CplexAssumptionSolver(AssumptionSolver):
                                         rhs      = [0])
 
         prob.solve()
-        prob.write("assumptions.lp")
         sol = prob.solution
         status = sol.get_status_string()
+
+        t1 = time.perf_counter()
+        print("elapsed time: {} ms".format(int((t1-t0) * 1000)))
+
+        prob.write("assumptions.lp")
         if status == "optimal":
             values = sol.get_values()
             return {v : values[self.edge_id[v]] for v in self.shadow_nodes}
@@ -251,16 +257,6 @@ def main2(test_no):
     else:
         print("No solution exists...")
 
-def parse_file(filename):
-    with open(filename, 'r') as f:
-        data         = json.load(f)
-        edges        = [ (l[0], l[1]) for l in data["edges"] if l[0] != l[1] ]
-        must_eq      = data["must_eq"]
-        names        = { l[0] : l[1] for l in data["mapping"] }
-        inv_name     = { l[0] : l[1] for l in data["mapping"] }
-        cannot_be_eq = [ inv_name[v] for v in data["cannot_be_eq"] ]
-    return (edges, must_eq, cannot_be_eq, names)
-
 def visualize_graph():
     rc = subprocess.run(["dot", "-Tpdf", "cplex.dot", "-o", "cplex.pdf"])
     if rc.returncode != 0:
@@ -274,8 +270,7 @@ def write_dot_file(g, names):
     # visualize_graph()
 
 def main(filename):
-    edges, must_eq, cannot_be_eq, names = parse_file(filename)
-    g = make_test_graph(edges)
+    g, must_eq, cannot_be_eq, names = parse_file(filename)
     def l2s(l):
         return ", ".join(l)
     write_dot_file(g, names)

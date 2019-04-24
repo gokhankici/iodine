@@ -91,8 +91,12 @@ instance Hashable a => Hashable (AbductionAnnot a) where
   hashWithSalt n (ValueEq2 v1 v2) = hashWithSalt n ("te2" :: String, v1, v2)
   hashWithSalt n (NoTaint v1)     = hashWithSalt n ("nt"  :: String, v1)
 
+data EdgeData = Direct
+              | Implicit
+              deriving (Eq, Show)
+
 data CplexInput =
-  CplexInput { cplexEdges      :: [(Int, Int)]
+  CplexInput { cplexEdges      :: [(Int, Int, EdgeData)]
              , cplexMustEq     :: [Int]
              , cplexCannotBeEq :: [Int]
              , cplexMapping    :: [(Int, Id)]
@@ -104,3 +108,15 @@ instance J.ToJSON CplexInput where
                                    , "cannot_be_eq" J..= J.toJSON cplexCannotBeEq
                                    , "mapping"      J..= J.toJSON cplexMapping
                                    ]
+
+instance J.ToJSON EdgeData where
+  toJSON Direct   = J.String "Direct"
+  toJSON Implicit = J.String "Implicit"
+
+instance J.FromJSON EdgeData where
+  parseJSON (J.String s) =
+    case s of
+      "Direct"   -> return Direct
+      "Implicit" -> return Implicit
+      _          -> fail $ printf "Cannot parse %s into EdgeData" s
+  parseJSON _ = fail "Got an error while parsing EdgeData: Expecting a string"
