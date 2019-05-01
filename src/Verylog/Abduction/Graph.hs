@@ -29,7 +29,7 @@ import GHC.IO.Unsafe
 -- Graph types
 type N   = Gr.Node
 -- type Adj = Gr.Adj E
-type V   = Id
+type V   = (Id, Bool) -- (variable name, is reg)
 type E   = EdgeData
 type G   = Gr.Gr V E
 
@@ -67,25 +67,25 @@ toAbductionGraph as = foldl' goAB Gr.empty as
 goAB :: G -> AlwaysBlockA I -> G
 goAB g ab = g'
   where
-    (_, g') = goStmt (mempty, g) (ab^.aStmt)
+    (_, g') = goStmt (ab^.aSt^.ports) (mempty, g)  (ab^.aStmt)
 
 type GoStmtData = (SQ.Seq I)
 type GoStmtAcc  = (GoStmtData, G)
 
-goStmt :: GoStmtAcc -> StmtA I -> GoStmtAcc
-goStmt acc@(implicits, g) s =
+goStmt :: SQ.Seq (VarA I) -> GoStmtAcc -> StmtA I -> GoStmtAcc
+goStmt prts acc@(implicits, g) s =
   case s of
     Skip                -> acc
-    Block{..}           -> foldl' goStmt acc blockStmts
+    Block{..}           -> foldl' (goStmt prts) acc blockStmts
     BlockingAsgn{..}    -> asgn lhs rhs
     NonBlockingAsgn{..} -> asgn lhs rhs
-    IfStmt{..}          -> foldl' goStmt (withConds ifCond, g) [thenStmt, elseStmt]
+    IfStmt{..}          -> foldl' (goStmt prts) (withConds ifCond, g) [thenStmt, elseStmt]
   where
     withConds e = implicits SQ.>< foldVariables e
-    asgn l r    = (implicits, goAsgn acc l r)
+    asgn l r    = (implicits, goAsgn prts acc l r)
 
-goAsgn :: GoStmtAcc -> I -> VExprA I -> G
-goAsgn (implicits, g) (lName, lIndex) r = g''
+goAsgn :: SQ.Seq (VarA I) -> GoStmtAcc -> I -> VExprA I -> G
+goAsgn prts (implicits, g) (lName, lIndex) r = g''
   where
     g'  = foldl' (addEdge Implicit) g implicits
     g'' = foldl' (addEdge Direct) g' (foldVariables r)
@@ -100,8 +100,20 @@ goAsgn (implicits, g) (lName, lIndex) r = g''
 
     addNode (ind, name) g1 =
       case Gr.lab g1 ind of
-        Nothing -> Gr.insNode (ind, name) g1
+        Nothing -> Gr.insNode (ind, (name, regLookup name prts)) g1
         Just _  -> g1
+
+    regLookup :: Id -> SQ.Seq (VarA I) -> Bool
+    regLookup name ps =
+      case SQ.viewl ps of 
+        p SQ.:< rest ->
+          if   fst (Verylog.Language.Types.varName p) == name
+          then case p of
+                 Register {} -> True
+                 Wire     {} -> False
+          else regLookup name rest
+        SQ.EmptyL ->
+          error $ printf "could not find %s in ports" name
 
 -- -----------------------------------------------------------------------------
 -- Helper functions
@@ -124,4 +136,3 @@ bfsM g nodes f = evalStateT go (IS.empty, nodes)
             _2 %= (SQ.>< SQ.fromList (Gr.suc g n))
             lift (f n)
           go
-

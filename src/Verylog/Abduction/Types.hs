@@ -99,7 +99,7 @@ data CplexInput =
   CplexInput { cplexEdges      :: [(Int, Int, EdgeData)]
              , cplexMustEq     :: [Int]
              , cplexCannotBeEq :: [Int]
-             , cplexMapping    :: [(Int, Id)]
+             , cplexMapping    :: [(Int, (Id, Bool))]
              }
 
 instance J.ToJSON CplexInput where

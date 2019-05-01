@@ -48,7 +48,7 @@ class ScipyFlowCapSolver:
                         method = "interior-point",      # better for sparse matrices
                         options = {"sparse":True})
         if result.status != 0:
-            print("linprog failed:")
+            print("[Capacities] Linear programming failed:")
             print(result)
             sys.exit(1)
         cap = result.x
@@ -63,6 +63,7 @@ class CplexFlowCapSolver:
 
         prob = cplex.Cplex()
         prob.set_results_stream(None)
+        prob.set_log_stream(None)
 
         # objective is to minimize
         prob.objective.set_sense(prob.objective.sense.minimize)
@@ -92,11 +93,12 @@ class CplexFlowCapSolver:
         prob.solve()
         sol = prob.solution
         status = sol.get_status_string()
+        prob.write("flow_capacity.lp")
         if status == "optimal":
             values = sol.get_values()
             return {e: int(round(values[i])) for e, i in edge_id.items()}
         else:
-            print("linprog failed: {}".format(status))
+            print("[Capacities] Linear programming failed: {}".format(status))
             sys.exit(1)
 
 def get_edge_capacities(g):

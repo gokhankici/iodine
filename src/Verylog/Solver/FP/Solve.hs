@@ -27,8 +27,11 @@ import           Text.Printf
 solve :: FC.Config -> FPSt -> IO (Bool, FT.FixSolution)
 -- -----------------------------------------------------------------------------
 solve cfg fpst = do
-  let finfo = toFqFormat fpst
-  res <- silence $ F.solve cfg finfo
+  let finfo     = toFqFormat fpst
+      wSilence = if   FC.minimize cfg
+                 then id
+                 else silence
+  res <- wSilence $ F.solve cfg finfo
   let stat = FT.resStatus res
   withColor (getColor stat) $ putStr (render $ FT.resultDoc $ fmap fst stat)
   putStrLn ""
@@ -45,7 +48,8 @@ solve cfg fpst = do
 -- -----------------------------------------------------------------------------
 
 printUnsafeResult :: FPSt -> FT.Result (Integer, HornId) -> IO ()
-printUnsafeResult fpst (FT.Result{..}) =
+printUnsafeResult fpst (FT.Result{..}) = do
+  printf "%d always blocks in total" (length $ fpst ^. fpABs)
   case resStatus of
     FT.Unsafe ids -> do
       let m        = errMap ids

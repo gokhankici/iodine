@@ -81,6 +81,7 @@ class ScipyAssumptionSolver(AssumptionSolver):
             if type(e) == int:
                 v = e               # this is a shadow node
                 upper_bound[i] = sum(map(lambda w: self.cap[v,w], self.g.successors(v)))
+            print("[Capacities] Linear programming failed:")
             else:
                 upper_bound[i] = self.cap[e]
         debug("upper bound:\n{}".format(upper_bound))
@@ -148,7 +149,7 @@ class ScipyAssumptionSolver(AssumptionSolver):
                         method = "interior-point",
                         options = {"sparse":True})
         if result.status != 0:
-            print("Linear programming failed: {}".format(result.message))
+            print("[Assumptions] Linear programming failed: {}".format(result.message))
             return None
         else:
             debug(result)
@@ -257,23 +258,19 @@ def main2(test_no):
     else:
         print("No solution exists...")
 
-def visualize_graph():
-    rc = subprocess.run(["dot", "-Tpdf", "cplex.dot", "-o", "cplex.pdf"])
-    if rc.returncode != 0:
-        print("error while running dot")
-        sys.exit(1)
-
-def write_dot_file(g, names):
-    g2 = nx.relabel_nodes(g, names, copy=True)
-    with open("cplex.dot", "w") as f:
-        f.write(export_to_dot(g2).to_string())
-    # visualize_graph()
-
 def main(filename):
-    g, must_eq, cannot_be_eq, names = parse_file(filename)
+    parsed       = parse_cplex_input(filename)
+    g            = parsed["graph"]
+    must_eq      = parsed["must_eq"]
+    cannot_be_eq = parsed["cannot_be_eq"]
+    names        = parsed["names"]
+
     def l2s(l):
         return ", ".join(l)
+
     write_dot_file(g, names)
+    # visualize_graph()
+
     result = suggest_assumptions(g, must_eq, cannot_be_eq)
     if result:
         print("Must equal   :")
