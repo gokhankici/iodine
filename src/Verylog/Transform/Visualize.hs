@@ -1,6 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 module Verylog.Transform.Visualize (visualize) where
 
 import Verylog.Solver.FP.Types

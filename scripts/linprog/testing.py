@@ -170,34 +170,6 @@ def loop2():
         args  = { y : x for x,y in pairs }
         print_all_edges(**args)
 
-def components():
-    g2 = nx.DiGraph()
-    cmap = {}
-
-    for c in nx.strongly_connected_components(g):
-        l = list(c)
-        cmap[l[0]] = l
-    
-    def any_edge(us, vs):
-        for u in us:
-            for v in vs:
-                if g.has_edge(u,v):
-                    return True
-        return False
-
-    names2 = names.copy()
-
-    for u,lu in cmap.items():
-        for v,lv in cmap.items():
-            if any_edge(lu, lv):
-                g2.add_edge(u, v)
-        if len(lu) > 1:
-            names2[u] = "cycle-{}".format(len(lu))
-            
-
-    write_dot_file(g2, names2)
-    visualize_graph()
-
 def find_parent_regs(node_id):
     regs     = set()
     worklist = deque([node_id])
@@ -230,7 +202,7 @@ def mk_qualifier_pairs():
 
 def main():
     # loop2()
-    components()
+    components(g,names)
     # mk_qualifier_pairs()
     # loop3()
 

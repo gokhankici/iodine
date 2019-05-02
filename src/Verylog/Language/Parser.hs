@@ -134,7 +134,7 @@ parseWithoutConversion :: ParseInput -> ([ParseIR], [FPQualifier])
 parseWithoutConversion (fp, s) = foldr f ([],mempty) (parseWith parseIR)
   where
     -- separate extra qualifiers from the rest
-    f (PQualifier q) = second $ ((:) q)
+    f (PQualifier q) = second ((:) q)
     f p              = first ((:) p)
 
     parseWith p =
@@ -145,7 +145,7 @@ parseWithoutConversion (fp, s) = foldr f ([],mempty) (parseWith parseIR)
 -----------------------------------------------------------------------------------
 makeState :: [ParseIR] -> (St, AnnotSt)
 -----------------------------------------------------------------------------------
-makeState (topIR@(TopModule{..}):as) = resultState -- trace (show (resultState^.sanitize)) resultState
+makeState (topIR@TopModule{..}:as) = resultState -- trace (show (resultState^.sanitize)) resultState
   where
     resultState = evalState comp emptyParseSt
 
@@ -169,7 +169,7 @@ makeState (topIR@(TopModule{..}):as) = resultState -- trace (show (resultState^.
 
       prts <- use (st . ports)
       let topWireInputs =
-            let f (PInput i) l  = if   (Wire i) `elem` prts
+            let f (PInput i) l  = if   Wire i `elem` prts
                                   then i:l
                                   else l
                 f (POutput _) l = l
@@ -209,7 +209,7 @@ sanityChecks = do
   sanitizes     <- use parseSanitize
   sanitizeGlobs <- use parseSanitizeGlob
   let allOtherAnnots = taintEqs `S.union` assertEqs `S.union` sanitizes `S.union` sanitizeGlobs
-      allOtherAnnotsDiff = allOtherAnnots `S.difference` (S.map varName prts)
+      allOtherAnnotsDiff = allOtherAnnots `S.difference` S.map varName prts
   when (allOtherAnnotsDiff /= S.empty) $
     throw (PassError $ printf "Annotation has an unknown variable: %s" (show allOtherAnnotsDiff))
 
@@ -217,7 +217,7 @@ sanityChecks = do
   -- make sure source or sink variables are registers
   rs  <- uses (st . ports) (seq2set . fmap varName . SQ.filter isRegister)
   let snk_dif = snkSet `S.difference` rs
-  when (not $ S.null snk_dif) $
+  unless (S.null snk_dif) $
     error $
     printf "Taint variable is not a register !\n  sinks: %s\n"
     (show snk_dif)
@@ -226,7 +226,7 @@ sanityChecks = do
 -----------------------------------------------------------------------------------
 collectTaint :: ParseIR -> P ()
 -----------------------------------------------------------------------------------
-collectTaint (TopModule{..}) = sanitizeSubmodules mGates
+collectTaint TopModule{..} = sanitizeSubmodules mGates
 collectTaint (PQualifier _) = return ()
 collectTaint (PAnnotation annot)  = fromAnnot annot
   where
@@ -238,15 +238,15 @@ collectTaint (PAnnotation annot)  = fromAnnot annot
     fromAnnot (Sanitize s)      = parseSanitize     %= S.union (S.fromList s)
     fromAnnot (SanitizeGlob s)  = parseSanitizeGlob %= S.insert s >>
                                   parseSanitize     %= S.insert s
-    fromAnnot (SanitizeMod{..}) = parseModSanitize %= mapOfSetInsert annotModuleName annotVarName
+    fromAnnot SanitizeMod{..}   = parseModSanitize %= mapOfSetInsert annotModuleName annotVarName
 
 -- figures out which variables to sanitize inside the module instantiations
 sanitizeSubmodules       :: [ParseGate] -> P ()
 sanitizeSubmodules gates = sequence_ $ sanitizeInst <$> gates
   where
     sanitizeInst :: ParseGate -> P ()
-    sanitizeInst (PContAsgn _ _)   = return ()
-    sanitizeInst (PModuleInst{..}) = do
+    sanitizeInst (PContAsgn _ _) = return ()
+    sanitizeInst PModuleInst{..} = do
       sanitizeSubmodules pmInstGates
 
       vs <- uses parseModSanitize (M.lookup pmModuleName)
@@ -263,8 +263,8 @@ sanitizeSubmodules gates = sequence_ $ sanitizeInst <$> gates
 -----------------------------------------------------------------------------------
 collectNonTaint :: ParseIR -> P ()
 -----------------------------------------------------------------------------------
-collectNonTaint (TopModule{..}) = collectPortAndUFs mPorts mGates mUFs
-collectNonTaint _               = error "collectNonTaint is called without top module"
+collectNonTaint TopModule{..} = collectPortAndUFs mPorts mGates mUFs
+collectNonTaint _             = error "collectNonTaint is called without top module"
 
 -- collect ports and ufs
 collectPortAndUFs :: [ParseVar] -> [ParseGate] -> [ParseUF] -> P ()
@@ -277,7 +277,7 @@ collectPortAndUFs vs gs us = do
     )      <$> us
   sequence_ $ handleGate                                        <$> gs
   where
-    handleGate (PModuleInst{..}) = collectPortAndUFs pmInstVars pmInstGates pmInstUFs
+    handleGate PModuleInst{..}   = collectPortAndUFs pmInstVars pmInstGates pmInstUFs
     handleGate (PContAsgn _ _ )  = return ()
 
     toVar (PWire w)     = Wire w
@@ -317,10 +317,10 @@ gate2IR loc (PContAsgn l r) = do
   l' <- checkLhsIsVar l
   r' <- makeExpr r
   return $ Always Assign (BlockingAsgn l' r') loc
-gate2IR _ (PModuleInst{..}) = do
+gate2IR _ PModuleInst{..} = do
   irs' <- makeIntermediaryIR loc' pmInstBehaviors pmInstGates
   st' <- uses st (set irs irs')
-  return $
+  return
     ModuleInst{ modInstName = pmInstName
               , modParams   = toPort <$> pmInstPorts
               , modInstSt   = st'
@@ -342,10 +342,10 @@ makeExpr v = do
     Nothing       -> return (VVar v)
     Just (fn, as) -> do
       as' <- SQ.fromList <$> mapM makeExpr as
-      return $ VUF { vVarName  = v
-                   , vFuncName = fn
-                   , vFuncArgs = as'
-                   }
+      return VUF { vVarName  = v
+                 , vFuncName = fn
+                 , vFuncArgs = as'
+                 }
 
 checkLhsIsVar :: Id -> P Id
 checkLhsIsVar l = do
@@ -449,7 +449,7 @@ whole :: Parser a -> Parser a
 whole p = spaceConsumer *> p <* eof
 
 spaceConsumer :: Parser ()
-spaceConsumer = (L.space (void spaceChar) lineCmnt blockCmnt)
+spaceConsumer = L.space (void spaceChar) lineCmnt blockCmnt
   where
     blockCmnt, lineCmnt :: Parser ()
     blockCmnt = L.skipBlockComment "/*" "*/"
@@ -479,7 +479,7 @@ betweenS l r = between (symbol l) (symbol r)
 
 -- | `lexeme p` consume whitespace after running p
 lexeme :: Parser a -> Parser a
-lexeme p = L.lexeme spaceConsumer p
+lexeme = L.lexeme spaceConsumer
 
 -- | `rWord`
 rWord   :: String -> Parser Id
@@ -518,9 +518,9 @@ parseMany1 elemP sepP =
 renderError :: IRParseError -> IO String
 renderError = return . eMsg
 
-data IRParseError = IRParseError { eMsg :: !String
-                                 }
-                  deriving (Show, Typeable)
+newtype IRParseError = IRParseError { eMsg :: String
+                                    }
+                     deriving (Show, Typeable)
 
 instance Exception IRParseError
 
@@ -533,11 +533,11 @@ myParseErrorPretty :: (Stream s) => ParseErrorBundle s e -> String
 myParseErrorPretty (ParseErrorBundle errs posSt) =
   errorBundlePretty $
   ParseErrorBundle
-  ((\(e,pos) -> mapParseError (const (SP pos)) e) <$> (fst $ attachSourcePos errorOffset errs posSt))
+  ((\(e,pos) -> mapParseError (const (SP pos)) e) <$> fst (attachSourcePos errorOffset errs posSt))
   posSt
 
 newtype SP = SP SourcePos
            deriving (Eq, Ord)
 
 instance ShowErrorComponent SP where
-  showErrorComponent (SP pos) = "parse error in file " ++ (MP.sourceName pos)
+  showErrorComponent (SP pos) = "parse error in file " ++ MP.sourceName pos

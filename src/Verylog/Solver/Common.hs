@@ -1,4 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE StrictData #-}
 
@@ -106,14 +105,14 @@ instance NFData Inv
 -- helper functions
 -- -----------------------------------------------------------------------------
 
-nextPred :: [Char]
+nextPred :: String
 nextPred = "next"
 
-invPred :: [Char]
+invPred :: String
 invPred  = "inv"
 
 makeInvPred   :: AlwaysBlockA a -> String
 makeInvPred a = makeInv (a^.aId)
 
 makeInv :: Int -> String
-makeInv n = printf "inv%d" n
+makeInv = printf "inv%d"

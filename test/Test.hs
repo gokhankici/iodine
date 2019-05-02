@@ -101,7 +101,7 @@ data UnitTest = UnitTest { testName    :: String
 -- SIMPLE TESTS
 -- -----------------------------------------------------------------------------
 simple :: Runner -> FilePath -> Spec
-simple runner testDir = do
+simple runner testDir =
   describe "simple" $ do
     forM_ (go <$> names) runner
     runner $ t { testName    = "stall-hand"
@@ -150,7 +150,7 @@ abduction runner testDir = describe abductionRoot $ forM_ (go <$> names) runner
 -- MIPS TESTS
 -- -----------------------------------------------------------------------------
 mips :: Runner -> FilePath -> Spec
-mips runner d = do
+mips runner d =
   describe "mips" $ do
     mipsModules runner d
     mipsStubs   runner d
@@ -304,9 +304,9 @@ benchmarkDir p = p </> "benchmarks"
 mipsDir p      = benchmarkDir p </> "472-mips-pipelined"
 
 runUnitTest :: TestArgs -> R.VerylogArgs -> Runner
-runUnitTest ta va (UnitTest{..}) =
+runUnitTest ta va UnitTest{..} =
   if   ta ^. dryRun
-  then it testName $ (printf "./iodine %s %s\n" verilogFile moduleName :: IO ())
+  then it testName (printf "./iodine %s %s\n" verilogFile moduleName :: IO ())
   else it testName $ R.run va' `shouldReturn` (testType == Succ)
   where
     va' = va { R.fileName   = verilogFile

@@ -134,7 +134,7 @@ main :: IO ()
 -- If the program is not constant time, the process exists with a non-zero return code.
 main = do
   safe <- getArgs >>= parseArgs >>= run
-  when (not safe) $ exitFailure
+  unless safe exitFailure
 
 -- -----------------------------------------------------------------------------
 run :: VerylogArgs -> IO Bool
@@ -147,19 +147,19 @@ parseArgs :: [String] -> IO VerylogArgs
 parseArgs as = withArgs as $ cmdArgs verylogArgs
 
 normalizePaths :: VerylogArgs -> IO VerylogArgs
-normalizePaths (VerylogArgs{..}) = do
+normalizePaths VerylogArgs{..} = do
   f' <- makeAbsolute fileName
   i' <- makeAbsolute iverilogDir
-  return $ VerylogArgs { fileName    = f'
-                       , iverilogDir = i'
-                       , ..
-                       }
+  return VerylogArgs { fileName    = f'
+                     , iverilogDir = i'
+                     , ..
+                     }
 
 
 -- -----------------------------------------------------------------------------
 generateIR :: VerylogArgs -> IO VerylogArgs
 -- -----------------------------------------------------------------------------
-generateIR (VerylogArgs{..}) = do
+generateIR VerylogArgs{..} = do
   runPreProcessor
   runIVL
   appendAnnots
@@ -190,10 +190,7 @@ generateIR (VerylogArgs{..}) = do
       case rc of
         ExitSuccess -> return ()
         ExitFailure _ -> do
-          hPutStrLn stderr "Generating IR from the following Verilog file failed:"
-          hPutStrLn stderr verilogFile
-          hPutStrLn stderr preprocFile
-          hPutStrLn stderr err
+          printMsg "Generating IR from the following Verilog file failed:" err
           exitFailure
 
     -- extract the annotations from the Verilog file and append them to the IR
@@ -201,18 +198,18 @@ generateIR (VerylogArgs{..}) = do
       let rgx = "s|[^@]*@annot{\\([^}]*\\)}[^@]*|\\1.\\n|pg"
       (rc, out, err) <- readProcessWithExitCode "/bin/sed" ["-n", rgx, verilogFile] ""
       case rc of
-        ExitSuccess -> do
+        ExitSuccess ->
           appendFile irFile out
         ExitFailure _ -> do
-          hPutStrLn stderr "Parsing annotations failed:"
-          hPutStrLn stderr verilogFile
-          hPutStrLn stderr preprocFile
-          hPutStrLn stderr err
+          printMsg "Parsing annotations failed:" err
           exitFailure
+
+    printMsg msg err = 
+      forM_ (msg:[verilogFile, preprocFile, err]) (hPutStrLn stderr)
 
     verilogFile = fileName
     verilogDir  = takeDirectory verilogFile
-    filePrefix  = verilogDir </> "" <.> (dropExtensions $ takeFileName verilogFile)
+    filePrefix  = verilogDir </> "" <.> dropExtensions (takeFileName verilogFile)
     preprocFile = filePrefix <.> "preproc" <.> "v"
     irFile      = filePrefix <.> "pl"
     result      = VerylogArgs { fileName = irFile
@@ -223,7 +220,7 @@ generateIR (VerylogArgs{..}) = do
 -- -----------------------------------------------------------------------------
 checkIR :: VerylogArgs -> IO Bool
 -- -----------------------------------------------------------------------------
-checkIR (VerylogArgs{..}) = do
+checkIR VerylogArgs{..} = do
   fileContents <- readFile fileName
   let pipelineInput = (fileName, fileContents)
       fpst          = pipeline pipelineInput
@@ -254,7 +251,7 @@ peHandle e = renderError e >>= hPutStrLn stderr >> return False
 
 passHandle :: PassError -> IO Bool
 passHandle (PassError msg)  = hPutStrLn stderr msg >> return False
-passHandle (CycleError{..}) = do
+passHandle CycleError{..} = do
   writeFile "/tmp/cycle.dot" cycleStr
   hPutStrLn stderr "Cycle is written to /tmp/cycle.dot"
   hPutStrLn stderr cycleErrorStr

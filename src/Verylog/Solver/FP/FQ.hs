@@ -131,9 +131,9 @@ makeConstraints fpst = snd $ IM.foldl' gos (0, mempty) (fpst ^. fpConstraints)
     gos = F.foldl' go
 
     go :: (Integer, [SubC HornId]) -> Inv -> (Integer, [SubC HornId])
-    go (n, subcs) horn = (n+1, (mc (n, horn)):subcs)
+    go (n, subcs) horn = (n+1, mc (n, horn) : subcs)
 
-    mc (n, (Horn{..})) = helper hBody hHead n hId
+    mc (n, Horn{..}) = helper hBody hHead n hId
 
     helper bdy' hd n hId =
       let bdy = Ands [eqs, bdy']
@@ -161,7 +161,7 @@ makeConstraints fpst = snd $ IM.foldl' gos (0, mempty) (fpst ^. fpConstraints)
 makeWFConstraints :: FPSt -> [WfC HornId]
 makeWFConstraints fpst = concatMap mwf (fpst ^. fpABs)
   where
-    mwf a@(AB{..}) =
+    mwf a@AB{..} =
       let allAs = seqNub $ makeInvArgs fmt a SQ.>< extraEnv fpst
           ids   = F.toList $ getBindIds fpst (Var <$> allAs)
           i     = a ^. aId
@@ -177,13 +177,13 @@ makeBinders   :: M.HashMap Id FQBind -> FQT.BindEnv
 makeBinders m = bindEnvFromList l
   where
     l                 = mkBE <$> M.elems m
-    mkBE (FQBind{..}) = ( bindId
-                        , FQT.symbol bindName
-                        , (RR bindType (reft (FQT.symbol "v") bindRef))
-                        )
+    mkBE FQBind{..} = ( bindId
+                      , FQT.symbol bindName
+                      , RR bindType (reft (FQT.symbol "v") bindRef)
+                      )
 
 convertExpr :: Expr -> FQT.Expr
-convertExpr (BinOp{..}) =
+convertExpr BinOp{..} =
   case bOp of
     EQU     -> FQT.PAtom Eq   el er
     LE      -> FQT.PAtom Le   el er
@@ -197,18 +197,18 @@ convertExpr (BinOp{..}) =
     el = convertExpr expL
     er = convertExpr expR
 convertExpr (Ands es) = pAnd (convertExpr <$> es)
-convertExpr (Ite{..}) = pIte c el er
+convertExpr Ite{..} = pIte c el er
   where
     c  = convertExpr cnd
     el = convertExpr expThen
     er = convertExpr expElse
-convertExpr (KV{..}) = FQT.PKVar
-                       (FQT.KV $ symbol (makeInv kvId))
-                       (mkSubst $ F.foldr' f [] kvSubs)
+convertExpr KV{..} = FQT.PKVar
+                     (FQT.KV $ symbol (makeInv kvId))
+                     (mkSubst $ F.foldr' f [] kvSubs)
   where
     f (v,e) acc = (symbol v, convertExpr e) : acc
 convertExpr (Var v)       = eVar v
-convertExpr (UFCheck{..}) =
+convertExpr UFCheck{..} =
   let (largs, rargs) = unzip ufArgs
       (l, r)         = ufNames
       f              = dummyLoc $ symbol ufFunc
@@ -226,7 +226,7 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
     ids   = f2seq $ F.foldl' (\s e -> s `HS.union` getIds e ) HS.empty es
 
     getBindId   :: Id -> Reader FPSt Int
-    getBindId v = views fpBinds (bindId . (M.lookupDefault (errMsg v) v))
+    getBindId v = views fpBinds (bindId . M.lookupDefault (errMsg v) v)
 
     errMsg v = throw $ PassError $ printf "cannot find %s in binders" v
 
@@ -234,17 +234,17 @@ getBindIds fpst es = runReader (mapM getBindId ids) fpst
     helper (e:es') = L.foldl' (\s e' -> getIds e' `HS.union` s) (getIds e) es'
 
     getIds :: Expr -> HS.HashSet Id
-    getIds (BinOp{..})      = getIds expL `HS.union` getIds expR
-    getIds (Ands es')       = helper es'
-    getIds (Ite{..})        = getIds cnd `HS.union` getIds expThen `HS.union` getIds expElse
-    getIds (KV{..})         = let f acc (v,e) = (getIds e) `HS.union` (HS.insert v acc)
-                              in F.foldl' f mempty kvSubs
-    getIds (Var v)          = HS.singleton v
-    getIds (UFCheck{..})    = 
+    getIds BinOp{..}    = getIds expL `HS.union` getIds expR
+    getIds (Ands es')   = helper es'
+    getIds Ite{..}      = getIds cnd `HS.union` getIds expThen `HS.union` getIds expElse
+    getIds KV{..}       = let f acc (v,e) = getIds e `HS.union` HS.insert v acc
+                          in F.foldl' f mempty kvSubs
+    getIds (Var v)      = HS.singleton v
+    getIds UFCheck{..}  = 
       let (as1,as2) = unzip $ map (over both idFromExp) ufArgs
           (n1,n2)   = ufNames & both %~ idFromExp
       in HS.fromList $ n1:n2:as1 ++ as2
-    getIds e                = HS.singleton $ getConstantName e
+    getIds e            = HS.singleton $ getConstantName e
 
 type UFAcc = (Int, [(Symbol, Sort)])
 
@@ -256,8 +256,8 @@ getUFGlobals fpst = fromListSEnv $ snd $ L.foldl' goStmt (0, []) ((^.aStmt) <$> 
                    in F.foldl' goExpr acc ves
 
     goExpr :: UFAcc -> VExpr -> UFAcc
-    goExpr acc (VVar{..})     = acc
-    goExpr (!n, !l) ve@(VUF{..}) =
+    goExpr acc VVar{..} = acc
+    goExpr (!n, !l) ve@VUF{..} =
       let args  = vexprPortSeq ve
           arity = F.length args
           s     = if   arity > 0

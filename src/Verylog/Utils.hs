@@ -1,5 +1,3 @@
-{-# language RecordWildCards #-}
-
 module Verylog.Utils ( app2
                      , liftIO1, liftIO2
                      , ifM
@@ -19,7 +17,7 @@ import           System.IO
 
 mapOfSetInsert :: (Eq k, Eq v, Hashable k, Hashable v)
                => k -> v -> M.HashMap k (S.HashSet v) -> M.HashMap k (S.HashSet v)
-mapOfSetInsert k v m = M.alter altr k m
+mapOfSetInsert k v = M.alter altr k
   where
     altr Nothing  = Just $ S.singleton v
     altr (Just s) = Just $ S.insert v s
@@ -70,7 +68,7 @@ break    = fmap ((,) Break)
 
 
 silence :: IO a -> IO a
-silence action = bracket (openFile "/dev/null" AppendMode) hClose prepareAndRun
+silence action = withFile "/dev/null" AppendMode prepareAndRun
   where
     handles = [stdout, stderr]
     prepareAndRun tmpHandle = go handles

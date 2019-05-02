@@ -35,13 +35,13 @@ type G   = Gr.Gr V E
 
 type I = (Id, Int) -- Index
 
-updateAnnotations :: IntermediaryA I -> IntermediaryA_St I
+updateAnnotations :: IntermediaryA I -> IntermediaryASt I
 updateAnnotations (as, st) = result
   where
     result = findSolution st g
     g = toAbductionGraph as
 
-findSolution :: IntermediaryA_St I -> G -> IntermediaryA_St I
+findSolution :: IntermediaryASt I -> G -> IntermediaryASt I
 findSolution (annots, qualifiers) g = unsafePerformIO act `seq` result
   where
     result = if   Gr.size g > 1

@@ -6,8 +6,6 @@ import warnings
 import numpy          as np
 import networkx       as nx
 import collections
-from   scipy.optimize import linprog
-from   scipy.sparse   import csr_matrix, csc_matrix, vstack, hstack
 import cplex
 import subprocess
 import time
@@ -57,104 +55,6 @@ class AssumptionSolver:
                 if u not in done:
                     worklist.append(u)
                     done.add(u)
-
-# scipy solver {{{
-class ScipyAssumptionSolver(AssumptionSolver):
-    def __init__(self, g, must_eq, cannot_be_eq):
-        super(ScipyAssumptionSolver, self).__init__(g, must_eq, cannot_be_eq)
-
-    def suggest_assumptions(self):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            return self.suggest_assumptions_helper()
-
-    def suggest_assumptions_helper(self):
-        """
-        Given a graph and two sets, suggest the nodes to be marked
-        must_eq      : nodes that must be marked (directly or indirectly)
-        cannot_be_eq : nodes that cannot be marked
-        """
-
-        # the upper bounds of the flows are the capacities
-        upper_bound = np.full(self.edge_count, 0)
-        for e, i in self.edge_id.items():
-            if type(e) == int:
-                v = e               # this is a shadow node
-                upper_bound[i] = sum(map(lambda w: self.cap[v,w], self.g.successors(v)))
-            print("[Capacities] Linear programming failed:")
-            else:
-                upper_bound[i] = self.cap[e]
-        debug("upper bound:\n{}".format(upper_bound))
-
-        # calculate the cost of every shadow edge
-        lp_cost = np.full(self.edge_count, 0)
-        for v in self.shadow_nodes:
-            lp_cost[self.edge_id[v]] = self.costs[v]
-        for v in self.cannot_be_eq:
-            for w in self.g.successors(v):
-                for u in self.g.predecessors(w):
-                    lp_cost[self.edge_id[u]] = self.costs[w] + 1
-        debug("lp cost:\n{}".format(lp_cost))
-
-        # the variables of nodes that cannot be marked has to be zero
-        a_eq_0 = csr_matrix((1, self.edge_count))
-        b_eq_0 = 0
-        for v in self.shadow_nodes:
-            if v in self.cannot_be_eq:
-                a_eq_0[0, self.edge_id[v]] = 1
-
-        # the outgoing flow of must_eq nodes have to be at capacity
-        a_eq_1 = csr_matrix((1, self.edge_count))
-        b_eq_1 = 0
-        for v in self.must_eq:
-            for w in self.g.successors(v):
-                a_eq_1[0, self.edge_id[v,w]] = 1
-            b_eq_1 += upper_bound[self.edge_id[v]]
-
-        a_eq = vstack([a_eq_0, a_eq_1])
-        b_eq = np.array([b_eq_0, b_eq_1])
-
-        # regular max flow constraints
-        a_ub = csr_matrix((0, self.edge_count))
-        b_ub = np.array([])
-        for v in self.g.nodes():
-            if len(self.g.succ[v]) == 0:
-                continue
-
-            vec = csr_matrix((1, self.edge_count))
-
-            for u in self.g.predecessors(v):
-                i = self.edge_id[u,v]
-                vec[0, i] = -1
-            vec[0, self.edge_id[v]] = -1
-            for w in self.g.successors(v):
-                i = self.edge_id[v,w]
-                vec[0, i] = 1
-
-            a_ub = vstack([a_ub, vec])
-            b_ub = np.append(b_ub, 0)
-
-        debug("equalities:")
-        debug(a_eq.A)
-        debug(b_eq)
-        debug("upper bounds:")
-        debug(a_ub.A)
-        debug(b_ub)
-
-        # solve the LP problem
-        result = linprog(lp_cost,
-                        A_eq = a_eq, b_eq = b_eq,
-                        A_ub = a_ub, b_ub = b_ub,
-                        bounds = [(0,ub) for ub in upper_bound],
-                        method = "interior-point",
-                        options = {"sparse":True})
-        if result.status != 0:
-            print("[Assumptions] Linear programming failed: {}".format(result.message))
-            return None
-        else:
-            debug(result)
-            return {v : int(round(result.x[self.edge_id[v]])) for v in self.shadow_nodes}
-# }}}
 
 class CplexAssumptionSolver(AssumptionSolver):
     def __init__(self, g, must_eq, cannot_be_eq):
@@ -240,7 +140,6 @@ class CplexAssumptionSolver(AssumptionSolver):
             sys.exit(1)
 
 def suggest_assumptions(g, must_eq, cannot_be_eq):
-    # defaultSolver = ScipyAssumptionSolver(g, must_eq, cannot_be_eq)
     defaultSolver = CplexAssumptionSolver(g, must_eq, cannot_be_eq)
     return defaultSolver.suggest_assumptions()
 

@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 /.venv
+/outputs/
 
 # cplex files
 *.lp
@@ -12,3 +13,5 @@ cplex.pdf
 cplex.png
 
 graph.json
+graph.dot
+graph.pdf

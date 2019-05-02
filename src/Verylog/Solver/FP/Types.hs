@@ -12,7 +12,7 @@ import           Control.Exception
 import           Control.Lens
 import           Data.Sequence
 import qualified Data.HashMap.Strict        as M
-import           GHC.Generics hiding (to)
+import           GHC.Generics
 import qualified Language.Fixpoint.Types    as FQ
 
 type FPQualifier = FPQualifierA Id

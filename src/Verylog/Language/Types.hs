@@ -15,7 +15,7 @@ import           Control.Monad.State.Lazy
 import qualified Data.HashSet             as S
 import qualified Data.Text                as T
 import           Data.Typeable
-import           Text.PrettyPrint hiding (sep)
+import           Text.PrettyPrint
 import           Data.List
 import qualified Data.Semigroup as SG
 import           Data.Hashable
@@ -94,7 +94,7 @@ data VExprA a =
     VVar { vVarName  :: a }
   | VUF  { vVarName  :: a
          , vFuncName :: a
-         , vFuncArgs :: (SQ.Seq (VExprA a))
+         , vFuncArgs :: SQ.Seq (VExprA a)
          }
   deriving (Eq, Generic)
 
@@ -171,14 +171,11 @@ makeLenses ''StA
 makeLenses ''BlockMetadataA
 makeLenses ''AlwaysBlockA
 
-done_atom :: Id
-done_atom = "done"
-
 runIRs :: (IR -> State St a) -> State St (SQ.Seq a)
-runIRs f = use irs >>= sequence . (fmap f)
+runIRs f = use irs >>= traverse f
 
 runIRs_ :: (IR -> State St a) -> State St ()
-runIRs_ f = use irs >>= sequence_ . (fmap f)
+runIRs_ f = use irs >>= sequence_ . fmap f
 
 readIRs :: St -> (IR -> Reader St a) -> SQ.Seq a
 readIRs st f = st^.irs.to (fmap (r . f))
@@ -202,9 +199,9 @@ class PPrint a where
   toDoc :: a -> Doc
 
   pprint :: a -> String
-  pprint = (renderStyle style{ lineLength     = 150
-                             , ribbonsPerLine = 1.2
-                             }) . toDoc
+  pprint = renderStyle style{ lineLength     = 150
+                            , ribbonsPerLine = 1.2
+                            } . toDoc
 
 instance PPrint T.Text where
   toDoc = text . T.unpack
@@ -213,8 +210,8 @@ instance PPrint Int where
   toDoc = int
 
 instance PPrint a => PPrint (VExprA a) where
-  toDoc (VVar v)   = toDoc v
-  toDoc (VUF {..}) = toDoc vFuncName <> parens (hsep $ punctuate comma (toDoc <$> toList vFuncArgs))
+  toDoc (VVar v) = toDoc v
+  toDoc VUF {..} = toDoc vFuncName <> parens (hsep $ punctuate comma (toDoc <$> toList vFuncArgs))
 
 instance PPrint a => PPrint (EventA a) where
   toDoc Star          = text "event1(star)"
@@ -224,28 +221,28 @@ instance PPrint a => PPrint (EventA a) where
 
 
 instance PPrint a => PPrint (IRA a) where
-  toDoc (Always{..})      = text "always(" <> vcat [toDoc event <> comma, toDoc alwaysStmt] <> text ")."
-  toDoc (ModuleInst{..})  = text "module" <> vcat [ lparen <+> id2Doc modInstName
-                                                  , comma  <+> pl ((toDoc . portName) <$> modParams)
-                                                  , comma  <+> toDoc modInstSt
-                                                  , rparen
-                                                  ] <> text "."
+  toDoc Always{..}      = text "always(" <> vcat [toDoc event <> comma, toDoc alwaysStmt] <> text ")."
+  toDoc ModuleInst{..}  = text "module" <> vcat [ lparen <+> id2Doc modInstName
+                                                , comma  <+> pl ((toDoc . portName) <$> modParams)
+                                                , comma  <+> toDoc modInstSt
+                                                , rparen
+                                                ] <> text "."
     where
-      pl = brackets . hsep . (punctuate (text ", "))
+      pl = brackets . hsep . punctuate (text ", ")
 
 
 instance PPrint a => PPrint (StmtA a) where
-  toDoc (Block [])     = brackets empty
+  toDoc (Block []) = brackets empty
   toDoc (Block (s:ss)) = vcat $ (lbrack <+> toDoc s) : (((comma <+>) . toDoc) <$> ss) ++ [rbrack]
-  toDoc (BlockingAsgn{..}) =
+  toDoc BlockingAsgn{..} =
     text "b_asn(" <> toDoc lhs <> comma <+> toDoc rhs <> rparen
-  toDoc (NonBlockingAsgn{..}) =
+  toDoc NonBlockingAsgn{..} =
     text "nb_asn(" <> toDoc lhs <> comma <+> toDoc rhs <> rparen
-  toDoc (IfStmt{..}) = text "ite" <> vcat [ lparen <+> toDoc ifCond
-                                          , comma  <+> toDoc thenStmt
-                                          , comma  <+> toDoc elseStmt
-                                          , rparen
-                                          ]
+  toDoc IfStmt{..} = text "ite" <> vcat [ lparen <+> toDoc ifCond
+                                        , comma  <+> toDoc thenStmt
+                                        , comma  <+> toDoc elseStmt
+                                        , rparen
+                                        ]
   toDoc Skip = text "skip"
 
 -- instance PPrint a => PPrint [a] where
@@ -259,7 +256,7 @@ instance PPrint a => PPrint (VarA a) where
   toDoc (Wire w)     = text "wire" <> parens (toDoc w)
 
 instance PPrint a => PPrint (StA a) where
-  toDoc st = vcat $ stDoc : space : st^.irs.(to (fmap toDoc)).(to toList)
+  toDoc st = vcat $ stDoc : space : st^.irs . to (toList . fmap toDoc)
     where
       stDoc = text "St" <+>
               vcat [ lbrace <+> text "ports" <+> equals <+> st^.ports.to toDoc
@@ -288,7 +285,7 @@ instance PPrint a => PPrint (AnnotStA a) where
                                   ]
 
 instance PPrint a => PPrint [a] where
-  toDoc = brackets . cat . (punctuate comma) . fmap toDoc
+  toDoc = brackets . cat . punctuate comma . fmap toDoc
 
 printSet :: PPrint a => S.HashSet a -> Doc
 printSet = toDoc . S.toList
@@ -350,7 +347,7 @@ instance (Eq a, Hashable a) => Mo.Monoid (StA a) where
   mappend = (SG.<>)
 
 getRegisters :: AlwaysBlockA a -> SQ.Seq a
-getRegisters a = fmap varName $ SQ.filter isRegister (a ^. aSt ^. ports)
+getRegisters a = varName <$> SQ.filter isRegister (a ^. aSt ^. ports)
 
 isRegister :: VarA a -> Bool
 isRegister (Register _) = True
@@ -365,8 +362,8 @@ class FoldVariables m where
   foldVariablesSet = foldl' (flip S.insert) mempty . foldVariables
 
 instance FoldVariables VExprA where
-  foldVariables (VVar v)   = SQ.singleton v
-  foldVariables (VUF {..}) = foldl' f SQ.empty vFuncArgs
+  foldVariables (VVar v) = SQ.singleton v
+  foldVariables VUF {..} = foldl' f SQ.empty vFuncArgs
     where
       f :: (FoldVariables m) => SQ.Seq a -> m a -> SQ.Seq a
       f vs a = let vs2 = foldVariables a
@@ -392,7 +389,7 @@ isClk (NegEdge _) = True
 isClk (PosEdge _) = True
 
 instance Hashable (AlwaysBlockA a) where
-  hashWithSalt n (AB{..}) = hashWithSalt n _aId
+  hashWithSalt n AB{..} = hashWithSalt n _aId
 
 instance Eq (AlwaysBlockA a) where
   a1 == a2 = (a1 ^. aId) == (a2 ^. aId)
@@ -475,10 +472,8 @@ instance Y.FromJSON AnnotStFile where
 
       f o name setter a = (\x -> set setter x a) <$> (o Y..: name)
 
-      annotParser o = do
-        return mempty
-        >>=
-        f o "init_eq" sanitize
+      annotParser o =
+        f o "init_eq" sanitize mempty
         >>=
         f o "always_eq" sanitizeGlob
 
@@ -495,15 +490,15 @@ vexprPortSet :: VExpr -> S.HashSet Id
 vexprPortSet = foldVariablesSet
 
 stmtCollectVExpr :: Stmt -> SQ.Seq VExpr
-stmtCollectVExpr (Block{..}) = go blockStmts
+stmtCollectVExpr Block{..} = go blockStmts
   where
-    go []     = mempty
-    go (s:ss) = stmtCollectVExpr s SQ.>< go ss
-stmtCollectVExpr (BlockingAsgn{..}) = SQ.singleton rhs
-stmtCollectVExpr (NonBlockingAsgn{..}) = SQ.singleton rhs
-stmtCollectVExpr (IfStmt{..}) = ifCond SQ.<|
-                                stmtCollectVExpr thenStmt SQ.><
-                                stmtCollectVExpr elseStmt
+    go = foldr ((SQ.><) . stmtCollectVExpr) mempty
+
+stmtCollectVExpr BlockingAsgn{..} = SQ.singleton rhs
+stmtCollectVExpr NonBlockingAsgn{..} = SQ.singleton rhs
+stmtCollectVExpr IfStmt{..} = ifCond SQ.<|
+                              stmtCollectVExpr thenStmt SQ.><
+                              stmtCollectVExpr elseStmt
 stmtCollectVExpr Skip = mempty
 
 seqNub :: (Hashable a, Eq a) => SQ.Seq a -> SQ.Seq a

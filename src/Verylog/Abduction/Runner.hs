@@ -67,7 +67,7 @@ removeId :: IntermediaryA (Id, Int) -> IntermediaryA Id
 removeId = fromProduct . undoUniqueId . toProduct
 
 -- MyProduct = (Seq (AlwaysBlock a), (AnnotSt a, [FPQualifier a]))
-type MyProduct a = Product (Compose Seq AlwaysBlockA) (Product (AnnotStA) (Compose [] FPQualifierA)) a
+type MyProduct a = Product (Compose Seq AlwaysBlockA) (Product AnnotStA (Compose [] FPQualifierA)) a
 
 toProduct :: IntermediaryA a -> MyProduct a
 toProduct (as, (annots, qualifiers)) = Pair (Compose as) (Pair annots (Compose qualifiers))
@@ -84,7 +84,7 @@ toCplexInput g sinkIds = CplexInput{..}
     cplexMapping    = Gr.labNodes g
 
 cplexToMark :: G -> [Int] -> [Int]
-cplexToMark g is = IS.toList $ (execState loop initSt) ^. _3
+cplexToMark g is = IS.toList $ execState loop initSt ^. _3
   where
     initSt = ( IS.fromList is -- worklist
              , ( IS.empty     -- direct seen nodes
@@ -99,7 +99,7 @@ cplexToMark g is = IS.toList $ (execState loop initSt) ^. _3
         else do let v = IS.findMin w
                 _1  %= IS.delete v -- remove node from worklist
                 let vParents = Gr.lpre g v
-                forM_ vParents $ \(u, typ) -> do
+                forM_ vParents $ \(u, typ) ->
                   case typ of
                     Direct   -> do c <- uses (_2 . _1) (IS.member u) -- check if seen directly before
                                    if c
