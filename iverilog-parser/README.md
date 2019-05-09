@@ -1,4 +1,7 @@
-# Verilog -> Prolog IR
+# Verilog -> Iodine IR
+
+Transforms Verilog into Iodine intermediate representation. The implementation
+is based on [Icarus Verilog](https://github.com/steveicarus/iverilog).
 
 ## Dependencies
 
@@ -8,7 +11,7 @@
   * bison
   * zsh
 
-Tested on Xubuntu 17.04, *might work* on a Mac.
+Tested on Ubuntu 18.10, *might work* on a Mac.
 
 ## Instructions
 
