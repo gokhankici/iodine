@@ -2,8 +2,6 @@
 
 import sys
 import warnings
-import numpy          as np
-import networkx       as nx
 import cplex
 import json
 from   collections    import namedtuple
