@@ -1,0 +1,6 @@
+*/c_test/test
+
+/Chips-*
+venv/
+
+*.z3

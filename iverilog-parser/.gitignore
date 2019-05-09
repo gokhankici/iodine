@@ -1,0 +1,99 @@
+*.prof
+.d/
+*.o
+main
+TAGS
+ivl
+parse.output
+syn-rules.output
+
+.*.pl
+.*.v
+
+.liquid
+
+# ##############################################################################
+# emacs
+# ##############################################################################
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Org-mode
+.org-id-locations
+*_archive
+
+# flymake-mode
+*_flymake.*
+
+# eshell files
+/eshell/history
+/eshell/lastdir
+
+# elpa packages
+/elpa/
+
+# reftex files
+*.rel
+
+# AUCTeX auto folder
+/auto/
+
+# cask packages
+.cask/
+dist/
+
+# Flycheck
+flycheck_*.el
+
+# server auth directory
+/server/
+
+# projectiles files
+.projectile
+
+# directory configuration
+.dir-locals.el
+# ##############################################################################
+
+# ##############################################################################
+# vim
+# ##############################################################################
+# Swap
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-v][a-z]
+[._]sw[a-p]
+
+# Session
+Session.vim
+
+# Temporary
+.netrwhist
+*~
+# Auto-generated tag files
+tags
+
+# ##############################################################################
+# GNU Global
+# ##############################################################################
+GPATH
+GRTAGS
+GTAGS
+
+# ##############################################################################
+# qt creator
+# ##############################################################################
+
+iverilog-parser.config  
+iverilog-parser.creator 
+iverilog-parser.creator.user*
+iverilog-parser.files   
+iverilog-parser.includes
+
+

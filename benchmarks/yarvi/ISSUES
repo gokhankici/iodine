@@ -1,0 +1,33 @@
+THIS IS A BIT OUT OF DATE
+
+Issues/todos:
+
+  #-1 Add support for stalling and convert to an Avalon master,
+    initially without caches.
+
+  #? Switch to 64-bit
+
+  #0 Interrupt support (mostly done, but untested).
+
+  #? Raise interrupts on RX full and TX empty.
+
+  #2 Add caches
+
+     - First a virtual 8 KiB directly mapped L1D$ and L1I$ (being
+       directly mapped and no bigger than the page size guarantees no
+       cache aliases, see. page 446 of H&P, ** 3rd ** edition.
+
+  #4 Virtual Memory: ITLB/DTLB + sw filler support.
+
+     Trap on TLB misses and define a set of CSRs to
+     - access the missed address in a format to make page traversal efficient
+     - read and write the TLB
+
+     Initially a simple directly mapped TLB will suffice and avoid
+     having to deal with (p)LRU.
+
+  #? Trap illegal instruction and CSR accesses (unpriviledged too).
+
+  #5 Traps: instruction {misalignment, address, illegal, priviledged},
+     fp disabled, {load,store} {misalignment, fault}.
+

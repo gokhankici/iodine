@@ -1,0 +1,3 @@
+[submodule "liquid-fixpoint"]
+	path = liquid-fixpoint
+	url = https://github.com/gokhankici/liquid-fixpoint.git

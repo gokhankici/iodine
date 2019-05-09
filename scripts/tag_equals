@@ -1,0 +1,12 @@
+#!/bin/zsh
+
+if [[ $# -ne 1 ]]; then
+	echo "usage: ${0:h} <verilog file>"
+	exit 1
+fi
+
+THIS_DIR=${0:A:h}
+FILENAME=$1
+
+# cat .liquid/.${FILENAME:t:r}.pl.fqout | $THIS_DIR/eqs.py | fzf
+cat .liquid/.${FILENAME:t:r}.pl.fqout | sort | uniq | fzf -e

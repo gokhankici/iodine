@@ -1,0 +1,10 @@
+#!/bin/zsh
+
+THIS_DIR=${0:A:h}
+
+stack exec iodine -- \
+	--iverilog-dir="${THIS_DIR}/../../../iverilog-parser" \
+	--abduction \
+	$@ && \
+	${THIS_DIR}/assumptions.py cplex.json
+

@@ -1,0 +1,32 @@
+qualif Eq1(v  : int, x as (VL_ . $1) : int, y as (VR_ . $1) : int): ((x = y)) // (line 0, column 0)
+qualif Eq2(v  : int, x as (VLP_ . $1) : int, y as (VRP_ . $1) : int): ((x = y)) // (line 0, column 0)
+
+
+bind 1 VL_y  : {v : int | []}
+bind 2 VR_y  : {v : int | []}
+bind 3 VLP_y : {v : int | []}
+bind 4 VRP_y : {v : int | []}
+bind 5 VLT_y  : {v : int | []}
+bind 6 VRT_y  : {v : int | []}
+bind 7 VLTP_y : {v : int | []}
+bind 8 VRTP_y : {v : int | []}
+
+bind 100 zero : {v : int | [(v = 0)]}
+bind 200 one : {v : int | [(v = 1)]}
+
+constraint:
+  env [3; 4]
+  lhs {v##1 : int | []}
+  rhs {v##1 : int | [$inv0[VRP_y:=VLP_y][VLTP_y:=zero][VRTP_y:=zero][v:=v##1]]}
+  id 1 tag []
+
+constraint:
+  env [1;2;3;4]
+  lhs {v##5 : int | [$inv0[VLP_y:=VL_y][VRP_y:=VR_y]]}
+  rhs {v##5 : int | [(VR_y = VL_y)]}
+  id 5 tag []
+
+wf:
+  env [1;2;3;4]
+  reft {v : int | [$inv0]}
+

@@ -1,0 +1,17 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+/.venv
+/outputs/
+
+# cplex files
+*.lp
+cplex.dot
+cplex.pdf
+cplex.png
+
+graph.json
+graph.dot
+graph.pdf

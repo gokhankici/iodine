@@ -1,0 +1,12 @@
+[submodule "external/riscv-opcodes"]
+	path = external/riscv-opcodes
+	url = https://github.com/scarv/riscv-opcodes.git
+[submodule "external/picorv32"]
+	path = external/picorv32
+	url = https://github.com/cliffordwolf/picorv32.git
+[submodule "external/libscarv"]
+	path = external/libscarv
+	url = https://github.com/scarv/libscarv.git
+[submodule "external/texmf"]
+	path = external/texmf
+	url = https://github.com/scarv/texmf.git
