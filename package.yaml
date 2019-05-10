@@ -1,6 +1,6 @@
-name:                verylog-hs
+name:                iodine
 version:             0.1.0.0
-github:              "gokhankici/verylog-hs"
+github:              "gokhankici/iodine"
 license:             MIT
 author:              "Rami Gokhan Kici"
 maintainer:          "gokhankici@gmail.com"
@@ -13,7 +13,7 @@ extra-source-files:
 synopsis:            Generates the transition relation & verification conditions from a Verilog IR
 category:            Hardware Verification
 
-description:         Please see the README on Github at <https://github.com/gokhankici/verylog-hs#readme>
+description:         Please see the README on Github at <https://github.com/gokhankici/iodine#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -45,7 +45,7 @@ dependencies:
 library:
   source-dirs:           src
   exposed-modules:
-  - Verylog.Runner
+  - Iodine.Runner
   ghc-options:
   - -Werror
   - -O2
@@ -75,7 +75,7 @@ executables:
     - -Werror
     - -O2
     dependencies:
-    - verylog-hs
+    - iodine
 
 tests:
   iodine-test:
@@ -89,6 +89,6 @@ tests:
     - -Werror
     - -O2
     dependencies:
-    - verylog-hs
+    - iodine
     - hspec
     - hspec-core

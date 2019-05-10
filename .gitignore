@@ -1,6 +1,6 @@
 .stack-work/
 .stack-work-profile/
-/verylog-hs.cabal
+/iodine.cabal
 configuration.sh
 .*.pl
 .*.preproc.v

@@ -5,7 +5,7 @@ import os
 import subprocess
 
 def run_tests(test_args, stack_args=[], build_args=[]):
-    PACKAGE_NAME = "verylog-hs"
+    PACKAGE_NAME = "iodine"
     EXE_NAME     = "iodine"
     TEST_NAME    = "iodine-test"
 

@@ -6,7 +6,7 @@
 
 module Main (main) where
 
-import qualified Verylog.Runner as R
+import qualified Iodine.Runner as R
 
 import Control.Lens hiding (simple, (<.>))
 import Control.Monad
@@ -278,7 +278,7 @@ main = do
 
 type Runner = UnitTest -> Spec
 
-spec :: TestArgs -> R.VerylogArgs -> Spec
+spec :: TestArgs -> R.IodineArgs -> Spec
 spec ta va = sequential $ do
   simple r testDir
   negative r testDir
@@ -305,7 +305,7 @@ benchmarkDir = "benchmarks"
 mipsDir :: FilePath
 mipsDir = benchmarkDir </> "472-mips-pipelined"
 
-runUnitTest :: TestArgs -> R.VerylogArgs -> Runner
+runUnitTest :: TestArgs -> R.IodineArgs -> Runner
 runUnitTest ta va UnitTest{..} =
   if   ta ^. dryRun
   then it testName (printf "./iodine %s %s\n" verilogFile moduleName :: IO ())
