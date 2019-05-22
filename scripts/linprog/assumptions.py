@@ -67,6 +67,7 @@ class CplexAssumptionSolver(AssumptionSolver):
 
     def suggest_assumptions(self):
         prob = cplex.Cplex()
+        prob.set_problem_type(prob.problem_type.MILP)
         prob.set_results_stream(None)
         prob.set_log_stream(None)
 
@@ -137,7 +138,7 @@ class CplexAssumptionSolver(AssumptionSolver):
         print("elapsed time: {} ms".format(int((t1-t0) * 1000)))
 
         prob.write("assumptions.lp")
-        if status == "optimal":
+        if "optimal" in status:
             values = sol.get_values()
             return set([ v for v in self.shadow_nodes if int(round(values[self.edge_id[v]])) > 0 ])
         else:

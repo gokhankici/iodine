@@ -3,9 +3,9 @@
 {-# LANGUAGE MultiWayIf #-}
 
 module Iodine.Abduction.Runner ( runner
-                                , runner'
-                                , runner3, toCplexInput, cplexToMark, runner3'
-                                ) where
+                               , runner'
+                               , runner3
+                               ) where
 
 import Iodine.Abduction.Graph
 import Iodine.Abduction.RandomSearch
@@ -42,19 +42,13 @@ runner' input = removeId (as', newAnnots)
     newAnnots = updateAnnotations inputWithIndex
 
 runner3 :: Intermediary -> IO ()
-runner3 input = runner3' g sinkIds
+runner3 input = B.writeFile "cplex.json" $ J.encode ci
   where
     (as, (st, _)) = giveId input
     sinkIds       = [n | (_, n) <- HS.toList (st^.sinks)]
     g             = toAbductionGraph as
-
-runner3' :: G -> [Int] -> IO ()
-runner3' g sinkIds = do B.writeFile "cplex.json" $ J.encode ci
-                        printGraph
-  where
     ci            = toCplexInput g sinkIds
-    printGraph    = B.writeFile "graph.json" $
-                    J.encode (Gr.labNodes g, Gr.labEdges g)
+    -- printGraph    = B.writeFile "graph.json" $ J.encode (Gr.labNodes g, Gr.labEdges g)
 
 --------------------------------------------------------------------------------
 -- Helper Functions

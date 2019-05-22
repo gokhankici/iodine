@@ -6,6 +6,7 @@ import cplex
 import json
 from   collections    import namedtuple
 from   utils          import *
+import pdb
 
 class CplexFlowCapSolver:
     def __init__(self):
@@ -50,13 +51,30 @@ class CplexFlowCapSolver:
         u, v = e
         return u if u in self.extra_nodes else v
 
+    def validate_result(self, result):
+        g = result.new_graph
+        for u,v,_ in g.edges:
+            c = result.capacities[u,v]
+            assert(c >= 0 and type(c) == int)
+        for v in g.nodes:
+            us      = g.pred[v]
+            ws      = g.succ[v]
+            in_cap  = sum(result.capacities[u, v] for u in us)
+            out_cap = sum(result.capacities[v, w] for w in ws)
+            assert(len(us) == 0 or len(ws) == 0 or in_cap == out_cap)
+
     def make_result(self, edge_id, values, orig_graph):
         new_graph   = orig_graph.copy()
         capacities  = {}
         extra_nodes = set()
         extra_edges = {}
         for e, i in edge_id.items():
-            cap = int(round(values[i]))
+            v  = values[i]
+            vi = int(round(v))
+            if abs(v - vi) > 1e-6:
+                print("[Capacities] Gap between value and closest integer is too much: |{} - {}|".format(v, vi))
+                sys.exit(1)
+            cap = vi
             if cap < 1:
                 continue
             elif self.is_extra_edge(e):
@@ -74,6 +92,7 @@ class CplexFlowCapSolver:
         edge_cnt = len(edge_id)
 
         prob = cplex.Cplex()
+        prob.set_problem_type(prob.problem_type.MILP)
         prob.set_results_stream(None)
         prob.set_log_stream(None)
 
@@ -119,11 +138,13 @@ class CplexFlowCapSolver:
 
         prob.solve()
         sol = prob.solution
-        status = sol.get_status_string()
-        prob.write("flow_capacity.lp")
-        if status == "optimal":
+        assert(sol.get_method() == sol.method.MIP)
+        # prob.write("flow_capacity.lp")
+        if sol.get_status() == sol.status.MIP_optimal:
             values = sol.get_values()
-            return self.make_result(edge_id, values, orig_g)
+            result = self.make_result(edge_id, values, orig_g)
+            self.validate_result(result)
+            return result
         else:
             print("[Capacities] Linear programming failed: {}".format(status))
             sys.exit(1)

@@ -43,7 +43,7 @@ testArgs = mode programName def detailsText (flagArg argUpd "HSPEC_ARG") flags
               "Only run the abduction tests, otherwise they are disabled."
             , flagNone ["v", "verbose"] (set verbose True)
               "Display both stdout & stderr of a test."
-            , flagNone ["dry-run"] (set dryRun True)
+            , flagNone ["d", "dry-run"] (set dryRun True)
               "Print the calls to Iodine"
             , flagNone ["h", "help"] (set help True)
               "Displays this help message."

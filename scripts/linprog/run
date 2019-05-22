@@ -1,10 +1,16 @@
 #!/bin/zsh
 
+zparseopts -D -E -- \
+           -ctalu=CTALU
+
 THIS_DIR=${0:A:h}
+IVERILOG_DIR="${THIS_DIR}/../../iverilog-parser"
+BMK_DIR="${THIS_DIR}/../../benchmarks"
 
-stack exec iodine -- \
-	--iverilog-dir="${THIS_DIR}/../../../iverilog-parser" \
-	--abduction \
-	$@ && \
-	${THIS_DIR}/assumptions.py cplex.json
+if [[ -n "$CTALU" ]]; then
+    ARGS=(${BMK_DIR}/xcrypto-ref/rtl/coprocessor/scarv_cop_palu.v scarv_cop_palu)
+else
+    ARGS=($@)
+fi
 
+stack exec iodine -- --iverilog-dir=${IVERILOG_DIR} --abduction $ARGS && ${THIS_DIR}/assumptions.py cplex.json

@@ -15,7 +15,7 @@ class Adj(Enum):
 parsed       = parse_cplex_input("cplex.json")
 g            = parsed["graph"]
 names        = parsed["names"]
-inv_names    = parsed["inv_name"]
+inv_names    = parsed["inv_names"]
 is_reg       = parsed["is_reg"]
 
 def to_node_id(arg):
