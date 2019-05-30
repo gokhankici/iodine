@@ -103,10 +103,10 @@ data CplexInput =
              }
 
 instance J.ToJSON CplexInput where
-  toJSON CplexInput{..} = J.object [ "edges"        J..= J.toJSON cplexEdges
-                                   , "must_eq"      J..= J.toJSON cplexMustEq
-                                   , "cannot_be_eq" J..= J.toJSON cplexCannotBeEq
-                                   , "mapping"      J..= J.toJSON cplexMapping
+  toJSON CplexInput{..} = J.object [ "edges"          J..= J.toJSON cplexEdges
+                                   , "must_eq"        J..= J.toJSON cplexMustEq
+                                   , "cannot_mark_eq" J..= J.toJSON cplexCannotBeEq
+                                   , "mapping"        J..= J.toJSON cplexMapping
                                    ]
 
 instance J.ToJSON EdgeData where

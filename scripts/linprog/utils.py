@@ -3,9 +3,11 @@ import json
 import networkx    as nx
 import subprocess
 
+import pdb
+
 def debug(msg):
-    # print(msg)
-    pass
+    print(msg)
+    # pass
 
 def export_to_dot(g):
     return nx.nx_pydot.to_pydot(g)
@@ -42,22 +44,22 @@ def parse_cplex_input(filename):
     with open(filename, 'r') as f:
         data = json.load(f)
 
-    edges        = [ to_edge(l) for l in data["edges"] if l[0] != l[1] ]
-    must_eq      = data["must_eq"]
-    names        = { l[0] : l[1][0] for l in data["mapping"] }
-    inv_name     = { l[1][0] : l[0] for l in data["mapping"] }
-    is_reg       = { l[0] : l[1][1] for l in data["mapping"] }
-    cannot_be_eq = [ inv_name[v] for v in data["cannot_be_eq"] ]
+    edges          = [ to_edge(l) for l in data["edges"] if l[0] != l[1] ]
+    must_eq        = data["must_eq"]
+    names          = { l[0] : l[1][0] for l in data["mapping"] }
+    inv_name       = { l[1][0] : l[0] for l in data["mapping"] }
+    is_reg         = { l[0] : l[1][1] for l in data["mapping"] }
+    cannot_mark_eq = [ inv_name[v] for v in data["cannot_mark_eq"] ]
 
     g = nx.MultiDiGraph()
     g.add_edges_from(edges)
 
-    return { "graph"        : g,
-             "must_eq"      : must_eq,
-             "cannot_be_eq" : cannot_be_eq,
-             "names"        : names,
-             "is_reg"       : is_reg,
-             "inv_names"    : inv_name }
+    return { "graph"          : g,
+             "must_eq"        : must_eq,
+             "cannot_mark_eq" : cannot_mark_eq,
+             "names"          : names,
+             "is_reg"         : is_reg,
+             "inv_names"      : inv_name }
 
 def visualize_graph():
     """
@@ -117,3 +119,16 @@ def components(g, names, **kwargs):
     if visualize:
         write_dot_file(g2, names2)
         visualize_graph()
+
+def dict_to_list(d, default=0, size=None):
+    """
+    Converts the given dictionary of type (Map Int a) to [a].
+    """
+    if size is None:
+        size = max(d.keys(), default=-1) + 1
+    l = [default] * size
+
+    for i, v in d.items():
+        assert(type(i) == int)
+        l[i] = v
+    return l

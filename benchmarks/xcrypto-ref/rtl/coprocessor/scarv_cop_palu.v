@@ -64,7 +64,6 @@ output wire [31:0]  palu_cpr_rd_wdata  // Writeback data
 // @annot{sanitize_glob(id_subclass)}
 // @annot{sanitize_glob(id_pw)}
 // @annot{sanitize_glob(g_resetn)}
-
 // @annot{sanitize_glob(id_class)}
 
 // REWRITE : extra assignments to check ct

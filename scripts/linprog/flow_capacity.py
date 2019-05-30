@@ -13,14 +13,13 @@ class CplexFlowCapSolver:
         self.result_type = namedtuple("CplexCapacity", ["capacities", "extra_nodes", "extra_edges", "new_graph"])
 
     def to_result_type(self, *args):
-        nt = self.result_type
-        return nt(*args)
+        return (self.result_type)(*args)
 
     def enum_edges(self, g):
         """
         Return a map that gives an id to every edge starting at 0
         """
-        return dict(map((lambda t: (t[1],t[0])), enumerate(g.edges())))
+        return { e : n for n,e in enumerate(g.edges()) }
 
     def make_extra_edges(self, g):
         """
