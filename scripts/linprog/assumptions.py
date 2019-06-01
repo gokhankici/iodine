@@ -25,7 +25,7 @@ class Variable:
     """
     These are the stuff that used as a variable in the MILP formulation.
     """
-    def __init__(self, variable, index = 0):
+    def __init__(self, variable, index = None):
         self._variable = variable
         self._index    = index
 
@@ -59,6 +59,12 @@ class Variable:
         else:
             raise Exception("Cannot call get_edge for a variable of type {}".format(self.variable_type))
 
+    def has_node(self, n):
+        if self.is_node():
+            return self._variable == n
+        else:
+            return n in self._variable
+
     def __eq__(self, other):
         return isinstance(other, Variable) and \
             self._variable      == other._variable and \
@@ -73,24 +79,33 @@ class Variable:
                                                             self._index)
 
 class AssumptionSolver:
-    def __init__(self, orig_g, must_eq, cannot_mark_eq):
+    AlwaysEqConstraint = collections.namedtuple("AlwaysEqConstraint", ["variable", "value"])
+    MaxFlowConstraint  = collections.namedtuple("MaxFlowConstraint", ["lhs", "rhs"])
+
+    def __init__(self, filename):
         """
-        Calculate the edge capacities and costs for every node.
+        Parse the given json file that contains the problem description.
         """
-        # must_eq, cannot_mark_eq : [Node]
-        self.must_eq        = set(must_eq)        # nodes we DO     want to be      "always_eq"
-        self.cannot_mark_eq = set(cannot_mark_eq) # nodes we DO NOT want to mark as "always_eq"
+        parsed = parse_cplex_input(filename)
+
+        self.orig_g    = parsed["graph"]
+        self.names     = parsed["names"]
+        self.inv_names = parsed["inv_names"]
+
+        # must_eq, cannot_mark_eq : { Node }
+        self.must_eq        = set(parsed["must_eq"])        # nodes we DO     want to be      "always_eq"
+        self.cannot_mark_eq = set(parsed["cannot_mark_eq"]) # nodes we DO NOT want to mark as "always_eq"
 
         # assign flow capacities to the edges
-        cc = CplexFlowCapSolver().get_edge_capacities(orig_g)
+        cc = CplexFlowCapSolver().get_edge_capacities(self.orig_g)
         # cap : Node x Node -> Int
         self.cap = cc.capacities
         self.g   = cc.new_graph
-
-        # FIXME: this needs to be removed later ...
-        assert(len(cc.extra_nodes) == 0)
+        
+        self.extra_nodes = cc.extra_nodes
+        assert(len(self.extra_nodes) == 0)
         # TODO: is this right ?
-        non_markable_nodes = self.cannot_mark_eq
+        non_markable_nodes = self.cannot_mark_eq | self.extra_nodes
 
         # nodes that can be marked
         self.markable_nodes = set( v
@@ -128,22 +143,6 @@ class AssumptionSolver:
 
         return costs
 
-class CplexAssumptionSolver(AssumptionSolver):
-    AlwaysEqConstraint = collections.namedtuple("AlwaysEqConstraint", ["variable", "value"])
-    MaxFlowConstraint  = collections.namedtuple("MaxFlowConstraint", ["lhs", "rhs"])
-
-    def __init__(self, filename):
-        """
-        Parse the given json file that contains the problem description.
-        """
-        parsed = parse_cplex_input(filename)
-        super(CplexAssumptionSolver, self).__init__(parsed["graph"],
-                                                    parsed["must_eq"],
-                                                    parsed["cannot_mark_eq"])
-        self.orig_g    = parsed["graph"]
-        self.names     = parsed["names"]
-        self.inv_names = parsed["inv_names"]
-
     def get_always_eq_constraints(self):
         """
         Returns a list of AlwaysEqConstraint
@@ -153,7 +152,7 @@ class CplexAssumptionSolver(AssumptionSolver):
         constraints = []
         for var in self.variables.values():
             if var.is_edge() and var.get_edge()[0] in self.must_eq:
-                c = CplexAssumptionSolver.\
+                c = AssumptionSolver.\
                     AlwaysEqConstraint(variable = var,
                                        value = self.cap[var.get_edge()])
                 constraints.append(c)
@@ -189,7 +188,7 @@ class CplexAssumptionSolver(AssumptionSolver):
             lhs.extend( self.variables[u,v] for u in self.g.predecessors(v) )
             rhs.extend( self.variables[v,w] for w in self.g.successors(v)   )
 
-            c = CplexAssumptionSolver.\
+            c = AssumptionSolver.\
                 MaxFlowConstraint(lhs = lhs, rhs = rhs)
             constraints.append(c)
         return constraints
@@ -249,107 +248,157 @@ class CplexAssumptionSolver(AssumptionSolver):
 
         t0 = time.perf_counter() # start the stopwatch
 
-        obj = self.get_objective_function()
-        ub  = self.get_upper_bounds()
-
         # update cost and upper bound
-        prob.variables.add(obj = obj, ub = ub)
+        prob.variables.add(obj = self.get_objective_function(),
+                           ub  = self.get_upper_bounds())
 
+        # insert always_eq constraints
         for c in self.get_always_eq_constraints():
-            CplexAssumptionSolver.add_always_eq_constraint(prob, c)
+            AssumptionSolver.add_always_eq_constraint(prob, c)
 
+        # insert max flow constraints
         for c in self.get_max_flow_constraints():
-            CplexAssumptionSolver.add_max_flow_constraint(prob, c)
+            AssumptionSolver.add_max_flow_constraint(prob, c)
 
+        # calculate the solution of the LP problem
         prob.solve()
         sol = prob.solution
 
         t1 = time.perf_counter()
-        print("elapsed time: {} ms".format(int((t1-t0) * 1000)))
+        debug("elapsed time: {} ms".format(int((t1-t0) * 1000)))
 
         assert(sol.get_method() == sol.method.MIP)
-        prob.write("assumptions.lp")
+        prob.write("assumptions.lp") # log the constraints to a file
 
+        # check if we have found an optimal solution
         if sol.get_status() == sol.status.MIP_optimal:
+            self.validate_solution(sol)
             values = sol.get_values()
             marked_nodes = set( var.get_node()
+                                # var's value is positive
                                 for var in ( self.inv_variables[i]
                                              for i, v in enumerate( int(round(x))
                                                                     for x in values )
                                              if v > 0 )
                                 if var.is_node() )
-
-            self.validate_marked_nodes(marked_nodes)
-
             return marked_nodes
         else:
-            print("linprog failed: {}".format(sol.get_status_string()))
+            print("linprog failed: {}".format(sol.get_status_string()), file=sys.stderr)
             sys.exit(1)
+
+    def validate_solution(self, sol):
+        print("-" * 120)
+
+        prefix = "m_i_palu_multiplier_"
+        names = [ "m_i_palu_multiplier_n_ctr", "m_i_palu_multiplier_ctr" ]
+        nodes = [ self.inv_names[s] for s in names ]
+        edges = [ var.get_edge()
+                  for var in self.variables.values()
+                  if var.is_edge() and any( var.has_node(n) for n in nodes ) ]
+        values = [ int(round(a)) for a in sol.get_values() ]
+
+        nodes2 = {}
+        for u,v in edges:
+            if u not in nodes2:
+                nodes2[u] = len(nodes2)
+            if v not in nodes2:
+                nodes2[v] = len(nodes2)
+        
+        def get_name(node):
+            name = self.names[node] if node not in self.extra_nodes else "<void>"
+            if name.startswith(prefix):
+                return "M_{}".format(name[len(prefix):])
+            else:
+                return name
+
+        print("{:*^83} {:*^9} {:^3} {:^3}".format("edge", "sol", "cap", "val"))
+        for e in edges:
+            u, v = e
+            i = self.variables[e].get_index()
+            print("({:^40},{:^40}) ({:>3},{:>3}) {:>3} {:>3}".\
+                  format(get_name(u) + " " + str(nodes2[u]),
+                         get_name(v) + " " + str(nodes2[v]),
+                         values[self.variables[u].get_index()],
+                         values[self.variables[v].get_index()],
+                         self.cap[e],
+                         values[i]))
+        
+
+        print("-" * 120)
+
+        two_cycles = set()
+        for u,v,_ in self.g.edges:
+            if self.g.has_edge(v,u) and \
+               (u,v) not in two_cycles and (v,u) not in two_cycles:
+                two_cycles.add((u,v))
+        print("cycles:")
+        for u,v in two_cycles:
+            print("{:<35} {:^15} {:<35}".format(self.names[u], "<--->", self.names[v]))
+
+        print("-" * 120)
 
     def validate_marked_nodes(self, marked_nodes):
-        g         = self.orig_g
-        always_eq = marked_nodes.copy()
-        worklist  = set([ w for v in marked_nodes for w in g.succ[v] ])
+        worklist  = collections.deque()
+        always_eq = set(marked_nodes)
 
-        def ns(s):
-            return set( self.names[n] for n in s )
+        for n in marked_nodes:
+            worklist.extend(self.g.successors(n))
 
         while len(worklist) > 0:
-            v    = worklist.pop()
-            name = self.names[v]
+            n = worklist.popleft()
 
-            before = v in always_eq
-            after  = all([u in always_eq for u in g.pred[v]])
-
-            if before:
+            if n in marked_nodes:
                 continue
-            elif after:
-                always_eq.add(v)
-                debug("[+++++] {:35}".format(name))
-                worklist.update(set(g.succ[v]))
-            else:
-                debug("[-----] {:35} : {}".format(name, ", ".join("{}({})".format(self.names[u], "+" if u in always_eq else "-") for u in g.pred[v])))
 
-        print("\n\n\n")
-        err = False
-        for v in self.must_eq:
-            if v not in always_eq:
-                print("VALIDATION ERROR: {:<35} IS NOT ALWAYS EQUAL !".format(self.names[v]))
-                err = True
+            old_value = n in always_eq
+            new_value = all( (u in always_eq) for u in self.g.predecessors(n) )
 
-        print("Marked nodes:")
-        for n in marked_nodes:
-            print("  {}".format(self.names[n]))
+            # old_value implies new_value
+            assert( (not old_value) or new_value )
 
-        if err:
-            sys.exit(1)
+            debug("[{}] {} = {}".\
+                  format(("+" if new_value else "-") * 5,
+                         self.names[n],
+                         " ".join("{}({})".format(self.names[u],
+                                                  "+" if u in always_eq else "-")
+                                  for u in self.g.predecessors(n)),
+                         new_value))
+
+            if new_value == old_value:
+                continue
+
+            always_eq.add(n)
+            worklist.extend(self.g.successors(n))
+
+        diff = self.must_eq - always_eq
+
+        if len(diff) > 0:
+            # pdb.set_trace()
+            print("", file=sys.stderr)
+            for n in diff:
+                print("!!! {} IS NOT MARKED !!!".format(self.names[n]), file=sys.stderr)
+            return False
+        return True
 
     def validate_marked_names(self, names):
-        self.validate_marked_nodes(set( self.inv_names[n] for n in names ))
+        return self.validate_marked_nodes(set( self.inv_names[n] for n in names ))
 
     def run(self):
-        print("Must equal   :")
+        debug("Must equal   :")
         for v in sorted([self.names[v] for v in self.must_eq]):
-            print("  {}".format(v))
+            debug("  {}".format(v))
 
         marked_nodes = self.suggest_assumptions()
-        self.validate_marked_nodes(marked_nodes)
 
-        print("Marked nodes : {}".format(", ".join(self.names[v] for v in marked_nodes)))
+        debug("Marked nodes : {}".format(", ".join(self.names[v] for v in marked_nodes)))
+
+        with open("output.json", "w") as f:
+            json.dump({ "marked_nodes" : [ self.names[n] for n in marked_nodes ] }, f, indent=2)
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("usage: assumptions.py <cplex.json>")
+        print("usage: assumptions.py <cplex.json>", file=sys.stderr)
         sys.exit(1)
     else:
-        CplexAssumptionSolver(sys.argv[1]).run()
-
-        # CplexAssumptionSolver(sys.argv[1]).\
-        #     validate_marked_names([
-        #         "palu_ivalid",
-        #         "id_subclass",
-        #         "id_pw",
-        #         "g_resetn",
-        #         "id_class"
-        #     ])
+        AssumptionSolver(sys.argv[1]).run()

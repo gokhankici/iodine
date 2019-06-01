@@ -78,7 +78,7 @@ class CplexFlowCapSolver:
                 continue
             elif self.is_extra_edge(e):
                 u,v = e
-                new_graph.add_edge(u, v, dict(type = "extra"))
+                new_graph.add_edge(u, v, key="extra")
                 ve = self.get_extra_node(e)
                 extra_nodes.add(ve)
                 extra_edges[e] = ve
