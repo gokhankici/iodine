@@ -17,7 +17,7 @@ from   tests         import get_test
 
 from   networkx.algorithms.components import strongly_connected_components
 
-import pdb
+import pudb
 
 class Variable:
     """
@@ -110,19 +110,36 @@ class AssumptionSolver:
         return costs
 
     def add_always_eq_constraints(self, prob):
+        """
+        Adds the following constraint for each b in V
+        c * (b - b_m) <= a_1 + a_2 + ...
+        where
+        a_1, a_2, ... are the parents of b
+        c is the maximum of indegree of b and 1
+        b_m is the mark variable o b
+        """
         for node in self.g.nodes:
             var     = self.variables[node]
             parents = [ self.variables[u] for u in self.g.predecessors(node) ]
             c       = max(len(parents), 1)
-
-            indices      = [ var.get_var_index() ]
+            i       = var.get_var_index()
+            indices      = [ i ]
             coefficients = [ c ]
 
             if var.is_markable():
-                indices.append(var.get_mark_index())
+                mi = var.get_mark_index()
+                indices.append(mi)
                 coefficients.append(-c)
+                prob.linear_constraints.add(lin_expr = [ cplex.SparsePair(ind = [mi, i],
+                                                                          val = [1, -1]) ],
+                                            senses   = "L",
+                                            rhs      = [0])
 
             for p in parents:
+                debug("{} * {} <- {}".format(c,
+                                             self.names[node],
+                                             ", ".join(self.names[v.get_node()]
+                                                       for v in parents)))
                 indices.append(p.get_var_index())
                 coefficients.append(-1)
 
@@ -132,6 +149,10 @@ class AssumptionSolver:
                                         rhs      = [0])
 
     def add_must_eq_constraints(self, prob):
+        """
+        Adds the following constraint for each n in must equal set
+        n = 1
+        """
         for n in self.must_eq:
             var = self.variables[n]
             prob.linear_constraints.add(lin_expr = [ cplex.SparsePair(ind = [ var.get_var_index() ],
@@ -211,85 +232,77 @@ class AssumptionSolver:
 
         # check if we have found an optimal solution
         if sol.get_status() == sol.status.MIP_optimal:
-            self.debug_solution(sol)
-            values = sol.get_values()
-
-            def is_marked(var):
-                if var.is_markable():
-                    i = var.get_mark_index()
-                    m = values[i]
-                    return int(round(m)) == 1
-                else:
-                    return False
-
             marked_nodes = set( var.get_node()
                                 for var in self.variables.values()
-                                if is_marked(var) )
+                                if self.is_marked(sol, var) )
+
+            self.debug_solution(sol, marked_nodes)
 
             return marked_nodes
         else:
             print("linprog failed: {}".format(sol.get_status_string()), file=sys.stderr)
             sys.exit(1)
 
-    def debug_solution(self, sol):
-        print("-" * 120)
+    def is_always_eq(self, sol, x):
+        """
+        Checks if the given variable or node is always equal in the solution
+        """
+        if type(x) == int:
+            var = self.variables[x]
+        elif isinstance(x, Variable):
+            var = x
+        else:
+            raise Exception("Expecting an integer or a variable, got {}".format(x))
 
-        prefix = "m_i_palu_multiplier_"
-        names = [ "m_i_palu_multiplier_n_ctr", "m_i_palu_multiplier_ctr" ]
-        nodes = [ self.inv_names[s] for s in names ]
-        edges = [ (u,v)
-                  for u,v,_ in self.g.edges
-                  if u in nodes or v in nodes ]
-        values = [ int(round(a)) for a in sol.get_values() ]
+        i = var.get_var_index()
+        m = sol.get_values()[i]
+        return val_to_int(m) == 1
 
-        nodes2 = {}
-        for u,v in edges:
-            if u not in nodes2:
-                nodes2[u] = len(nodes2)
-            if v not in nodes2:
-                nodes2[v] = len(nodes2)
+    def is_marked(self, sol, x):
+        """
+        Checks if the given variable or node is marked in the solution
+        """
+        if type(x) == int:
+            var = self.variables[x]
+        elif isinstance(x, Variable):
+            var = x
+        else:
+            raise Exception("Expecting an integer or a variable, got {}".format(x))
 
-        def get_name(node):
-            name = self.names[node]
-            if name.startswith(prefix):
-                return "M_{}".format(name[len(prefix):])
-            else:
-                return name
+        if var.is_markable():
+            i = var.get_mark_index()
+            m = sol.get_values()[i]
+            return val_to_int(m) == 1
+        else:
+            return False
 
-        def get_ae_value(node):
-            return values[self.variables[node].get_var_index()]
+    def debug_solution(self, sol, marked_nodes):
+        sep()
+        ae_calc = self.calculate_always_equal_nodes(marked_nodes)
+        ae_sol  = set( var.get_node()
+                       for var in self.variables.values()
+                       if self.is_always_eq(sol, var) )
+        diff1 = ae_calc - ae_sol
+        if len(diff1) > 0:
+            print("Nodes found always_eq by checking but not by the ILP solver:")
+            for n in diff1:
+                print("  {}".format(self.names[n]))
+        diff2 = ae_sol - ae_calc
+        if len(diff2) > 0:
+            print("Nodes found always_eq by the ILP solver but not by checking:")
+            for n in diff2:
+                print("  {}".format(self.names[n]))
+        sep()
+        # pudb.set_trace()
 
-        def get_mark_value(node):
-            var = self.variables[node]
-            if var.is_markable():
-                return values[var.get_mark_index()]
-            else:
-                return None
+    def name(self, node):
+        return self.names[node]
+    def nid(self, name):
+        return self.inv_names[name]
+    def parents(self, name):
+        return [ self.name(p) for p in self.g.predecessors(self.nid(name)) ]
 
-        print("{:*^83} {:*^9} {:*^9}".format("edge", "ae", "mark"))
-        for e in edges:
-            u, v = e
-            print("({:^40},{:^40}) ({:>3},{:>3}) ({:>3},{:>3})".\
-                  format(get_name(u) + " " + str(nodes2[u]),
-                         get_name(v) + " " + str(nodes2[v]),
-                         get_ae_value(u), get_ae_value(v),
-                         get_mark_value(u), get_mark_value(v)))
-
-
-        print("-" * 120)
-
-        two_cycles = set()
-        for u,v,_ in self.g.edges:
-            if self.g.has_edge(v,u) and \
-               (u,v) not in two_cycles and (v,u) not in two_cycles:
-                two_cycles.add((u,v))
-        print("cycles:")
-        for u,v in two_cycles:
-            print("{:<35} {:^15} {:<35}".format(self.names[u], "<--->", self.names[v]))
-
-        print("-" * 120)
-
-    def validate_marked_nodes(self, marked_nodes):
+    def calculate_always_equal_nodes(self, marked_nodes):
         worklist  = collections.deque()
         always_eq = set(marked_nodes)
 
@@ -322,13 +335,19 @@ class AssumptionSolver:
             always_eq.add(n)
             worklist.extend(self.g.successors(n))
 
+        return always_eq
+
+    def validate_marked_nodes(self, marked_nodes):
+        always_eq = self.calculate_always_equal_nodes(marked_nodes)
         diff = self.must_eq - always_eq
 
         if len(diff) > 0:
-            # pdb.set_trace()
             print("", file=sys.stderr)
             for n in diff:
                 print("!!! {} IS NOT MARKED !!!".format(self.names[n]), file=sys.stderr)
+                p = min(( n for n in self.g.nodes() if n not in always_eq ),
+                        key=lambda n: self.node_costs[n])
+                print("root cause: {}".format(self.names[p]))
             return False
         return True
 
@@ -336,13 +355,17 @@ class AssumptionSolver:
         return self.validate_marked_nodes(set( self.inv_names[n] for n in names ))
 
     def run(self):
-        debug("Must equal   :")
-        for v in sorted([self.names[v] for v in self.must_eq]):
-            debug("  {}".format(v))
+        def print_nodes(ns):
+            for v in sorted([self.names[v] for v in ns]):
+                print("  {}".format(v))
+
+        print("Must equal:")
+        print_nodes(self.must_eq)
 
         marked_nodes = self.suggest_assumptions()
 
-        debug("Marked nodes : {}".format(", ".join(self.names[v] for v in marked_nodes)))
+        print("Marked nodes:")
+        print_nodes(marked_nodes)
 
         self.validate_marked_nodes(marked_nodes)
 

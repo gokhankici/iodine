@@ -2,12 +2,14 @@ import collections
 import json
 import networkx    as nx
 import subprocess
+import sys
 
 import pdb
 
-def debug(msg):
-    print(msg)
-    # pass
+def debug(*args, **kwargs):
+    kwargs["file"] = sys.stderr
+    # print(*args, **kwargs)
+    pass
 
 def export_to_dot(g):
     return nx.nx_pydot.to_pydot(g)
@@ -132,3 +134,17 @@ def dict_to_list(d, default=0, size=None):
         assert(type(i) == int)
         l[i] = v
     return l
+
+def sep():
+    print("-" * 120)
+
+def val_to_int(v):
+    """
+    Converts a double value calculated by the ILP solver into an integer.
+    """
+    r = round(v)
+    if r - v > 1e-6:
+        print("value {} is not a floating point very close to an integer!".format(v),
+              file=sys.stderr)
+        sys.exit(1)
+    return int(r)
