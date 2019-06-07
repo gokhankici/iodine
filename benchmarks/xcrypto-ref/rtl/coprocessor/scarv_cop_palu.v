@@ -60,11 +60,24 @@ output wire [31:0]  palu_cpr_rd_wdata  // Writeback data
 // @annot{taint_sink(reg_palu_cpr_rd_ben)}
 // @annot{taint_sink(reg_palu_cpr_rd_wdata)}
 
-// @annot{sanitize_glob(palu_ivalid)}
-// @annot{sanitize_glob(id_subclass)}
+// -----------------------------------------------------------------------------
+// manually found
+// -----------------------------------------------------------------------------
+// @annot-not{sanitize_mod(scarv_cop_palu_multiplier, ctr)}
+// @annot-not{sanitize_glob(g_resetn)}
+// @annot-not{sanitize_glob(id_class)}
+// @annot-not{sanitize_glob(id_pw)}
+// @annot-not{sanitize_glob(id_subclass)}
+// @annot-not{sanitize_glob(palu_ivalid)}
+
+// -----------------------------------------------------------------------------
+// tool
+// -----------------------------------------------------------------------------
 // @annot{sanitize_glob(id_pw)}
+// @annot{sanitize_glob(mul_start)}
 // @annot{sanitize_glob(g_resetn)}
-// @annot{sanitize_glob(id_class)}
+// @annot{sanitize(m_i_palu_multiplier_ctr)}
+
 
 // REWRITE : extra assignments to check ct
 reg reg_palu_idone;
@@ -537,7 +550,6 @@ scarv_cop_palu_shifter i_palu_shifter (
 .c    (pshf_c    )  // Result
 );
 
-// @annot{sanitize_mod(scarv_cop_palu_multiplier, ctr)}
 scarv_cop_palu_multiplier i_palu_multiplier (
 .g_clk   (g_clk     ), // Global clock.
 .g_resetn(g_resetn  ), // Global synchronous active low reset

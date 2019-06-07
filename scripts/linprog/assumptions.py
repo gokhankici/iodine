@@ -3,7 +3,7 @@
 
 import sys
 import warnings
-import networkx       as nx
+import networkx as nx
 import collections
 import cplex
 import subprocess
@@ -15,122 +15,90 @@ from   flow_capacity import CplexFlowCapSolver
 from   utils         import *
 from   tests         import get_test
 
-import pdb
+# from networkx.algorithms.components import strongly_connected_components
 
-class VariableType(enum.Enum):
-    EDGE = enum.auto()   # represents a regular edge from the graph
-    NODE = enum.auto()   # a node that is ok to mark as always_eq
+import pudb
 
-class Variable:
+class Variable(collections.namedtuple("Variable", ["node",
+                                                   "var_index",
+                                                   "mark_index",
+                                                   "is_markable",
+                                                   "name",
+                                                   "is_register"])):
     """
     These are the stuff that used as a variable in the MILP formulation.
     """
-    def __init__(self, variable, index = None):
-        self._variable = variable
-        self._index    = index
-
-        if type(variable) == tuple and \
-           len(variable) == 2 and \
-           type(variable[0]) == type(variable[1]) == int:
-            self._variable_type = VariableType.EDGE
-        elif type(variable) == int:
-            self._variable_type = VariableType.NODE
-        else:
-            raise Exception("Variable accepts a pair of integers or an integer")
-
-    def get_index(self):
-        return self._index
-
-    def is_node(self):
-        return self._variable_type == VariableType.NODE
-
-    def is_edge(self):
-        return self._variable_type == VariableType.EDGE
-
-    def get_node(self):
-        if self.is_node():
-            return self._variable
-        else:
-            raise Exception("Cannot call get_node for a variable of type {}".format(self.variable_type))
-
-    def get_edge(self):
-        if self.is_edge():
-            return self._variable
-        else:
-            raise Exception("Cannot call get_edge for a variable of type {}".format(self.variable_type))
-
-    def has_node(self, n):
-        if self.is_node():
-            return self._variable == n
-        else:
-            return n in self._variable
-
     def __eq__(self, other):
-        return isinstance(other, Variable) and \
-            self._variable      == other._variable and \
-            self._variable_type == other._variable_type
+        return isinstance(other, Variable) and self.node == other.node
 
     def __hash__(self):
-        return hash((self._variable, self._variable_type))
+        return hash(self.node)
 
     def __str__(self):
-        return "Variable({}, type = {}, index = {})".format(self._variable,
-                                                            self._variable_type,
-                                                            self._index)
+        return "Variable({}, var index = {}, mark index = {})".\
+            format(self.node,
+                   self.var_index,
+                   self.mark_index)
+
+class Assumptions(collections.namedtuple("Assumptions", ["always_eq", "initial_eq"])):
+    """
+    always_eq are the node ids of the variables that need the always equal assumption.
+    initial_eq is the same thing for initially equal assumption.
+    """
+    def json_dump(self):
+        """ names are the mapping from node ids to variable names """
+        j = { "always_eq"  : list(v.name for v in self.always_eq),
+              "initial_eq" : list(v.name for v in self.initial_eq) }
+        return json.dumps(j, indent=2)
+
+    def print(self, **kwargs):
+        for v in self.always_eq:
+            print("// @annot{{sanitize_glob({})}}".format(v.name), **kwargs)
+        for v in self.initial_eq:
+            print("// @annot{{sanitize({})}}".format(v.name), **kwargs)
 
 class AssumptionSolver:
-    AlwaysEqConstraint = collections.namedtuple("AlwaysEqConstraint", ["variable", "value"])
-    MaxFlowConstraint  = collections.namedtuple("MaxFlowConstraint", ["lhs", "rhs"])
-
     def __init__(self, filename):
         """
         Parse the given json file that contains the problem description.
         """
         parsed = parse_cplex_input(filename)
+        self.g = parsed["graph"]
 
-        self.orig_g    = parsed["graph"]
-        self.names     = parsed["names"]
-        self.inv_names = parsed["inv_names"]
+        cannot_mark_eq = set(parsed["cannot_mark_eq"]) # nodes we DO NOT want to mark as "always_eq"
+        def is_node_markable(n):
+            return n not in cannot_mark_eq
 
-        # must_eq, cannot_mark_eq : { Node }
-        self.must_eq        = set(parsed["must_eq"])        # nodes we DO     want to be      "always_eq"
-        self.cannot_mark_eq = set(parsed["cannot_mark_eq"]) # nodes we DO NOT want to mark as "always_eq"
-
-        # assign flow capacities to the edges
-        cc = CplexFlowCapSolver().get_edge_capacities(self.orig_g)
-        # cap : Node x Node -> Int
-        self.cap = cc.capacities
-        self.g   = cc.new_graph
-        
-        self.extra_nodes = cc.extra_nodes
-        assert(len(self.extra_nodes) == 0)
-        # TODO: is this right ?
-        non_markable_nodes = self.cannot_mark_eq | self.extra_nodes
-
-        # nodes that can be marked
-        self.markable_nodes = set( v
-                                   for v in self.g.nodes()
-                                   if v not in non_markable_nodes and len(self.g.succ[v]) > 0 )
+        node_cnt = self.g.order()
+        self.variable_count = 2 * node_cnt
 
         # variables used in the linear problem
         # mapping from variable identifier to the variable itself
-        self.variables = { v : Variable(v, n)
-                           for n, v in enumerate(itertools.chain(self.g.edges(),
-                                                                 self.markable_nodes)) }
+        self.variables = { v : Variable(node        = v,
+                                        name        = parsed["names"][v],
+                                        var_index   = i,
+                                        mark_index  = i + node_cnt,
+                                        is_markable = is_node_markable(v),
+                                        is_register = parsed["is_reg"][v])
+                           for i, v in enumerate(self.g.nodes()) }
 
-        # variable index -> variable
-        self.inv_variables = { var.get_index() : var for var in self.variables.values() }
+        self.must_eq = set(self.variables[n] for n in parsed["must_eq"]) # nodes we DO want to be "always_eq"
 
         # calculate costs of the nodes
         # node_costs : Node -> Int
         self.node_costs = self.calc_costs()
+
+    def get_var_from_index(self, index):
+        v = self.variables[index % self.g.order()]
+        assert(v.var_index == index or v.mark_index == index)
+        return v
 
     def calc_costs(self):
         """
         Returns a mapping from node ids to their costs
         """
         costs    = collections.defaultdict(int)
-        worklist = collections.deque(v for v in self.markable_nodes if len(self.g.pred[v]) == 0)
+        worklist = collections.deque( n for n in self.g.nodes if len(self.g.pred[n]) == 0 )
         done     = set(worklist)
 
         while worklist:
@@ -143,95 +111,69 @@ class AssumptionSolver:
 
         return costs
 
-    def get_always_eq_constraints(self):
+    def add_always_eq_constraints(self, prob):
         """
-        Returns a list of AlwaysEqConstraint
-        variable : the outgoing edge of every node in the must_eq set
-        value    : the capacity of that edge
+        Adds the following constraint for each b in V
+        c * (b - b_m) <= a_1 + a_2 + ...
+        where
+        a_1, a_2, ... are the parents of b
+        c is the maximum of indegree of b and 1
+        b_m is the mark variable o b
         """
-        constraints = []
-        for var in self.variables.values():
-            if var.is_edge() and var.get_edge()[0] in self.must_eq:
-                c = AssumptionSolver.\
-                    AlwaysEqConstraint(variable = var,
-                                       value = self.cap[var.get_edge()])
-                constraints.append(c)
-        return constraints
+        for node in self.g.nodes:
+            var     = self.variables[node]
+            parents = [ self.variables[u] for u in self.g.predecessors(node) ]
+            c       = max(len(parents), 1)
+            i       = var.var_index
+            indices      = [ i ]
+            coefficients = [ c ]
 
-    @staticmethod
-    def add_always_eq_constraint(prob, c):
-        prob.linear_constraints.add(lin_expr = [ cplex.SparsePair(ind = [c.variable.get_index()],
-                                                                  val = [1]) ],
-                                    senses   = "E",
-                                    rhs      = [ c.value ])
+            if var.is_markable:
+                mi = var.mark_index
+                indices.append(mi)
+                coefficients.append(-c)
+                le = cplex.SparsePair(ind = [mi, i], val = [1, -1])
+                prob.linear_constraints.add(lin_expr = [le], senses = "L", rhs = [0])
 
-    def get_max_flow_constraints(self):
+            for p in parents:
+                debug("{} * {} <- {}".format(c,
+                                             var.name,
+                                             ", ".join(v.name for v in parents)))
+                indices.append(p.var_index)
+                coefficients.append(-1)
+
+            le = cplex.SparsePair(ind = indices, val = coefficients)
+            prob.linear_constraints.add(lin_expr = [le], senses = "L", rhs = [0])
+
+    def add_must_eq_constraints(self, prob):
         """
-        Returns a list of MaxFlowConstraint
-        lhs : incoming nodes
-        rhs : outgoing nodes
+        Adds the following constraint for each n in must equal set
+        n = 1
         """
-        constraints = []
-        for v in self.g.nodes():
-            # if v is a leaf node, skip this step
-            if self.g.out_degree(v) == 0:
-                continue
-
-            lhs, rhs = [], []
-
-            if v in self.markable_nodes:
-                lhs.append( self.variables[v] )
-            elif self.g.in_degree(v) == 0:
-                # if v is a non-markable root node, skip this step
-                continue
-
-            lhs.extend( self.variables[u,v] for u in self.g.predecessors(v) )
-            rhs.extend( self.variables[v,w] for w in self.g.successors(v)   )
-
-            c = AssumptionSolver.\
-                MaxFlowConstraint(lhs = lhs, rhs = rhs)
-            constraints.append(c)
-        return constraints
-
-    @staticmethod
-    def add_max_flow_constraint(prob, c):
-        indices = [ var.get_index() for var in itertools.chain(c.lhs, c.rhs) ]
-        coefficients = ( [-1] * len(c.lhs) ) + ( [1] * len(c.rhs) )
-        prob.linear_constraints.add(lin_expr = [ cplex.SparsePair(ind = indices,
-                                                                  val = coefficients) ],
-                                    senses   = "E",
-                                    rhs      = [0])
+        for var in self.must_eq:
+            prob.linear_constraints.add(lin_expr = [ cplex.SparsePair(ind = [ var.var_index ],
+                                                                      val = [1] ) ],
+                                        senses   = "E",
+                                        rhs      = [1])
 
     def get_objective_function(self):
         """
         Return a list that contains the cost of each variable used
         """
-        obj = [0] * len(self.variables)
+        obj = [0] * self.variable_count
         for var in self.variables.values():
-            i = var.get_index()
-            if var.is_node():
-                obj[i] = self.node_costs[var.get_node()]
-            elif var.is_edge():
-                obj[i] = 0
-            else:
-                raise Exception()
+            n = var.node
+            c = self.node_costs[n]
+            if var.is_markable:
+                i      = var.mark_index
+                obj[i] = c
         return obj
 
     def get_upper_bounds(self):
         """
         Return a list that contains the upper bound of each variable used
         """
-        ub  = [0] * len(self.variables)
-        for var in self.variables.values():
-            i = var.get_index()
-            if var.is_node():
-                n = var.get_node()
-                ub[i]  = sum( self.cap[u] for u in self.g.out_edges(n) )
-            elif var.is_edge():
-                ub[i]  = self.cap[var.get_edge()]
-            else:
-                raise Exception()
-        return ub
+        return [1] * self.variable_count
 
     def suggest_assumptions(self):
         """
@@ -249,151 +191,81 @@ class AssumptionSolver:
         t0 = time.perf_counter() # start the stopwatch
 
         # update cost and upper bound
-        prob.variables.add(obj = self.get_objective_function(),
-                           ub  = self.get_upper_bounds())
+        prob.variables.add(obj   = self.get_objective_function(),
+                           ub    = self.get_upper_bounds(),
+                           types = [ prob.variables.type.integer ] * self.variable_count)
 
-        # insert always_eq constraints
-        for c in self.get_always_eq_constraints():
-            AssumptionSolver.add_always_eq_constraint(prob, c)
+        self.add_always_eq_constraints(prob)
 
-        # insert max flow constraints
-        for c in self.get_max_flow_constraints():
-            AssumptionSolver.add_max_flow_constraint(prob, c)
+        self.add_must_eq_constraints(prob)
 
         # calculate the solution of the LP problem
         prob.solve()
         sol = prob.solution
 
         t1 = time.perf_counter()
-        debug("elapsed time: {} ms".format(int((t1-t0) * 1000)))
+        print("elapsed time: {} ms".format(int((t1-t0) * 1000)), file=sys.stderr)
 
         assert(sol.get_method() == sol.method.MIP)
         prob.write("assumptions.lp") # log the constraints to a file
 
         # check if we have found an optimal solution
         if sol.get_status() == sol.status.MIP_optimal:
-            self.validate_solution(sol)
-            values = sol.get_values()
-            marked_nodes = set( var.get_node()
-                                # var's value is positive
-                                for var in ( self.inv_variables[i]
-                                             for i, v in enumerate( int(round(x))
-                                                                    for x in values )
-                                             if v > 0 )
-                                if var.is_node() )
-            return marked_nodes
+            return self.make_result(sol)
         else:
             print("linprog failed: {}".format(sol.get_status_string()), file=sys.stderr)
             sys.exit(1)
 
-    def validate_solution(self, sol):
-        print("-" * 120)
+    def is_always_eq(self, sol, var):
+        """
+        Checks if the given variable or node is always equal in the solution
+        """
+        assert(isinstance(var, Variable))
+        i = var.var_index
+        m = sol.get_values()[i]
+        return val_to_int(m) == 1
 
-        prefix = "m_i_palu_multiplier_"
-        names = [ "m_i_palu_multiplier_n_ctr", "m_i_palu_multiplier_ctr" ]
-        nodes = [ self.inv_names[s] for s in names ]
-        edges = [ var.get_edge()
-                  for var in self.variables.values()
-                  if var.is_edge() and any( var.has_node(n) for n in nodes ) ]
-        values = [ int(round(a)) for a in sol.get_values() ]
-
-        nodes2 = {}
-        for u,v in edges:
-            if u not in nodes2:
-                nodes2[u] = len(nodes2)
-            if v not in nodes2:
-                nodes2[v] = len(nodes2)
-        
-        def get_name(node):
-            name = self.names[node] if node not in self.extra_nodes else "<void>"
-            if name.startswith(prefix):
-                return "M_{}".format(name[len(prefix):])
-            else:
-                return name
-
-        print("{:*^83} {:*^9} {:^3} {:^3}".format("edge", "sol", "cap", "val"))
-        for e in edges:
-            u, v = e
-            i = self.variables[e].get_index()
-            print("({:^40},{:^40}) ({:>3},{:>3}) {:>3} {:>3}".\
-                  format(get_name(u) + " " + str(nodes2[u]),
-                         get_name(v) + " " + str(nodes2[v]),
-                         values[self.variables[u].get_index()],
-                         values[self.variables[v].get_index()],
-                         self.cap[e],
-                         values[i]))
-        
-
-        print("-" * 120)
-
-        two_cycles = set()
-        for u,v,_ in self.g.edges:
-            if self.g.has_edge(v,u) and \
-               (u,v) not in two_cycles and (v,u) not in two_cycles:
-                two_cycles.add((u,v))
-        print("cycles:")
-        for u,v in two_cycles:
-            print("{:<35} {:^15} {:<35}".format(self.names[u], "<--->", self.names[v]))
-
-        print("-" * 120)
-
-    def validate_marked_nodes(self, marked_nodes):
-        worklist  = collections.deque()
-        always_eq = set(marked_nodes)
-
-        for n in marked_nodes:
-            worklist.extend(self.g.successors(n))
-
-        while len(worklist) > 0:
-            n = worklist.popleft()
-
-            if n in marked_nodes:
-                continue
-
-            old_value = n in always_eq
-            new_value = all( (u in always_eq) for u in self.g.predecessors(n) )
-
-            # old_value implies new_value
-            assert( (not old_value) or new_value )
-
-            debug("[{}] {} = {}".\
-                  format(("+" if new_value else "-") * 5,
-                         self.names[n],
-                         " ".join("{}({})".format(self.names[u],
-                                                  "+" if u in always_eq else "-")
-                                  for u in self.g.predecessors(n)),
-                         new_value))
-
-            if new_value == old_value:
-                continue
-
-            always_eq.add(n)
-            worklist.extend(self.g.successors(n))
-
-        diff = self.must_eq - always_eq
-
-        if len(diff) > 0:
-            # pdb.set_trace()
-            print("", file=sys.stderr)
-            for n in diff:
-                print("!!! {} IS NOT MARKED !!!".format(self.names[n]), file=sys.stderr)
+    def is_marked(self, sol, var):
+        """
+        Checks if the given variable or node is marked in the solution
+        """
+        assert(isinstance(var, Variable))
+        if var.is_markable:
+            i = var.mark_index
+            m = sol.get_values()[i]
+            return val_to_int(m) == 1
+        else:
             return False
-        return True
 
-    def validate_marked_names(self, names):
-        return self.validate_marked_nodes(set( self.inv_names[n] for n in names ))
+    def make_result(self, solution):
+        """
+        Convert the MILP solution to a set of assumptions that Iodine can understand
+        """
+        marked, always_eq, initial_eq = set(), set(), set()
+        for var in self.variables.values():
+            is_m = self.is_marked(solution, var)
+            is_a = self.is_always_eq(solution, var)
+            if is_m:
+                marked.add(var)
+            if is_a:
+                always_eq.add(var)
+                if not is_m and var.is_register:
+                    # if a register is always_eq but not marked,
+                    # add it to the flushed set
+                    initial_eq.add(var)
+
+        return Assumptions(always_eq = marked, initial_eq = initial_eq)
 
     def run(self):
-        debug("Must equal   :")
-        for v in sorted([self.names[v] for v in self.must_eq]):
-            debug("  {}".format(v))
+        debug("Must equal:")
+        for v in self.must_eq:
+            debug(v.name)
 
-        marked_nodes = self.suggest_assumptions()
-
-        debug("Marked nodes : {}".format(", ".join(self.names[v] for v in marked_nodes)))
+        result = self.suggest_assumptions()
+        result.print()
 
         with open("output.json", "w") as f:
-            json.dump({ "marked_nodes" : [ self.names[n] for n in marked_nodes ] }, f, indent=2)
+            print(result.json_dump(), file=f)
 
 
 if __name__ == "__main__":
