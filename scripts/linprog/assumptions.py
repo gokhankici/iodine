@@ -50,6 +50,7 @@ class Assumptions(collections.namedtuple("Assumptions",
     def print(self, **kwargs):
         for v in self.always_eq:
             print("// @annot{{sanitize_glob({})}}".format(v.name), **kwargs)
+        print("")
         for v in self.initial_eq:
             print("// @annot{{sanitize({})}}".format(v.name), **kwargs)
 

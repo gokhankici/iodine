@@ -1,16 +1,70 @@
-#!/bin/zsh
+#!/usr/bin/env python3.6
 
-zparseopts -D -E -- \
-           -ctalu=CTALU
+import argparse
+from collections import namedtuple
+from os.path import realpath, dirname, join
+import subprocess
+import sys
 
-THIS_DIR=${0:A:h}
-IVERILOG_DIR="${THIS_DIR}/../../iverilog-parser"
-BMK_DIR="${THIS_DIR}/../../benchmarks"
+THIS_DIR = realpath(dirname(__file__))
+PROJECT_ROOT = join(THIS_DIR, "../../")
+IVERILOG_DIR = join(PROJECT_ROOT, "iverilog-parser")
+BENCHMARK_DIR = join(PROJECT_ROOT, "benchmarks")
 
-if [[ -n "$CTALU" ]]; then
-    ARGS=(${BMK_DIR}/xcrypto-ref/rtl/coprocessor/scarv_cop_palu.v scarv_cop_palu)
-else
-    ARGS=($@)
-fi
 
-stack exec iodine -- --iverilog-dir=${IVERILOG_DIR} --abduction $ARGS && ${THIS_DIR}/assumptions.py cplex.json
+class Benchmark(namedtuple("Benchmark", ["filename", "module"])):
+    def run_abduction(self):
+        args = ["stack", "exec", "iodine", "--",
+                "--iverilog-dir", IVERILOG_DIR,
+                "--abduction",
+                self.filename, self.module]
+        rc = subprocess.run(args).returncode
+        if rc != 0:
+            print("iodine failed", file=sys.stderr)
+            sys.exit(rc)
+
+
+# name, file and module pairs of the benchmarks
+CONFIG = [("ctalu", "xcrypto-ref/rtl/coprocessor/scarv_cop_palu.v", "scarv_cop_palu"),
+          ("mips", "472-mips-pipelined/mips_pipeline.v", "mips_pipeline"),
+          ("yarvi", "yarvi/shared/yarvi.v", "yarvi"),
+          ("sha", "crypto_cores/sha_core/trunk/rtl/sha256.v", "sha256"),
+          ("fpu", "fpu/verilog/fpu.v", "fpu"),
+          ("fpu-div", "fpu2/divider/divider.v", "divider"),
+          ("modexp", "crypto_cores/RSA4096/ModExp2/ModExp.v", "ModExp")]
+
+BENCHMARKS = {n: Benchmark(filename=join(BENCHMARK_DIR, f), module=m)
+              for n, f, m in CONFIG}
+
+
+
+def err(msg):
+    print(msg, file=sys.stderr)
+    sys.exit(1)
+
+
+def run(b):
+    b.run_abduction()
+    script = join(THIS_DIR, "assumptions.py")
+    args = [script, "cplex.json"]
+    r = subprocess.run(args)
+    sys.exit(r.returncode)
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description="""
+    Extract the CFG of the verilog program and run the abduction script.
+    """)
+    ap.add_argument("-b", "--benchmark", choices=BENCHMARKS.keys(), help="Benchmark name")
+    ap.add_argument("-f", "--filename", help="Verilog file")
+    ap.add_argument("-m", "--module", help="Module name")
+    args = ap.parse_args()
+
+    if args.benchmark:
+        run(BENCHMARKS[args.benchmark])
+    elif args.filename and args.module:
+        b = Benchmark(filename=args.filename, module=args.module)
+        run(b)
+    else:
+        ap.print_help()
+        sys.exit(1)
