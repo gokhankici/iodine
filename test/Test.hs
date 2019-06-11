@@ -225,28 +225,34 @@ major runner _parserDir = describe "major" $ forM_ ts runner
          , t { testName    = "yarvi"
              , moduleName  = "yarvi"
              , verilogFile = b </> "yarvi/shared/yarvi.v"
+             , annotFile   = b </> "yarvi/shared/annot-yarvi.json"
              }
-         , t { testName    = "sha256"
+         , t { testName    = "sha"
              , moduleName  = "sha256"
              , verilogFile = c </> "sha_core/trunk/rtl/sha256.v"
+             , annotFile   = c </> "sha_core/trunk/rtl/annot-sha256.json"
              }
          , t { testName    = "fpu"
              , moduleName  = "fpu"
              , verilogFile = b </> "fpu/verilog/fpu.v"
+             , annotFile   = b </> "fpu/verilog/annot-fpu.json"
              }
          , t { testName    = "fpu-divider"
              , moduleName  = "divider"
              , verilogFile = b </> "fpu2/divider/divider.v"
+             , annotFile   = b </> "fpu2/divider/annot-divider.json"
              , testType    = Fail
              }
          , t { testName    = "modexp"
              , moduleName  = "ModExp"
              , verilogFile = c </> "RSA4096/ModExp2/ModExp.v"
+             , annotFile   = c </> "RSA4096/ModExp2/annot-ModExp.json"
              , testType    = Fail
              }
          , t { testName    = "ctalu"
              , moduleName  = "scarv_cop_palu"
              , verilogFile = b </> "xcrypto-ref/rtl/coprocessor/scarv_cop_palu.v"
+             , annotFile   = b </> "xcrypto-ref/rtl/coprocessor/annot-scarv_cop_palu.json"
              }
          ]
 

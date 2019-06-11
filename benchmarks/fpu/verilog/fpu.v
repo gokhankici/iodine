@@ -80,33 +80,6 @@ output		overflow, underflow;
 output		zero;
 output		div_by_zero;
 
-// @annot{taint_source(rmode)}
-// @annot{taint_source(fpu_op)}
-// @annot{taint_source(opa)}
-// @annot{taint_source(opb)}
-
-// @annot{taint_sink(snan)}
-// @annot{taint_sink(qnan)}
-// @annot{taint_sink(div_by_zero)}
-
-// @annot{taint_sink(out)}
-// @annot{taint_sink(ine)}
-// @annot{taint_sink(overflow)}
-// @annot{taint_sink(underflow)}
-// @annot{taint_sink(zero)}
-
-// @annot{taint_sink(foo)}
-// @annot{taint_sink(m_u1_foo_u1)}
-// @annot{taint_sink(m_u2_foo_u2)}
-// @annot{taint_sink(m_u4_foo_u4)}
-
-// @annot{qualifierPairs([m_u6_rem, fpu_op_r3, m_u5_prod, fract_out_q, m_u5_prod, m_u0_opb_dn, m_u6_quo, fract_i2f])}
-
-// @annot{qualifierPairs([opa_r1, opb_r1, m_u6_remainder, fpu_op_r2, m_u1_exp_dn_out, m_u2_exp_out, m_u6_quo1, m_u0_expb_00, m_u5_prod1, m_u1_fasu_op, m_u1_fracta_out, m_u1_fractb_out, m_u1_sign, m_u2_sign])}
-
-// @annot{qualifierPairs([opa_r, opb_r, fpu_op_r1])}
-
-
 parameter
     INF  = 31'h7f800000,
 	QNAN = 31'h7fc00001,

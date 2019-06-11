@@ -1,0 +1,95 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "de_inst"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "wb_wbv"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "csr_cycle",
+        "csr_fflags",
+        "csr_frm",
+        "csr_instret",
+        "csr_mbadaddr",
+        "csr_mcause",
+        "csr_mcpuid",
+        "csr_mepc",
+        "csr_mfromhost",
+        "csr_mhartid",
+        "csr_mie",
+        "csr_mimpid",
+        "csr_mip",
+        "csr_mscratch",
+        "csr_mstatus",
+        "csr_mtdeleg",
+        "csr_mtime",
+        "csr_mtimecmp",
+        "csr_mtohost",
+        "csr_mtvec",
+        "csr_time",
+        "de_csr_val",
+        "de_csrd",
+        "de_inst",
+        "de_pc",
+        "de_rs1_val_r",
+        "de_rs2_val_r",
+        "de_valid_",
+        "ex_csr_res",
+        "ex_csrd",
+        "ex_inst",
+        "ex_ld_res",
+        "ex_ld_shifted",
+        "ex_load_addr",
+        "ex_load_byteena",
+        "ex_loaded_data_is_bus_res",
+        "ex_next_pc",
+        "ex_res",
+        "ex_restart",
+        "ex_valid_",
+        "ex_wben",
+        "ex_wbv",
+        "if_pc",
+        "if_valid_",
+        "interrupt_cause",
+        "wb_csrd",
+        "wb_inst",
+        "wb_valid",
+        "wb_wben",
+        "wb_wbv"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "b_wr0",
+        "b_wr1",
+        "b_wr2",
+        "b_wr3",
+        "bus_csr_no",
+        "bus_csr_read_enable",
+        "bus_csr_write_enable",
+        "bus_csr_writedata",
+        "bus_req_address",
+        "bus_req_data",
+        "bus_req_read",
+        "bus_req_write",
+        "de_branch_taken",
+        "de_illegal_csr_access",
+        "ex_ld_condition",
+        "if_inst",
+        "if_pc",
+        "interrupt",
+        "readdata"
+      ]
+    }
+  ]
+}

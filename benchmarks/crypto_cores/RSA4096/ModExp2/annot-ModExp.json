@@ -1,0 +1,59 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "e_buf",
+        "getResult",
+        "m_buf",
+        "n_mem_qi",
+        "nprime0_mem_qi",
+        "r_mem_qi",
+        "reset",
+        "startCompute",
+        "startInput",
+        "t_mem_qi"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "res_out"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "addr_buf",
+        "addr_buf2",
+        "c0",
+        "c_bar",
+        "e_in",
+        "i",
+        "j",
+        "k",
+        "k_e1",
+        "k_e2",
+        "last_c0",
+        "m",
+        "m_bar",
+        "m_in",
+        "n_buf",
+        "n_in",
+        "nprime0",
+        "nprime0_buf",
+        "r_buf",
+        "r_in",
+        "res_buf",
+        "s0",
+        "t_buf",
+        "t_in",
+        "v",
+        "x0",
+        "y0",
+        "z",
+        "z0"
+      ]
+    }
+  ]
+}

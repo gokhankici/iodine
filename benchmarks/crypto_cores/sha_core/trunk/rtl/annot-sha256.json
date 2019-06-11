@@ -1,0 +1,80 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "text_i"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "text_o",
+        "cmd"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "rst_i",
+        "cmd_i",
+        "cmd_w_i"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "busy",
+        "cmd",
+        "read_counter",
+        "round"
+      ]
+    }
+  ],
+  "history": [
+    {
+      "type": "initial_eq",
+      "variables": [
+        "read_counter",
+        "round",
+        "text_o",
+        "cmd",
+        "H0",
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        "H7",
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4",
+        "W5",
+        "W6",
+        "W7",
+        "W8",
+        "W9",
+        "W10",
+        "W11",
+        "W12",
+        "W13",
+        "W14",
+        "Wt",
+        "Kt",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "busy"
+      ],
+      "comment": "These were the ones that found manually"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "rmode",
+        "fpu_op",
+        "opa",
+        "opb"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "snan",
+        "qnan",
+        "div_by_zero",
+        "out",
+        "ine",
+        "overflow",
+        "underflow",
+        "zero"
+      ]
+    }
+  ],
+  "qualifiers": [
+    {
+      "type": "pairs",
+      "variables": [
+        "m_u6_rem",
+        "fpu_op_r3",
+        "m_u5_prod",
+        "fract_out_q",
+        "m_u5_prod",
+        "m_u0_opb_dn",
+        "m_u6_quo",
+        "fract_i2f"
+      ]
+    },
+    {
+      "type": "pairs",
+      "variables": [
+        "opa_r1",
+        "opb_r1",
+        "m_u6_remainder",
+        "fpu_op_r2",
+        "m_u1_exp_dn_out",
+        "m_u2_exp_out",
+        "m_u6_quo1",
+        "m_u0_expb_00",
+        "m_u5_prod1",
+        "m_u1_fasu_op",
+        "m_u1_fracta_out",
+        "m_u1_fractb_out",
+        "m_u1_sign",
+        "m_u2_sign"
+      ]
+    },
+    {
+      "type": "pairs",
+      "variables": [
+        "opa_r",
+        "opb_r",
+        "fpu_op_r1"
+      ]
+    }
+  ]
+}

@@ -45,39 +45,6 @@ output wire [ 3:0]  palu_cpr_rd_ben  , // Writeback byte enable
 output wire [31:0]  palu_cpr_rd_wdata  // Writeback data
 );
 
-// @annot{taint_source(g_resetn)}
-// @annot{taint_source(palu_ivalid)}
-// @annot{taint_source(gpr_rs1)}
-// @annot{taint_source(palu_rs1)}
-// @annot{taint_source(palu_rs2)}
-// @annot{taint_source(palu_rs3)}
-// @annot{taint_source(id_imm)}
-// @annot{taint_source(id_pw)}
-// @annot{taint_source(id_class)}
-// @annot{taint_source(id_subclass)}
-
-// @annot{taint_sink(reg_palu_idone)}
-// @annot{taint_sink(reg_palu_cpr_rd_ben)}
-// @annot{taint_sink(reg_palu_cpr_rd_wdata)}
-
-// -----------------------------------------------------------------------------
-// manually found
-// -----------------------------------------------------------------------------
-// @annot-not{sanitize_mod(scarv_cop_palu_multiplier, ctr)}
-// @annot-not{sanitize_glob(g_resetn)}
-// @annot-not{sanitize_glob(id_class)}
-// @annot-not{sanitize_glob(id_pw)}
-// @annot-not{sanitize_glob(id_subclass)}
-// @annot-not{sanitize_glob(palu_ivalid)}
-
-// -----------------------------------------------------------------------------
-// tool
-// -----------------------------------------------------------------------------
-// @annot{sanitize_glob(id_pw)}
-// @annot{sanitize_glob(mul_start)}
-// @annot{sanitize_glob(g_resetn)}
-// @annot{sanitize(m_i_palu_multiplier_ctr)}
-
 
 // REWRITE : extra assignments to check ct
 reg reg_palu_idone;

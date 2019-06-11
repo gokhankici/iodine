@@ -1,0 +1,63 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "input_a",
+        "input_a_stb",
+        "input_b",
+        "input_b_stb",
+        "output_z_ack",
+        "rst"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "s_input_a_ack",
+        "s_input_b_ack",
+        "s_output_z",
+        "s_output_z_stb"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "a",
+        "a_e",
+        "a_m",
+        "a_s",
+        "b",
+        "b_e",
+        "b_m",
+        "b_s",
+        "count",
+        "dividend",
+        "divisor",
+        "guard",
+        "quotient",
+        "remainder",
+        "round_bit",
+        "s_input_a_ack",
+        "s_input_b_ack",
+        "s_output_z",
+        "s_output_z_stb",
+        "state",
+        "sticky",
+        "z",
+        "z_e",
+        "z_m",
+        "z_s"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "input_a_stb",
+        "input_b_stb",
+        "output_z_ack",
+        "rst"
+      ]
+    }
+  ]
+}

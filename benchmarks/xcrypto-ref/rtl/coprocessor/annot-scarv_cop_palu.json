@@ -1,0 +1,63 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+		  "g_resetn",
+		  "palu_ivalid",
+		  "gpr_rs1",
+		  "palu_rs1",
+		  "palu_rs2",
+		  "palu_rs3",
+		  "id_imm",
+		  "id_pw",
+		  "id_class",
+		  "id_subclass"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+		  "reg_palu_idone",
+		  "reg_palu_cpr_rd_ben",
+		  "reg_palu_cpr_rd_wdata"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+		  "id_pw",
+		  "mul_start",
+		  "g_resetn"
+      ]
+    },
+    {
+      "type": "initial_eq",
+	  "module": "scarv_cop_palu_multiplier",
+      "variables": [
+		  "ctr"
+      ]
+    }
+  ],
+  "history": [
+    {
+      "type": "always_eq",
+      "variables": [
+		  "g_resetn",
+		  "id_class",
+		  "id_pw",
+		  "id_subclass",
+		  "palu_ivalid"
+      ],
+      "comment": "These were the ones that found manually"
+    },
+    {
+      "type": "initial_eq",
+	  "module": "scarv_cop_palu_multiplier",
+      "variables": [
+		  "ctr"
+      ],
+      "comment": "These were the ones that found manually"
+    }
+  ]
+}

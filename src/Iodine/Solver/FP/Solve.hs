@@ -49,7 +49,7 @@ solve cfg fpst = do
 
 printUnsafeResult :: FPSt -> FT.Result (Integer, HornId) -> IO ()
 printUnsafeResult fpst FT.Result{..} = do
-  printf "%d always blocks in total" (length $ fpst ^. fpABs)
+  -- printf "%d always blocks in total" (length $ fpst ^. fpABs)
   case resStatus of
     FT.Unsafe ids -> do
       let m        = errMap ids
