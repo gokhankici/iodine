@@ -94,6 +94,7 @@ data UnitTestType = Succ | Fail
 data UnitTest = UnitTest { testName    :: String
                          , moduleName  :: String
                          , verilogFile :: FilePath
+                         , annotFile   :: FilePath
                          , testType    :: UnitTestType
                          }
 
@@ -219,6 +220,7 @@ major runner _parserDir = describe "major" $ forM_ ts runner
     ts = [ t { testName    = "mips"
              , moduleName  = "mips_pipeline"
              , verilogFile = mipsDir </> "mips_pipeline.v"
+             , annotFile   = mipsDir </> "annot-mips_pipeline.json"
              }
          , t { testName    = "yarvi"
              , moduleName  = "yarvi"
@@ -266,7 +268,7 @@ main = do
         else va
 
   -- hack: set the required first two positional arguments to empty list
-  va <- updateDef . invalidate <$> R.parseArgs ("" : "" : opts ^. iodineArgs)
+  va <- updateDef . invalidate <$> R.parseArgs ("" : "" : "" : opts ^. iodineArgs)
 
   readConfig defaultConfig (opts^.hspecArgs)
     >>= withArgs [] . runSpec (spec opts va)
@@ -274,6 +276,7 @@ main = do
   where
     invalidate va = va { R.fileName   = undefined
                        , R.moduleName = undefined
+                       , R.annotFile  = undefined
                        }
 
 type Runner = UnitTest -> Spec
@@ -295,6 +298,7 @@ t :: UnitTest
 t = UnitTest { testName    = undefined
              , moduleName  = undefined
              , verilogFile = undefined
+             , annotFile   = undefined
              , testType    = Succ
              }
 
@@ -308,10 +312,11 @@ mipsDir = benchmarkDir </> "472-mips-pipelined"
 runUnitTest :: TestArgs -> R.IodineArgs -> Runner
 runUnitTest ta va UnitTest{..} =
   if   ta ^. dryRun
-  then it testName (printf "./iodine %s %s\n" verilogFile moduleName :: IO ())
+  then it testName (printf "./iodine %s %s %s\n" verilogFile moduleName annotFile :: IO ())
   else it testName $ R.run va' `shouldReturn` (testType == Succ)
   where
     va' = va { R.fileName   = verilogFile
              , R.moduleName = moduleName
+             , R.annotFile  = annotFile
              , R.noSave     = True
              }

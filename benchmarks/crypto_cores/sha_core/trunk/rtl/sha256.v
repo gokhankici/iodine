@@ -159,19 +159,32 @@ module sha256 (clk_i, rst_i, text_i_, text_o, cmd_i, cmd_w_i, cmd_o);
                 1       read data
                         
         */
-        
 
-        reg     [3:0]   cmd; // @annot{sanitize(cmd)}
+	    // manually found assumptions:
+		// @annot-not{sanitize(read_counter)}
+		// @annot-not{sanitize(round)}
+		// @annot-not{sanitize(text_o)}
+        // @annot-not{sanitize(cmd)}
+        // @annot-not{sanitize(H0,H1,H2,H3,H4,H5,H6,H7,W0,W1,W2,W3,W4,W5,W6,W7,W8,W9,W10,W11,W12,W13,W14,Wt,Kt,A,B,C,D,E,F,G,H,busy)}
+
+		// tool's assumptions:
+		// @annot-not{sanitize(Kt)}
+		// @annot{sanitize(busy)}
+		// @annot{sanitize(cmd)}
+		// @annot{sanitize(read_counter)}
+		// @annot{sanitize(round)}
+
+
+        reg     [3:0]   cmd;
         wire    [3:0]   cmd_o;
         
-        reg     [31:0]  text_o; // @annot{sanitize(text_o)}
+        reg     [31:0]  text_o;
         
-        reg     [6:0]   round; // @annot{sanitize(round)}
+        reg     [6:0]   round;
         wire    [6:0]   round_plus_1;
         
-        reg     [2:0]   read_counter; // @annot{sanitize(read_counter)}
+        reg     [2:0]   read_counter;
 
-        // @annot{sanitize(H0,H1,H2,H3,H4,H5,H6,H7,W0,W1,W2,W3,W4,W5,W6,W7,W8,W9,W10,W11,W12,W13,W14,Wt,Kt,A,B,C,D,E,F,G,H,busy)}
         reg     [31:0]  H0,H1,H2,H3,H4,H5,H6,H7;
         reg     [31:0]  W0,W1,W2,W3,W4,W5,W6,W7,W8,W9,W10,W11,W12,W13,W14;
         reg     [31:0]  Wt,Kt;

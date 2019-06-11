@@ -61,7 +61,7 @@ removeId :: IntermediaryA (Id, Int) -> IntermediaryA Id
 removeId = fromProduct . undoUniqueId . toProduct
 
 -- MyProduct = (Seq (AlwaysBlock a), (AnnotSt a, [FPQualifier a]))
-type MyProduct a = Product (Compose Seq AlwaysBlockA) (Product AnnotStA (Compose [] FPQualifierA)) a
+type MyProduct a = Product (Compose Seq AlwaysBlockA) (Product AnnotStA (Compose Seq FPQualifierA)) a
 
 toProduct :: IntermediaryA a -> MyProduct a
 toProduct (as, (annots, qualifiers)) = Pair (Compose as) (Pair annots (Compose qualifiers))

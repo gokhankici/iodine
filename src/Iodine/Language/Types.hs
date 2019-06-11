@@ -118,7 +118,7 @@ type Annotation = AnnotationA Id
 data AnnotationA a =
     Source       a
   | Sink         a
-  | Sanitize     [a]
+  | Sanitize     (SQ.Seq a)
   | SanitizeMod  { annotModuleName :: a
                  , annotVarName    :: a
                  }

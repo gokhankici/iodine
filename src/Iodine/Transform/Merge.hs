@@ -8,6 +8,7 @@
 module Iodine.Transform.Merge ( merge
                                ) where
 
+import           Iodine.Types
 import           Iodine.Language.Types
 import           Iodine.Transform.DFG
 import           Iodine.Solver.FP.Types
@@ -25,10 +26,10 @@ import           Debug.Trace
 import qualified Data.Sequence as SQ
 import qualified Data.Foldable as F
 
-type ABS        = SQ.Seq AlwaysBlock
-type Qualifiers = [FPQualifier]
+type AI = ABS Id
+type Qs = Qualifiers Id
 
-merge :: (ABS, Qualifiers) -> ABS
+merge :: (AI, Qs) -> AI
 merge =
   mergeEquals
   >>>
@@ -48,7 +49,7 @@ merge =
 -----------------------------------------------------------------------------------
 -- | [AlwaysBlock] -> [AlwaysBlock] :::: Filter out continuous assignments
 -----------------------------------------------------------------------------------
-mergeEquals :: (ABS, Qualifiers) -> (ABS, Qualifiers)
+mergeEquals :: (AI, Qs) -> (AI, Qs)
 mergeEquals (as, allQualifiers) = (as', allQualifiers)
   where
     as' = rest SQ.>< newclocks1 SQ.>< newclocks2
@@ -74,7 +75,7 @@ mergeEquals (as, allQualifiers) = (as', allQualifiers)
             ]
       in  filter ((> 1) . length) iss1
                      
-mergeAssignsAndStars :: ABS -> ABS
+mergeAssignsAndStars :: AI -> AI
 mergeAssignsAndStars as = res
   where
     _res = mergeBlocksG abMap g'
@@ -117,7 +118,7 @@ mergeClocks as = groups ++ assigns ++ rest
                , _aMd      = mconcat $ view aMd <$> gs
                }
 
-mergeAssigns :: ABS -> ABS
+mergeAssigns :: AI -> AI
 mergeAssigns as = as'
   where
     assigns = SQ.filter ((==) Continuous . eventToAssignType . view aEvent) as
@@ -145,12 +146,12 @@ printBlocks as = f <$> as
 -----------------------------------------------------------------------------------
 -- Helper functions
 -----------------------------------------------------------------------------------
-mergeBlocks :: AM -> [[Node]] -> ABS
+mergeBlocks :: AM -> [[Node]] -> AI
 mergeBlocks abMap nss = go (1, mempty) nss
   where
     maxId = fst $ IM.findMax abMap
 
-    go :: (Int, ABS) -> [[Node]] -> ABS
+    go :: (Int, AI) -> [[Node]] -> AI
     go (_, acc) [] = acc
     go (!n, !acc) (ns':rest) =
       let as2 = (abMap IM.!) <$> ns
@@ -164,7 +165,7 @@ mergeBlocks abMap nss = go (1, mempty) nss
           ns  = debug (show ns') ns'
      in go (n+1, acc SQ.|> a') rest
 
-mergeBlocksG :: AM -> G -> ABS
+mergeBlocksG :: AM -> G -> AI
 mergeBlocksG abMap g = mergeBlocks abMap (pathsToNonAssignsG g)
 
 debug :: String -> a -> a
@@ -174,5 +175,5 @@ debug str n = if   enabled
   where
     enabled = False
 
-abs2Map :: ABS -> IM.IntMap AlwaysBlock
+abs2Map :: AI -> IM.IntMap AlwaysBlock
 abs2Map = F.foldl' (\acc a -> IM.insert (a^.aId) a acc) mempty

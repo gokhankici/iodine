@@ -36,12 +36,6 @@ input clk, reset;
     //                              Signal Declarations
     // ********************************************************************
 
-    // @annot{taint_source(IF_PC_d_out)}
-    // @annot{taint_sink(WB_wd_reg)}
-
-    // @annot{sanitize_glob(IF_PC_d_out)}
-    // @annot{sanitize_glob(reset)}
-
     // IF Signal Declarations
 
     // MODIFICATIONS HERE:
@@ -50,11 +44,10 @@ input clk, reset;
 
     // MODIFICATIONS HERE:
     // Add a new Stall signal
-    reg Stall; // @annot{sanitize(Stall)}
+    reg Stall;
 
     // ID Signal Declarations
 
-    // @annot{sanitize(ID_instr, ID_pc4)}
     reg [31:0] ID_instr, ID_pc4;  // pipeline register values from EX
 
     wire [5:0] ID_op, ID_funct;
@@ -83,45 +76,42 @@ input clk, reset;
 
     // MODIFICATIONS HERE:
     // Add EX_rs
-    reg  [31:0] EX_pc4, EX_extend, EX_rd1, EX_rd2; // @annot{sanitize(EX_pc4, EX_extend, EX_rd1, EX_rd2)}
+    reg  [31:0] EX_pc4, EX_extend, EX_rd1, EX_rd2;
     wire [31:0]  EX_offset, EX_btgt, EX_alub, EX_ALUOut;
-    reg  [4:0]  EX_rs, EX_rt, EX_rd; // @annot{sanitize(EX_rs, EX_rt, EX_rd)}
+    reg  [4:0]  EX_rs, EX_rt, EX_rd;
     wire [4:0]  EX_RegRd;
     wire [5:0] EX_funct;
 
-    // @annot{sanitize( EX_RegWrite, EX_Branch, EX_RegDst, EX_MemtoReg, EX_MemRead, EX_MemWrite, EX_ALUSrc)}
     reg  EX_RegWrite, EX_Branch, EX_RegDst, EX_MemtoReg,  // EX Control Signals
          EX_MemRead, EX_MemWrite, EX_ALUSrc;
 
     wire EX_Zero;
 
-    reg  [1:0] EX_ALUOp; // @annot{sanitize(EX_ALUOp)}
+    reg  [1:0] EX_ALUOp;
     wire [2:0] EX_Operation;
 
     // MODIFICATIONS HERE:
     // Add registers for forwarding control
-    reg  [1:0] ForwardA, ForwardB; // @annot{sanitize(ForwardA, ForwardB)}
+    reg  [1:0] ForwardA, ForwardB;
 
    // MEM Signals
 
     wire MEM_PCSrc;
 
-    //@annot{sanitize(MEM_RegWrite, MEM_Branch, MEM_MemtoReg, MEM_MemRead, MEM_MemWrite, MEM_Zero)}
     reg  MEM_RegWrite, MEM_Branch, MEM_MemtoReg,
          MEM_MemRead, MEM_MemWrite, MEM_Zero;
 
-    reg  [31:0] MEM_btgt, MEM_ALUOut, MEM_rd2; // @annot{sanitize(MEM_btgt, MEM_ALUOut, MEM_rd2)}
+    reg  [31:0] MEM_btgt, MEM_ALUOut, MEM_rd2;
     wire [31:0] MEM_memout;
-    reg  [5:0] MEM_RegRd; // @annot{sanitize(MEM_RegRd)}
+    reg  [5:0] MEM_RegRd;
 
     // WB Signals
 
-    // @annot{sanitize(WB_RegWrite, WB_MemtoReg)}
     reg WB_RegWrite, WB_MemtoReg;  // WB Control Signals
 
-    reg  [31:0] WB_memout, WB_ALUOut; // @annot{sanitize( WB_memout, WB_ALUOut )}
+    reg  [31:0] WB_memout, WB_ALUOut;
     wire [31:0] WB_wd;
-    reg  [4:0] WB_RegRd; // @annot{sanitize(WB_RegRd)}
+    reg  [4:0] WB_RegRd;
 
     // ********************************************************************
     //                              IF Stage
@@ -154,7 +144,6 @@ input clk, reset;
     // (Note: the branch has priority over the jump, since that instruction came first)
     mux2 #(32)	IF_PCMUX(MEM_PCSrc, IF_pc_jump, MEM_btgt, IF_pc_next);
 
-    // @annot{sanitize_mod(rom32, data_out)}
     rom32 		IMEM(IF_pc, IF_instr);
 
     always @(posedge clk)		    // IF/ID Pipeline Register
@@ -181,8 +170,6 @@ input clk, reset;
     //                              ID Stage
     // ********************************************************************
 
-    // @annot{sanitize_mod(reg_file, RD1)}
-    // @annot{sanitize_mod(reg_file, RD2)}
     reg_file	RFILE(clk, WB_RegWrite, ID_rs, ID_rt, WB_RegRd, ID_rd1, ID_rd2, WB_wd);
 
     // sign-extender
@@ -207,15 +194,6 @@ input clk, reset;
 
     // MODIFICATIONS HERE:
     // Connect ID_Jump to the control unit
-    // @annot{sanitize_mod(control_pipeline, ALUOp)}
-    // @annot{sanitize_mod(control_pipeline, ALUSrc)}
-    // @annot{sanitize_mod(control_pipeline, Branch)}
-    // @annot{sanitize_mod(control_pipeline, Jump)}
-    // @annot{sanitize_mod(control_pipeline, MemRead)}
-    // @annot{sanitize_mod(control_pipeline, MemWrite)}
-    // @annot{sanitize_mod(control_pipeline, MemtoReg)}
-    // @annot{sanitize_mod(control_pipeline, RegDst)}
-    // @annot{sanitize_mod(control_pipeline, RegWrite)}
     control_pipeline CTL(.opcode(ID_op),           .RegDst(ID_RegDst),
                          .ALUSrc(ID_ALUSrc),       .MemtoReg(ID_MemtoReg),
                          .RegWrite(ID_RegWrite_v), .MemRead(ID_MemRead_v),
@@ -302,13 +280,10 @@ input clk, reset;
 
     // MODIFICATIONS HERE:
     // Take the output from FMUXA instead of directly from ID/EX
-    // @annot{sanitize_mod(alu, result)}
-    // @annot{sanitize_mod(alu, zero)}
     alu 		EX_ALU(EX_Operation, MuxA_out, EX_alub, EX_ALUOut, EX_Zero);
 
     mux2 #(5) 	EX_RFMUX(EX_RegDst, EX_rt, EX_rd, EX_RegRd);
 
-    // @annot{sanitize_mod(alu_ctl, ALUOperation)}
     alu_ctl 	EX_ALUCTL(EX_ALUOp, EX_funct, EX_Operation);
 
 
@@ -388,7 +363,6 @@ input clk, reset;
     // ********************************************************************
 
     //      module mem32(clk, mem_read,    mem_write,    address,    data_in, data_out);
-    // @annot{sanitize_mod(mem32, data_out)}
     mem32 		MEM_DMEM(clk, MEM_MemRead, MEM_MemWrite, MEM_ALUOut, MEM_rd2, MEM_memout);
 
     and  		MEM_BR_AND(MEM_PCSrc, MEM_Branch, MEM_Zero);
@@ -419,7 +393,7 @@ input clk, reset;
     mux2 #(32)	WB_WRMUX(WB_MemtoReg, WB_ALUOut, WB_memout, WB_wd);
 
     // REWRITE: added this reg to find out 
-    reg [31:0] WB_wd_reg; // @annot{sanitize(WB_wd_reg)}
+    reg [31:0] WB_wd_reg;
 
 	always @(posedge clk)
     	WB_wd_reg <= WB_wd;

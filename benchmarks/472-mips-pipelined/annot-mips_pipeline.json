@@ -1,0 +1,116 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "IF_PC_d_out"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "WB_wd_reg"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "IF_PC_d_out",
+        "reset"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "EX_RegWrite",
+        "EX_Branch",
+        "EX_RegDst",
+        "EX_MemtoReg",
+        "EX_MemRead",
+        "EX_MemWrite",
+        "EX_ALUSrc",
+        "WB_memout",
+        "WB_ALUOut",
+        "EX_ALUOp",
+        "EX_pc4",
+        "EX_extend",
+        "EX_rd1",
+        "EX_rd2",
+        "EX_rs",
+        "EX_rt",
+        "EX_rd",
+        "ForwardA",
+        "ForwardB",
+        "ID_instr",
+        "ID_pc4",
+        "MEM_RegRd",
+        "MEM_RegWrite",
+        "MEM_Branch",
+        "MEM_MemtoReg",
+        "MEM_MemRead",
+        "MEM_MemWrite",
+        "MEM_Zero",
+        "MEM_btgt",
+        "MEM_ALUOut",
+        "MEM_rd2",
+        "Stall",
+        "WB_RegRd",
+        "WB_RegWrite",
+        "WB_MemtoReg",
+        "WB_wd_reg"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "module": "alu",
+      "variables": [
+        "result",
+        "zero"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "module": "alu_ctl",
+      "variables": [
+        "ALUOperation"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "module": "control_pipeline",
+      "variables": [
+        "ALUOp",
+        "ALUSrc",
+        "Branch",
+        "Jump",
+        "MemRead",
+        "MemWrite",
+        "MemtoReg",
+        "RegDst",
+        "RegWrite"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "module": "mem32",
+      "variables": [
+        "data_out"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "module": "reg_file",
+      "variables": [
+        "RD1",
+        "RD2"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "module": "rom32",
+      "variables": [
+        "data_out"
+      ]
+    }
+  ]
+}

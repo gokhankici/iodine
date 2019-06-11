@@ -7,9 +7,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Iodine.Language.Parser ( parse
-                               , renderError
-                               , IRParseError (..)
-                               ) where
+                              , renderError
+                              , IRParseError (..)
+                              ) where
 
 import           Control.Arrow
 import           Control.Exception
@@ -70,15 +70,13 @@ data ParseGate = PContAsgn Id Id
                              }
                deriving (Show)
 
-data ParseIR = TopModule    { mPortNames :: [ParsePort]       -- port list (i.e. formal parameters)
-                            , mPorts     :: [ParseVar]        -- wires os registers used
-                            , mGates     :: [ParseGate]       -- assign or module instantiations
-                            , mBehaviors :: [ParseBehavior]   -- always blocks
-                            , mUFs       :: [ParseUF]         -- uninterpreted functions
-                            }
-             | PAnnotation  Annotation
-             | PQualifier   FPQualifier
-             deriving (Show)
+data TopModule = TopModule { mPortNames :: [ParsePort]       -- port list (i.e. formal parameters)
+                           , mPorts     :: [ParseVar]        -- wires os registers used
+                           , mGates     :: [ParseGate]       -- assign or module instantiations
+                           , mBehaviors :: [ParseBehavior]   -- always blocks
+                           , mUFs       :: [ParseUF]         -- uninterpreted functions
+                           }
+               deriving (Show)
 
 data ParseStmt = PBlock           [ParseStmt]
                | PBlockingAsgn    Id
@@ -122,30 +120,28 @@ makeLenses ''ParseSt
 
 type Parser = Parsec SourcePos String
 
-type ParseInput  = (FilePath, String)
-type ParseOutput = ((St, AnnotSt), [FPQualifier])
+type ParseInput  = ((FilePath, String), (SQ.Seq Annotation, SQ.Seq FPQualifier))
+type ParseOutput = ((St, AnnotSt), SQ.Seq FPQualifier)
 
 -- --------------------------------------------------------------------------------
 parse :: ParseInput -> ParseOutput
 -- --------------------------------------------------------------------------------
-parse = parseWithoutConversion >>> first makeState
+parse = first parseWithoutConversion >>>
+        arr (\(o,(a,q)) -> ((o, a),q)) >>>
+        first makeState
 
-parseWithoutConversion :: ParseInput -> ([ParseIR], [FPQualifier])
-parseWithoutConversion (fp, s) = foldr f ([],mempty) (parseWith parseIR)
+parseWithoutConversion :: (FilePath, String) -> TopModule
+parseWithoutConversion (fp, s) = parseWith parseIR
   where
-    -- separate extra qualifiers from the rest
-    f (PQualifier q) = second ((:) q)
-    f p              = first ((:) p)
-
     parseWith p =
       case runParser (whole p) fp s of
         Right e     -> e
         Left bundle -> throw (IRParseError (myParseErrorPretty bundle))
 
 -----------------------------------------------------------------------------------
-makeState :: [ParseIR] -> (St, AnnotSt)
+makeState :: (TopModule, SQ.Seq Annotation) -> (St, AnnotSt)
 -----------------------------------------------------------------------------------
-makeState (topIR@TopModule{..}:as) = resultState -- trace (show (resultState^.sanitize)) resultState
+makeState (topIR@TopModule{..}, as) = resultState
   where
     resultState = evalState comp emptyParseSt
 
@@ -153,7 +149,8 @@ makeState (topIR@TopModule{..}:as) = resultState -- trace (show (resultState^.sa
 
     comp = do
       -- collect taint information (update the state's variables)
-      sequence_ $ collectTaint <$> (as ++ [topIR])
+      sequence_ $ updateTaint <$> as
+      sanitizeSubmodules mGates
 
       -- collect ports and ufs
       collectNonTaint topIR
@@ -185,8 +182,6 @@ makeState (topIR@TopModule{..}:as) = resultState -- trace (show (resultState^.sa
       sanityChecks
 
       (,) <$> use st <*> use annots
-
-makeState _ = throw (PassError "First ir is not a toplevel module !")
 
 type P = State ParseSt
 
@@ -224,21 +219,16 @@ sanityChecks = do
 
 
 -----------------------------------------------------------------------------------
-collectTaint :: ParseIR -> P ()
+updateTaint :: Annotation -> P ()
 -----------------------------------------------------------------------------------
-collectTaint TopModule{..} = sanitizeSubmodules mGates
-collectTaint (PQualifier _) = return ()
-collectTaint (PAnnotation annot)  = fromAnnot annot
-  where
-    fromAnnot :: Annotation -> P ()
-    fromAnnot (Source s)        = parseSources      %= S.insert s
-    fromAnnot (Sink s)          = parseSinks        %= S.insert s
-    fromAnnot (TaintEq s)       = parseTaintEq      %= S.insert s
-    fromAnnot (AssertEq s)      = parseAssertEq     %= S.insert s
-    fromAnnot (Sanitize s)      = parseSanitize     %= S.union (S.fromList s)
-    fromAnnot (SanitizeGlob s)  = parseSanitizeGlob %= S.insert s >>
-                                  parseSanitize     %= S.insert s
-    fromAnnot SanitizeMod{..}   = parseModSanitize %= mapOfSetInsert annotModuleName annotVarName
+updateTaint (Source s)        = parseSources      %= S.insert s
+updateTaint (Sink s)          = parseSinks        %= S.insert s
+updateTaint (TaintEq s)       = parseTaintEq      %= S.insert s
+updateTaint (AssertEq s)      = parseAssertEq     %= S.insert s
+updateTaint (Sanitize s)      = parseSanitize     %= S.union (seq2set s)
+updateTaint (SanitizeGlob s)  = parseSanitizeGlob %= S.insert s >>
+                                parseSanitize     %= S.insert s
+updateTaint SanitizeMod{..}   = parseModSanitize %= mapOfSetInsert annotModuleName annotVarName
 
 -- figures out which variables to sanitize inside the module instantiations
 sanitizeSubmodules       :: [ParseGate] -> P ()
@@ -261,10 +251,9 @@ sanitizeSubmodules gates = sequence_ $ sanitizeInst <$> gates
 
 
 -----------------------------------------------------------------------------------
-collectNonTaint :: ParseIR -> P ()
+collectNonTaint :: TopModule -> P ()
 -----------------------------------------------------------------------------------
 collectNonTaint TopModule{..} = collectPortAndUFs mPorts mGates mUFs
-collectNonTaint _             = error "collectNonTaint is called without top module"
 
 -- collect ports and ufs
 collectPortAndUFs :: [ParseVar] -> [ParseGate] -> [ParseUF] -> P ()
@@ -399,7 +388,7 @@ parseModuleInst = rWord "module"
                               <*> (comma *> list parseBehavior)
                               <*> (comma *> list parseUF))
 
-parseTopModule :: Parser ParseIR
+parseTopModule :: Parser TopModule
 parseTopModule = spaceConsumer
                  *> rWord "topmodule"
                  *> parens (TopModule
@@ -410,26 +399,6 @@ parseTopModule = spaceConsumer
                              <*> (comma *> list parseUF))
                  <* char '.' <* spaceConsumer
 
-parseTaint :: Parser ParseIR
-parseTaint = spaceConsumer
-             *> ( PAnnotation <$> parseAnnot <|>
-                  PQualifier <$> parseQual
-                )
-             <* char '.' <* spaceConsumer
-  where
-    parseAnnot =     rWord "taint_source"  *> parens (Source <$> identifier)
-                 <|> rWord "taint_sink"    *> parens (Sink <$> identifier)
-                 <|> rWord "taint_eq"      *> parens (TaintEq <$> identifier)
-                 <|> rWord "assert_eq"     *> parens (AssertEq <$> identifier)
-                 <|> rWord "sanitize_mod"  *> parens (SanitizeMod <$> identifier <*> (comma *> identifier))
-                 <|> rWord "sanitize_glob" *> parens (SanitizeGlob <$> identifier)
-                 <|> rWord "sanitize"      *> parens (Sanitize <$> parseMany1 identifier comma)
-
-    parseQual =     rWord "qualifierPairs"  *> parens (QualifPairs  <$> list identifier)
-                <|> rWord "qualifierAssume" *> parens (QualifAssume <$> list identifier)
-                <|> rWord "qualifierIff"    *> parens (QualifIff    <$> identifier <*> (comma *> list identifier))
-                <|> rWord "qualifierImp"    *> parens (QualifImp    <$> identifier <*> (comma *> list identifier))
-
 parseStmt :: Parser ParseStmt
 parseStmt =     rWord "block"  *> parens (PBlock           <$> list parseStmt)
             <|> rWord "b_asn"  *> parens (PBlockingAsgn    <$> identifier <*> (comma *> identifier))
@@ -437,8 +406,8 @@ parseStmt =     rWord "block"  *> parens (PBlock           <$> list parseStmt)
             <|> rWord "ite"    *> parens (PIfStmt          <$> identifier <*> (comma *> parseStmt) <*> (comma *> parseStmt))
             <|> rWord "skip"   *> return PSkip
 
-parseIR :: Parser [ParseIR]
-parseIR = (:) <$> parseTopModule <*> many parseTaint
+parseIR :: Parser TopModule
+parseIR = parseTopModule
 
 --------------------------------------------------------------------------------
 -- | Tokenisers and Whitespace
@@ -507,9 +476,9 @@ identifier = lexeme (p >>= check)
               then fail $ "keyword " ++ show x ++ " cannot be an identifier"
               else return x
 
-parseMany1 :: Parser a -> Parser b -> Parser [a]
-parseMany1 elemP sepP =
-    (:) <$> elemP <*> many (sepP *> elemP)
+-- parseMany1 :: Parser a -> Parser b -> Parser [a]
+-- parseMany1 elemP sepP =
+--     (:) <$> elemP <*> many (sepP *> elemP)
 
 --------------------------------------------------------------------------------
 -- | Printing Error Messages

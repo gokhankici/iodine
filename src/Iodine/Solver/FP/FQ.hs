@@ -65,7 +65,7 @@ toFqFormat fpst =
         ]
         ++
         concat [ custom n q
-               | (n, q) <- zip ([1..] :: [Int]) (fpst ^. fpQualifiers)
+               | (n, q) <- zip ([1..] :: [Int]) (F.toList $ fpst ^. fpQualifiers)
                ]
       bindMds     = M.empty
       highOrBinds = False
@@ -148,7 +148,7 @@ makeConstraints fpst = snd $ IM.foldl' gos (0, mempty) (fpst ^. fpConstraints)
     env es = insertsIBindEnv (F.toList $ getBindIds fpst es) emptyIBindEnv
 
     eqs = Ands [ BinOp IFF (Var x1t) (Var x2t)
-               | q       <- fpst ^. fpQualifiers
+               | q       <- F.toList $ fpst ^. fpQualifiers
                , (x1,x2) <- case q of
                               QualifAssume vs -> twoPairs vs
                               _               -> []

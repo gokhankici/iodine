@@ -50,7 +50,7 @@ data FPStA a =
   FPSt { _fpConstraints :: Constraints
        , _fpABs         :: Seq (AlwaysBlockA a)
        , _fpBinds       :: BindMap
-       , _fpQualifiers  :: [FPQualifier]
+       , _fpQualifiers  :: Seq FPQualifier
        , _fpAnnotations :: AnnotStA a
        }
   deriving (Generic)

@@ -4,6 +4,7 @@ module Iodine.Transform.FP.VCGen ( toFpSt
                                   , toFpSt'
                                   ) where
 
+import           Iodine.Types
 import           Iodine.Language.Types
 import           Iodine.Solver.Common
 import           Iodine.Solver.FP.Types
@@ -21,7 +22,6 @@ import qualified Language.Fixpoint.Types  as FQ
 
 -- import Debug.Trace
 
-type ABS = SQ.Seq AlwaysBlock
 type S = State (Int, BindMap)
 
 toFpSt' :: AnnotSt -> FPSt -> FPSt
@@ -32,7 +32,7 @@ toFpSt' newAnnots st =
   where
     cs = invs newAnnots (st^.fpABs)
 
-toFpSt  :: (ABS, (AnnotSt, [FPQualifier])) -> FPSt
+toFpSt  :: (ABS Id, (AnnotSt, Qualifiers Id)) -> FPSt
 toFpSt (as, (allAnnots, allQualifiers)) =
   FPSt { _fpConstraints = cs
        , _fpABs         = as
@@ -57,7 +57,7 @@ toFpSt (as, (allAnnots, allQualifiers)) =
                             }) name m
 
 
-getBinds :: ABS -> SQ.Seq Inv -> BindMap
+getBinds :: ABS Id -> SQ.Seq Inv -> BindMap
 getBinds as cs = evalState comp (length constants + 1, m)
   where
     comp = do sequence_ (getBind <$> cs)

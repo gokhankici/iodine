@@ -1,11 +1,12 @@
 module Iodine.Pipeline ( pipeline
-                        , pipeline'
-                        ) where
+                       , pipeline'
+                       ) where
 
 import Control.Arrow
 
 import Iodine.Types
 
+import Iodine.Language.AnnotParser
 import Iodine.Language.Parser
 import Iodine.Solver.FP.Types
 import Iodine.Transform.FP.VCGen
@@ -32,7 +33,7 @@ pipeline' :: ParseInput -> Intermediary
 pipeline' = common
 
 common :: ParseInput -> Intermediary
-common = parse >>> afterParse
+common = second parseAnnotations >>> parse >>> afterParse
 
 afterParse :: ParseOutput -> Intermediary
 afterParse = ( (fst >>> modularize)       -- ABS

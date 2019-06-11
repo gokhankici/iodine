@@ -7,7 +7,6 @@ module Iodine.Runner ( IodineArgs(..)
                       , parseArgs
                       , run
                       , main
-                      , test
                       ) where
 
 import qualified Iodine.Abduction.Runner as VAR
@@ -33,7 +32,8 @@ import System.Process
 import Text.Printf
 
 -- import Debug.Trace
-import Control.DeepSeq
+-- import Control.DeepSeq
+import qualified Data.ByteString.Lazy as B
 
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
@@ -42,7 +42,7 @@ import Control.DeepSeq
 @
 iodine v1.0, (C) Rami Gokhan Kici 2019
 
-iodine [OPTIONS] FILE MODULE
+iodine [OPTIONS] FILE MODULE ANNOTATIONS
 
 Common flags:
      --iverilog-dir=DIR        path of the iverilog-parser directory
@@ -63,21 +63,23 @@ Checks whether the given Verilog file runs in constant time.
 'fileName' and 'moduleName' are required:
 First argument is the path the to the verilog file.
 Second argument is the name of the root Verilog module in that file.
+Third argument is a JSON file that contains the annotations.
 
 By default, this project and @iverilog-parser@ is assumed to be located in the same folder.
 -}
 data IodineArgs =
   IodineArgs { fileName    :: FilePath -- this is used for both the Verilog and IR file
-              , moduleName  :: String
-              , iverilogDir :: FilePath
-              , ir          :: Bool
-              , vcgen       :: Bool
-              , minimize    :: Bool
-              , noSave      :: Bool
-              , abduction   :: Bool
-              , time        :: Bool
-              , noFPOutput  :: Bool
-              }
+             , moduleName  :: String
+             , iverilogDir :: FilePath
+             , ir          :: Bool
+             , vcgen       :: Bool
+             , minimize    :: Bool
+             , noSave      :: Bool
+             , abduction   :: Bool
+             , time        :: Bool
+             , noFPOutput  :: Bool
+             , annotFile   :: FilePath
+             }
   deriving (Show, Data, Typeable)
 
 verylogArgs :: IodineArgs
@@ -86,7 +88,10 @@ verylogArgs = IodineArgs { fileName    = def
                                           &= typ "FILE"
                           , moduleName  = def
                                           &= argPos 1
-                                          &= typ "MODULE"
+                                          &= typ "MODULENAME"
+                          , annotFile   = def
+                                          &= argPos 2
+                                          &= typ "ANNOTATIONS"
                           , iverilogDir = "iverilog-parser"
                                           &= typDir
                                           &= explicit &= name "iverilog-dir"
@@ -124,6 +129,7 @@ verylogArgs = IodineArgs { fileName    = def
                   , ""
                   , "First argument is the path the to the verilog file."
                   , "Second argument is the name of the root Verilog module in that file."
+                  , "Third argument is a JSON file that contains the annotations."
                   ]
 
 
@@ -150,10 +156,12 @@ normalizePaths :: IodineArgs -> IO IodineArgs
 normalizePaths IodineArgs{..} = do
   f' <- makeAbsolute fileName
   i' <- makeAbsolute iverilogDir
+  a' <- makeAbsolute annotFile
   return IodineArgs { fileName    = f'
-                     , iverilogDir = i'
-                     , ..
-                     }
+                    , iverilogDir = i'
+                    , annotFile   = a'
+                    , ..
+                    }
 
 
 -- -----------------------------------------------------------------------------
@@ -162,7 +170,6 @@ generateIR :: IodineArgs -> IO IodineArgs
 generateIR IodineArgs{..} = do
   runPreProcessor
   runIVL
-  appendAnnots
   return result
 
   where
@@ -193,17 +200,6 @@ generateIR IodineArgs{..} = do
           printMsg "Generating IR from the following Verilog file failed:" err
           exitFailure
 
-    -- extract the annotations from the Verilog file and append them to the IR
-    appendAnnots = do
-      let rgx = "s|[^@]*@annot{\\([^}]*\\)}[^@]*|\\1.\\n|pg"
-      (rc, out, err) <- readProcessWithExitCode "/bin/sed" ["-n", rgx, verilogFile] ""
-      case rc of
-        ExitSuccess ->
-          appendFile irFile out
-        ExitFailure _ -> do
-          printMsg "Parsing annotations failed:" err
-          exitFailure
-
     printMsg msg err = 
       forM_ (msg:[verilogFile, preprocFile, err]) (hPutStrLn stderr)
 
@@ -221,8 +217,9 @@ generateIR IodineArgs{..} = do
 checkIR :: IodineArgs -> IO Bool
 -- -----------------------------------------------------------------------------
 checkIR IodineArgs{..} = do
+  annotContents <- B.readFile annotFile
   fileContents <- readFile fileName
-  let pipelineInput = (fileName, fileContents)
+  let pipelineInput = ((fileName, fileContents), annotContents)
       fpst          = pipeline pipelineInput
 
   if | vcgen     -> saveQuery cfg (toFqFormat fpst) >> return True
@@ -256,18 +253,3 @@ passHandle CycleError{..} = do
   hPutStrLn stderr "Cycle is written to /tmp/cycle.dot"
   hPutStrLn stderr cycleErrorStr
   return False
-
--- | This is for testing in ghci ... Has to be removed at some point.
-test :: IO ()
-test =  do
-  a' <- normalizePaths a >>= generateIR
-  let fn = fileName a'
-  fileContents <- readFile fn
-  let pipelineInput = (fn, fileContents)
-  let result = VAR.runner' $ pipeline' pipelineInput
-  result `deepseq` return ()
-  where
-    a = verylogArgs { fileName   = "./test/abduction/pos/abduction-03.v"
-                    , moduleName = "test"
-                    , abduction  = True
-                    }
