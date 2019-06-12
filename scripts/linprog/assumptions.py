@@ -8,6 +8,7 @@ import time
 import json
 
 from utils import debug, parse_cplex_input, val_to_int
+from annotation import Annotation
 
 # from networkx.algorithms.components import strongly_connected_components
 # import pudb
@@ -35,28 +36,8 @@ class Variable(collections.namedtuple("Variable", ["node",
                    self.mark_index)
 
 
-class Assumptions(collections.namedtuple("Assumptions",
-                                         ["always_eq", "initial_eq"])):
-    """
-    always_eq are the node ids of the variables that need the always equal
-    assumption. initial_eq is the same thing for initially equal assumption.
-    """
-    def json_dump(self):
-        """ names are the mapping from node ids to variable names """
-        j = {"always_eq":  list(v.name for v in self.always_eq),
-             "initial_eq": list(v.name for v in self.initial_eq)}
-        return json.dumps(j, indent=2)
-
-    def print(self, **kwargs):
-        for v in self.always_eq:
-            print("// @annot{{sanitize_glob({})}}".format(v.name), **kwargs)
-        print("")
-        for v in self.initial_eq:
-            print("// @annot{{sanitize({})}}".format(v.name), **kwargs)
-
-
 class AssumptionSolver:
-    def __init__(self, filename):
+    def __init__(self, filename, annotfile):
         """
         Parse the given json file that contains the problem description.
         """
@@ -88,6 +69,8 @@ class AssumptionSolver:
         # calculate costs of the nodes
         # node_costs : Node -> Int
         self.node_costs = self.calc_costs()
+
+        self.annotation = Annotation(filename=annotfile)
 
     def get_var_from_index(self, index):
         v = self.variables[index % self.g.order()]
@@ -216,7 +199,7 @@ class AssumptionSolver:
 
         # check if we have found an optimal solution
         if sol.get_status() == sol.status.MIP_optimal:
-            return self.make_result(sol)
+            self.update_annotation(sol)
         else:
             print("linprog failed: {}".format(sol.get_status_string()),
                   file=sys.stderr)
@@ -243,7 +226,7 @@ class AssumptionSolver:
         else:
             return False
 
-    def make_result(self, solution):
+    def update_annotation(self, solution):
         """
         Convert the MILP solution to a set of assumptions that Iodine can
         understand
@@ -253,31 +236,29 @@ class AssumptionSolver:
             is_m = self.is_marked(solution, var)
             is_a = self.is_always_eq(solution, var)
             if is_m:
-                marked.add(var)
+                marked.add(var.name)
             if is_a:
-                always_eq.add(var)
+                always_eq.add(var.name)
                 if not is_m and var.is_register:
                     # if a register is always_eq but not marked,
                     # add it to the flushed set
-                    initial_eq.add(var)
+                    initial_eq.add(var.name)
 
-        return Assumptions(always_eq=marked, initial_eq=initial_eq)
+        self.annotation.set_always_eq(marked)
+        self.annotation.set_initial_eq(initial_eq)
 
     def run(self):
         debug("Must equal:")
         for v in self.must_eq:
             debug(v.name)
 
-        result = self.suggest_assumptions()
-        result.print()
-
-        with open("output.json", "w") as f:
-            print(result.json_dump(), file=f)
+        self.suggest_assumptions()
+        print(self.annotation.dump())
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("usage: assumptions.py <cplex.json>", file=sys.stderr)
+    if len(sys.argv) != 3:
+        print("usage: assumptions.py <cplex.json> <annot json>", file=sys.stderr)
         sys.exit(1)
     else:
-        AssumptionSolver(sys.argv[1]).run()
+        AssumptionSolver(sys.argv[1], sys.argv[2]).run()

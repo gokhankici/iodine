@@ -3,26 +3,15 @@
 import argparse
 from collections import namedtuple
 from os.path import realpath, dirname, join
+import os.path as p
 import subprocess
 import sys
 
+from annotation import Benchmark
+
 THIS_DIR = realpath(dirname(__file__))
 PROJECT_ROOT = join(THIS_DIR, "../../")
-IVERILOG_DIR = join(PROJECT_ROOT, "iverilog-parser")
 BENCHMARK_DIR = join(PROJECT_ROOT, "benchmarks")
-
-
-class Benchmark(namedtuple("Benchmark", ["filename", "module"])):
-    def run_abduction(self):
-        args = ["stack", "exec", "iodine", "--",
-                "--iverilog-dir", IVERILOG_DIR,
-                "--abduction",
-                self.filename, self.module]
-        rc = subprocess.run(args).returncode
-        if rc != 0:
-            print("iodine failed", file=sys.stderr)
-            sys.exit(rc)
-
 
 # name, file and module pairs of the benchmarks
 CONFIG = [("ctalu", "xcrypto-ref/rtl/coprocessor/scarv_cop_palu.v", "scarv_cop_palu"),
@@ -33,9 +22,16 @@ CONFIG = [("ctalu", "xcrypto-ref/rtl/coprocessor/scarv_cop_palu.v", "scarv_cop_p
           ("fpu-div", "fpu2/divider/divider.v", "divider"),
           ("modexp", "crypto_cores/RSA4096/ModExp2/ModExp.v", "ModExp")]
 
-BENCHMARKS = {n: Benchmark(filename=join(BENCHMARK_DIR, f), module=m)
-              for n, f, m in CONFIG}
+def mk_bmk(filename, module):
+    full_filename = join(BENCHMARK_DIR, filename)
+    h, t = p.split(full_filename)
+    n, _ = p.splitext(t)
+    a = join(h, "annot-{}.json".format(n))
+    return Benchmark(filename=full_filename,
+                     module=module,
+                     annotfile=a)
 
+BENCHMARKS = {n: mk_bmk(f, m) for n, f, m in CONFIG}
 
 
 def err(msg):
@@ -44,12 +40,22 @@ def err(msg):
 
 
 def run(b):
+    # creates the cplex.json file
     b.run_abduction()
-    script = join(THIS_DIR, "assumptions.py")
-    args = [script, "cplex.json"]
-    r = subprocess.run(args)
-    sys.exit(r.returncode)
 
+    # run assumption.py and create the annot-last.json file
+    tmp_annotfile = "annot-last.json"
+    with open(tmp_annotfile, "w") as f:
+        args = [join(THIS_DIR, "assumptions.py"),
+                "cplex.json",
+                b.annotfile]
+        r = subprocess.run(args, stdout=f)
+    if r.returncode != 0:
+        sys.exit(r.returncode)
+
+    # re-run iodine with the new annot file
+    b2 = b.with_annot(tmp_annotfile)
+    b2.run_iodine()
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="""
@@ -58,12 +64,15 @@ if __name__ == "__main__":
     ap.add_argument("-b", "--benchmark", choices=BENCHMARKS.keys(), help="Benchmark name")
     ap.add_argument("-f", "--filename", help="Verilog file")
     ap.add_argument("-m", "--module", help="Module name")
+    ap.add_argument("-a", "--annotation", help="Annotation JSON file")
     args = ap.parse_args()
 
     if args.benchmark:
         run(BENCHMARKS[args.benchmark])
-    elif args.filename and args.module:
-        b = Benchmark(filename=args.filename, module=args.module)
+    elif args.filename and args.module and args.annotation:
+        b = Benchmark(filename=args.filename,
+                      module=args.module,
+                      annotfile=args.annotation)
         run(b)
     else:
         ap.print_help()
