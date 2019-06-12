@@ -1,0 +1,32 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "x",
+        "y"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "out"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "in_eq"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "cond1",
+        "cond2",
+        "x",
+        "y"
+      ]
+    }
+  ]
+}

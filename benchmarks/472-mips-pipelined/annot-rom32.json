@@ -1,0 +1,22 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "data_out"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "data_out"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "address"
+      ]
+    }
+  ]
+}

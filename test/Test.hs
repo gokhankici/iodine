@@ -93,8 +93,12 @@ data UnitTestType = Succ | Fail
 
 data UnitTest = UnitTest { testName    :: String
                          , moduleName  :: String
+                         -- verilog file contains the top level module
                          , verilogFile :: FilePath
-                         , annotFile   :: FilePath
+                         -- JSON file that contains the annotations
+                         -- Default value is "dir/annot-name.json" where
+                         -- "dir/name.v" is the verilog file
+                         , annotFile   :: Maybe FilePath
                          , testType    :: UnitTestType
                          }
 
@@ -220,39 +224,32 @@ major runner _parserDir = describe "major" $ forM_ ts runner
     ts = [ t { testName    = "mips"
              , moduleName  = "mips_pipeline"
              , verilogFile = mipsDir </> "mips_pipeline.v"
-             , annotFile   = mipsDir </> "annot-mips_pipeline.json"
              }
          , t { testName    = "yarvi"
              , moduleName  = "yarvi"
              , verilogFile = b </> "yarvi/shared/yarvi.v"
-             , annotFile   = b </> "yarvi/shared/annot-yarvi.json"
              }
          , t { testName    = "sha"
              , moduleName  = "sha256"
              , verilogFile = c </> "sha_core/trunk/rtl/sha256.v"
-             , annotFile   = c </> "sha_core/trunk/rtl/annot-sha256.json"
              }
          , t { testName    = "fpu"
              , moduleName  = "fpu"
              , verilogFile = b </> "fpu/verilog/fpu.v"
-             , annotFile   = b </> "fpu/verilog/annot-fpu.json"
              }
          , t { testName    = "fpu-divider"
              , moduleName  = "divider"
              , verilogFile = b </> "fpu2/divider/divider.v"
-             , annotFile   = b </> "fpu2/divider/annot-divider.json"
              , testType    = Fail
              }
          , t { testName    = "modexp"
              , moduleName  = "ModExp"
              , verilogFile = c </> "RSA4096/ModExp2/ModExp.v"
-             , annotFile   = c </> "RSA4096/ModExp2/annot-ModExp.json"
              , testType    = Fail
              }
          , t { testName    = "ctalu"
              , moduleName  = "scarv_cop_palu"
              , verilogFile = b </> "xcrypto-ref/rtl/coprocessor/scarv_cop_palu.v"
-             , annotFile   = b </> "xcrypto-ref/rtl/coprocessor/annot-scarv_cop_palu.json"
              }
          ]
 
@@ -304,7 +301,7 @@ t :: UnitTest
 t = UnitTest { testName    = undefined
              , moduleName  = undefined
              , verilogFile = undefined
-             , annotFile   = undefined
+             , annotFile   = Nothing
              , testType    = Succ
              }
 
@@ -318,11 +315,16 @@ mipsDir = benchmarkDir </> "472-mips-pipelined"
 runUnitTest :: TestArgs -> R.IodineArgs -> Runner
 runUnitTest ta va UnitTest{..} =
   if   ta ^. dryRun
-  then it testName (printf "./iodine %s %s %s\n" verilogFile moduleName annotFile :: IO ())
+  then it testName (printf "iodine %s %s %s\n" verilogFile moduleName af :: IO ())
   else it testName $ R.run va' `shouldReturn` (testType == Succ)
   where
+    af  = case annotFile of
+            Nothing -> let dir  = takeDirectory verilogFile
+                           name = dropExtension $ takeBaseName verilogFile
+                       in  dir </> "annot-" ++ name <.> "json"
+            Just f  -> f
     va' = va { R.fileName   = verilogFile
              , R.moduleName = moduleName
-             , R.annotFile  = annotFile
+             , R.annotFile  = af
              , R.noSave     = True
              }

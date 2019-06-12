@@ -1,0 +1,76 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "ID_instr"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "EX_rt"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "reset"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "EX_ALUOp",
+        "EX_ALUSrc",
+        "EX_Branch",
+        "EX_MemRead",
+        "EX_MemWrite",
+        "EX_MemtoReg",
+        "EX_RegDst",
+        "EX_RegWrite",
+        "EX_extend",
+        "EX_pc4",
+        "EX_rd",
+        "EX_rd1",
+        "EX_rd2",
+        "EX_rs",
+        "EX_rt",
+        "ForwardA",
+        "ForwardB",
+        "ID_instr",
+        "MEM_ALUOut",
+        "MEM_Branch",
+        "MEM_MemRead",
+        "MEM_MemWrite",
+        "MEM_MemtoReg",
+        "MEM_RegRd",
+        "MEM_RegWrite",
+        "MEM_Zero",
+        "MEM_btgt",
+        "MEM_rd2",
+        "Stall",
+        "WB_ALUOut",
+        "WB_MemtoReg",
+        "WB_RegRd",
+        "WB_RegWrite",
+        "WB_memout"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "ALUOp",
+        "ALUSrc",
+        "Branch",
+        "Jump",
+        "MemRead",
+        "MemWrite",
+        "MemtoReg",
+        "RegDst",
+        "RegWrite"
+      ],
+      "module": "control_pipeline"
+    }
+  ]
+}

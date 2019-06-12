@@ -1,0 +1,22 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "d_out"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "d_out"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "reset"
+      ]
+    }
+  ]
+}

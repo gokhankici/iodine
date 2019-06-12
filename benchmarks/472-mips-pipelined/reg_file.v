@@ -19,15 +19,6 @@
 //-----------------------------------------------------------------------------
 
 module reg_file(clk, RegWrite, RN1, RN2, WN, RD1, RD2, WD);
-  // @annot{sanitize_glob(RN1)}
-  // @annot{sanitize_glob(RN2)}
-  // @annot{taint_eq(file_array)}
-
-   // @annot{taint_source(RD1)}
-   // @annot{taint_source(RD2)}
-   // @annot{taint_sink(RD1)}
-   // @annot{taint_sink(RD2)}
-
    input         clk;
    input         RegWrite;
    input  [4:0]  RN1, RN2, WN;

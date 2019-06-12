@@ -1,0 +1,17 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "opa",
+        "opb"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "out"
+      ]
+    }
+  ]
+}

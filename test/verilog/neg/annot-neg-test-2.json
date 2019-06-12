@@ -1,0 +1,35 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "x"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "y"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "x"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "Stall"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "val"
+      ],
+      "module": "reg_file"
+    }
+  ]
+}

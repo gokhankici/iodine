@@ -1,0 +1,23 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "ALUOperation"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "ALUOperation"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "ALUOp",
+        "Funct"
+      ]
+    }
+  ]
+}

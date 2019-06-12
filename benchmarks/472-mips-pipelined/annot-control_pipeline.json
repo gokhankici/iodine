@@ -1,0 +1,30 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "ALUSrc",
+        "Branch",
+        "Jump",
+        "MemRead",
+        "MemWrite",
+        "MemtoReg",
+        "RegDst",
+        "RegWrite"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "ALUSrc",
+        "Branch",
+        "Jump",
+        "MemRead",
+        "MemWrite",
+        "MemtoReg",
+        "RegDst",
+        "RegWrite"
+      ]
+    }
+  ]
+}

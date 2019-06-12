@@ -1,0 +1,36 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "RN1",
+        "RN2",
+		"WN",
+		"WD",
+		"RegWrite"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "RD1",
+        "RD2"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "RN1",
+        "RN2",
+		"WN",
+		"RegWrite"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "file_array"
+      ]
+    }
+  ]
+}

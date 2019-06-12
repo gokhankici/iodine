@@ -1,0 +1,33 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "opa",
+        "opb"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "out"
+      ]
+    }
+  ],
+  "qualifiers": [
+    {
+      "type": "pairs",
+      "variables": [
+        "r1",
+        "r2"
+      ]
+    },
+    {
+      "type": "pairs",
+      "variables": [
+        "opb_r",
+        "opa_r"
+      ]
+    }
+  ]
+}

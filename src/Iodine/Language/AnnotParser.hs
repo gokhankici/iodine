@@ -54,6 +54,7 @@ instance FromJSON A where
       "always_eq"  -> case mm of
                         Nothing -> r (SanitizeGlob <$> vs)
                         Just m  -> typeMismatch "always_eq does not support modules (yet)" (toJSON m)
+      "assert_eq"  -> r (AssertEq <$> vs)
       _            -> typeMismatch "unknown annotation type" (toJSON t)
 
 instance FromJSON Q where

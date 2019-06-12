@@ -1,0 +1,24 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "in"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "out"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "in",
+        "out",
+        "sec"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "a",
+        "b",
+        "ctl"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "result",
+        "zero"
+      ]
+    }
+  ]
+}

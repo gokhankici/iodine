@@ -1,0 +1,33 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "in",
+        "wallclock"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "out"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "in"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "in",
+        "inH",
+        "out",
+        "state",
+        "wallclock"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "x"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "z"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "IF_instr"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "WB_ALUOut"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "IF_instr"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "Stall"
+      ]
+    }
+  ]
+}

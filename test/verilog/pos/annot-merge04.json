@@ -1,0 +1,34 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "in1",
+        "in2",
+        "in3"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "out"
+      ]
+    }
+  ],
+  "qualifiers": [
+    {
+      "type": "pairs",
+      "variables": [
+        "in1_r2",
+        "in2_r2"
+      ]
+    },
+    {
+      "type": "pairs",
+      "variables": [
+        "in2_r",
+        "in1_r"
+      ]
+    }
+  ]
+}

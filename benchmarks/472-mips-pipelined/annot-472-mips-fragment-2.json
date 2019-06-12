@@ -1,0 +1,68 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "IF_instr"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "ID_instr"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "IF_instr"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "EX_ALUOp",
+        "EX_MemRead",
+        "EX_extend",
+        "EX_rt",
+        "ID_instr",
+        "IF_instr",
+        "MEM_ALUOut",
+        "Stall",
+        "WB_ALUOut",
+        "a",
+        "b"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "ALUOp",
+        "ALUSrc",
+        "Branch",
+        "Jump",
+        "MemRead",
+        "MemWrite",
+        "MemtoReg",
+        "RegDst",
+        "RegWrite"
+      ],
+      "module": "control_pipeline"
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "ALUOperation"
+      ],
+      "module": "alu_ctl_stub"
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "result",
+        "zero"
+      ],
+      "module": "alu_stub"
+    }
+  ]
+}

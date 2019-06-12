@@ -1,0 +1,34 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "in1",
+        "in2"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "out"
+      ]
+    }
+  ],
+  "qualifiers": [
+    {
+      "type": "implies",
+      "lhs": "temp1",
+      "rhs": [
+        "in2",
+        "in1"
+      ]
+    },
+    {
+      "type": "pairs",
+      "variables": [
+        "temp1",
+        "fast"
+      ]
+    }
+  ]
+}
