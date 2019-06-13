@@ -53,6 +53,8 @@ def run(b):
     if r.returncode != 0:
         sys.exit(r.returncode)
 
+    subprocess.run(["cat", tmp_annotfile])
+
     # re-run iodine with the new annot file
     b2 = b.with_annot(tmp_annotfile)
     b2.run_iodine()

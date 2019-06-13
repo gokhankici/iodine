@@ -8,7 +8,7 @@ import time
 import json
 
 from utils import debug, parse_cplex_input, val_to_int
-from annotation import Annotation
+from annotation import AnnotationFile
 
 # from networkx.algorithms.components import strongly_connected_components
 # import pudb
@@ -70,7 +70,7 @@ class AssumptionSolver:
         # node_costs : Node -> Int
         self.node_costs = self.calc_costs()
 
-        self.annotation = Annotation(filename=annotfile)
+        self.annotation_file = AnnotationFile(filename=annotfile)
 
     def get_var_from_index(self, index):
         v = self.variables[index % self.g.order()]
@@ -199,7 +199,7 @@ class AssumptionSolver:
 
         # check if we have found an optimal solution
         if sol.get_status() == sol.status.MIP_optimal:
-            self.update_annotation(sol)
+            self.update_annotation_file(sol)
         else:
             print("linprog failed: {}".format(sol.get_status_string()),
                   file=sys.stderr)
@@ -226,7 +226,7 @@ class AssumptionSolver:
         else:
             return False
 
-    def update_annotation(self, solution):
+    def update_annotation_file(self, solution):
         """
         Convert the MILP solution to a set of assumptions that Iodine can
         understand
@@ -244,8 +244,8 @@ class AssumptionSolver:
                     # add it to the flushed set
                     initial_eq.add(var.name)
 
-        self.annotation.set_always_eq(marked)
-        self.annotation.set_initial_eq(initial_eq)
+        self.annotation_file.annotations.set_always_eq(marked)
+        self.annotation_file.annotations.set_initial_eq(initial_eq)
 
     def run(self):
         debug("Must equal:")
@@ -253,7 +253,7 @@ class AssumptionSolver:
             debug(v.name)
 
         self.suggest_assumptions()
-        print(self.annotation.dump())
+        print(self.annotation_file.dump())
 
 
 if __name__ == "__main__":

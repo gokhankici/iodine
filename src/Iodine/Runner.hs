@@ -42,7 +42,7 @@ import qualified Data.ByteString.Lazy as B
 @
 iodine v1.0, (C) Rami Gokhan Kici 2019
 
-iodine [OPTIONS] FILE MODULE ANNOTATIONS
+iodine [OPTIONS] FILE MODULE ANNOT_FILE
 
 Common flags:
      --iverilog-dir=DIR        path of the iverilog-parser directory
@@ -91,7 +91,7 @@ verylogArgs = IodineArgs { fileName    = def
                                           &= typ "MODULENAME"
                           , annotFile   = def
                                           &= argPos 2
-                                          &= typ "ANNOTATIONS"
+                                          &= typ "ANNOT_FILE"
                           , iverilogDir = "iverilog-parser"
                                           &= typDir
                                           &= explicit &= name "iverilog-dir"

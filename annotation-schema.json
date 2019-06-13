@@ -9,6 +9,7 @@
         "anyOf": [
           {
             "type": "object",
+			"required": ["type", "variables"],
             "properties": {
               "type": {
                 "type": "string",
@@ -24,6 +25,7 @@
           },
           {
             "type": "object",
+			"required": ["type", "variables"],
             "properties": {
               "type": {
                 "type": "string",
@@ -49,6 +51,7 @@
         "anyOf": [
           {
             "type": "object",
+			"required": ["type", "variables"],
             "properties": {
               "type": {
                 "type": "string",
@@ -64,6 +67,7 @@
           },
           {
             "type": "object",
+			"required": ["type", "lhs", "rhs"],
             "properties": {
               "type": {
                 "type": "string",
@@ -77,6 +81,48 @@
                 "items": {
                   "type": "string"
                 }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "blacklist": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+			"required": ["type", "variables"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "pattern": "^(always_eq|assert_eq)$"
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+			"required": ["type", "variables"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "pattern": "^(initial_eq)$"
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "module": {
+                "type": "string"
               }
             }
           }
