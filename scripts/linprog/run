@@ -1,16 +1,12 @@
 #!/usr/bin/env python3.6
 
 import argparse
-from os.path import realpath, dirname, join
+from os.path import join
 import os.path as p
 import subprocess
 import sys
-
+from config import BENCHMARK_DIR, LINPROG_DIR
 from benchmark import Benchmark
-
-THIS_DIR = realpath(dirname(__file__))
-PROJECT_ROOT = join(THIS_DIR, "../../")
-BENCHMARK_DIR = join(PROJECT_ROOT, "benchmarks")
 
 # name, file and module of the benchmarks
 CONFIG = [("ctalu",
@@ -61,7 +57,7 @@ def run(b):
     # run assumption.py and create the annot-last.json file
     tmp_annotfile = "annot-last.json"
     with open(tmp_annotfile, "w") as f:
-        args = [join(THIS_DIR, "assumptions.py"),
+        args = [join(LINPROG_DIR, "assumptions.py"),
                 "cplex.json",
                 b.annotfile]
         r = subprocess.run(args, stdout=f)

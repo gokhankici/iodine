@@ -2,6 +2,7 @@ import collections
 import os.path as p
 import subprocess
 import sys
+from config import IVERILOG_DIR, DEBUG
 
 
 class Benchmark(collections.namedtuple("Benchmark",
@@ -9,21 +10,16 @@ class Benchmark(collections.namedtuple("Benchmark",
     """
     Contains the information required to run a benchmark.
     """
-    IVERILOG_DIR = p.realpath(p.join(p.dirname(__file__),
-                                     "../../",
-                                     "iverilog-parser"))
-    DEBUG = False
-
     def run_iodine(self, extra_args=[]):
         args = ["stack", "exec", "iodine", "--",
-                "--iverilog-dir", Benchmark.IVERILOG_DIR]
+                "--iverilog-dir", IVERILOG_DIR]
 
         args.extend(extra_args)
         args.extend([p.realpath(self.filename),
                      self.module,
                      p.realpath(self.annotfile)])
 
-        if Benchmark.DEBUG:
+        if DEBUG:
             print("running:\n{}".format(" ".join(args)),
                   file=sys.stderr)
 

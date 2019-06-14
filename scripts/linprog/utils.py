@@ -1,24 +1,28 @@
 import collections
 import json
-import networkx    as nx
+import networkx as nx
 import subprocess
 import sys
+from config import DEBUG
+# import pudb
 
-import pdb
 
 def debug(*args, **kwargs):
-    kwargs["file"] = sys.stderr
-    # print(*args, **kwargs)
-    pass
+    if DEBUG:
+        kwargs["file"] = sys.stderr
+        print(*args, **kwargs)
+
 
 def export_to_dot(g):
     return nx.nx_pydot.to_pydot(g)
 
+
 def print_graph(g):
     print(export_to_dot(g))
 
+
 def dist_from_sources(g, sources):
-    dist     = {v:0 for v in sources}
+    dist = {v: 0 for v in sources}
     worklist = collections.deque()
     worklist.extend(sources)
     while worklist:
@@ -29,6 +33,7 @@ def dist_from_sources(g, sources):
                 dist[u] = d + 1
                 worklist.append(u)
     return dist
+
 
 def parse_cplex_input(filename):
     """
@@ -46,22 +51,21 @@ def parse_cplex_input(filename):
     with open(filename, 'r') as f:
         data = json.load(f)
 
-    edges          = [ to_edge(l) for l in data["edges"] if l[0] != l[1] ]
-    must_eq        = data["must_eq"]
-    names          = { l[0] : l[1][0] for l in data["mapping"] }
-    inv_name       = { l[1][0] : l[0] for l in data["mapping"] }
-    is_reg         = { l[0] : l[1][1] for l in data["mapping"] }
-    cannot_mark_eq = [ inv_name[v] for v in data["cannot_mark_eq"] ]
+    edges = [to_edge(l) for l in data["edges"] if l[0] != l[1]]
+    must_eq = data["must_eq"]
+    names = {l[0]: l[1][0] for l in data["mapping"]}
+    inv_name = {l[1][0]: l[0] for l in data["mapping"]}
+    is_reg = {l[0]: l[1][1] for l in data["mapping"]}
 
     g = nx.MultiDiGraph()
     g.add_edges_from(edges)
 
-    return { "graph"          : g,
-             "must_eq"        : must_eq,
-             "cannot_mark_eq" : cannot_mark_eq,
-             "names"          : names,
-             "is_reg"         : is_reg,
-             "inv_names"      : inv_name }
+    return {"graph": g,
+            "must_eq": must_eq,
+            "names": names,
+            "is_reg": is_reg,
+            "inv_names": inv_name}
+
 
 def visualize_graph():
     """
@@ -72,6 +76,7 @@ def visualize_graph():
         print("error while running dot")
         sys.exit(1)
 
+
 def write_dot_file(g, names):
     """
     Create the graph.dot to be printed by graphviz.
@@ -81,6 +86,7 @@ def write_dot_file(g, names):
     with open("graph.dot", "w") as f:
         f.write(export_to_dot(g2).to_string())
 
+
 def components(g, names, **kwargs):
     """
     Print the graph using dot, but replace components with a single node.
@@ -89,19 +95,19 @@ def components(g, names, **kwargs):
     cmap = {}
 
     for c in nx.strongly_connected_components(g):
-        l = list(c)
-        cmap[l[0]] = l
+        cl = list(c)
+        cmap[cl[0]] = cl
 
     def any_edge(us, vs):
         for u in us:
             for v in vs:
-                if g.has_edge(u,v):
+                if g.has_edge(u, v):
                     yield (u, v)
 
     names2 = names.copy()
 
-    for u,lu in cmap.items():
-        for v,lv in cmap.items():
+    for u, lu in cmap.items():
+        for v, lv in cmap.items():
             es = list(any_edge(lu, lv))
             if es:
                 g2.add_edge(u, v)
@@ -112,7 +118,7 @@ def components(g, names, **kwargs):
                         for k, d in eds.items():
                             if "label" in d:
                                 labels.append(d["label"])
-                g2.edges[u,v]["label"] = sum(labels)
+                g2.edges[u, v]["label"] = sum(labels)
 
         if len(lu) > 1:
             names2[u] = "cycle-{}".format(len(lu))
@@ -122,21 +128,24 @@ def components(g, names, **kwargs):
         write_dot_file(g2, names2)
         visualize_graph()
 
+
 def dict_to_list(d, default=0, size=None):
     """
     Converts the given dictionary of type (Map Int a) to [a].
     """
     if size is None:
         size = max(d.keys(), default=-1) + 1
-    l = [default] * size
+    result = [default] * size
 
     for i, v in d.items():
         assert(type(i) == int)
-        l[i] = v
-    return l
+        result[i] = v
+    return result
+
 
 def sep():
     print("-" * 120)
+
 
 def val_to_int(v):
     """
@@ -144,7 +153,8 @@ def val_to_int(v):
     """
     r = round(v)
     if r - v > 1e-6:
-        print("value {} is not a floating point very close to an integer!".format(v),
-              file=sys.stderr)
+        msg = "value {} is not a floating point very close to an integer!".\
+              format(v)
+        print(msg, file=sys.stderr)
         sys.exit(1)
     return int(r)

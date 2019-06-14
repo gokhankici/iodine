@@ -40,11 +40,15 @@ class AssumptionSolver:
         """
         Parse the given json file that contains the problem description.
         """
+        self.annotation_file = AnnotationFile(filename=annotfile)
+
         parsed = parse_cplex_input(filename)
         self.g = parsed["graph"]
 
-        # nodes we DO NOT want to mark as "always_eq"
-        cannot_mark_eq = set(parsed["cannot_mark_eq"])
+        # nodes we DO NOT want to MARK as "always_eq"
+        blacklist = self.annotation_file.blacklist
+        cannot_mark_eq = set(parsed["inv_names"][v]
+                             for v in blacklist.always_eq)
 
         def is_node_markable(n):
             return n not in cannot_mark_eq
@@ -65,11 +69,13 @@ class AssumptionSolver:
         # nodes we DO want to be "always_eq"
         self.must_eq = set(self.variables[n] for n in parsed["must_eq"])
 
+        # nodes that cannot be always_eq
+        self.cannot_be_eq = set(self.variables[parsed["inv_names"][v]]
+                                for v in blacklist.initial_eq)
+
         # calculate costs of the nodes
         # node_costs : Node -> Int
         self.node_costs = self.calc_costs()
-
-        self.annotation_file = AnnotationFile(filename=annotfile)
 
     def get_var_from_index(self, index):
         v = self.variables[index % self.g.order()]
@@ -141,6 +147,11 @@ class AssumptionSolver:
             le = cplex.SparsePair(ind=[var.var_index], val=[1])
             prob.linear_constraints.add(lin_expr=[le], senses="E", rhs=[1])
 
+    def add_cannot_be_eq_constraints(self, prob):
+        for var in self.cannot_be_eq:
+            le = cplex.SparsePair(ind=[var.var_index], val=[1])
+            prob.linear_constraints.add(lin_expr=[le], senses="E", rhs=[0])
+
     def get_objective_function(self):
         """
         Return a list that contains the cost of each variable used
@@ -182,8 +193,8 @@ class AssumptionSolver:
                            types=ts)
 
         self.add_always_eq_constraints(prob)
-
         self.add_must_eq_constraints(prob)
+        self.add_cannot_be_eq_constraints(prob)
 
         # calculate the solution of the LP problem
         prob.solve()

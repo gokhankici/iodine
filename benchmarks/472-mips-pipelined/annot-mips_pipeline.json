@@ -115,11 +115,34 @@
   ],
   "blacklist": [
 	{
-      "type": "initial_eq",
-      "variables": [
-        "m_MEM_DMEM_mem_array",
-        "m_RFILE_file_array"
-      ]
-    }
+		"type": "initial_eq",
+		"variables": [
+			"m_MEM_DMEM_mem_array",
+			"m_RFILE_file_array"
+		]
+    },
+	{
+		"type": "always_eq",
+		"variables": [
+			"WB_memout",
+			"m_RFILE_RD1",
+			"m_RFILE_RD2",
+			"ID_rd1",
+			"ID_rd2",
+			"m_MEM_DMEM_data_out",
+			"EX_rd1",
+			"EX_rd2",
+			"m_WB_WRMUX_b",
+			"m_FMUXA_y",
+			"m_FMUXB_y",
+			"MuxA_out",
+			"MuxB_out",
+			"m_ALUMUX_a",
+			"m_EX_ALU_a",
+			"MEM_memout",
+			"m_FMUXA_a",
+			"m_FMUXB_a"
+		]
+	}
   ]
 }

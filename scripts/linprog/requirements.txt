@@ -1,6 +1,8 @@
+attrs==19.1.0
 decorator==4.4.0
 entrypoints==0.3
 flake8==3.7.7
+jsonschema==3.0.1
 mccabe==0.6.1
 networkx==2.3
 pudb==2019.1
@@ -9,4 +11,6 @@ pydot==1.4.1
 pyflakes==2.1.1
 Pygments==2.4.2
 pyparsing==2.4.0
+pyrsistent==0.15.2
+six==1.12.0
 urwid==2.0.1

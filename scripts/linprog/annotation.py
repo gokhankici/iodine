@@ -4,7 +4,7 @@ import collections
 import json
 import sys
 from jsonschema import validate
-import os.path as p
+from config import SCHEMA_FILE
 
 
 class Annotation:
@@ -145,9 +145,6 @@ class Qualifier:
 
 
 class AnnotationFile:
-    SCHEMA_FILE = p.join(p.dirname(p.dirname(p.dirname(p.realpath(__file__)))),
-                         "annotation-schema.json")
-
     def __init__(self, **kwargs):
         """
         Required arguments: sources and sinks, or a filename that contains the
@@ -161,8 +158,6 @@ class AnnotationFile:
             raise Exception("Unsupported arguments: {}".format(kwargs))
 
     def parse_file(self, filename):
-        def up(f): p.dirname(f)
-
         with open(filename, "r") as f:
             j = json.load(f)
         AnnotationFile.validate_json(j)
@@ -202,7 +197,7 @@ class AnnotationFile:
         AnnotationFile.validate_json(self.to_json())
 
     def validate_json(j):
-        with open(AnnotationFile.SCHEMA_FILE, "r") as f:
+        with open(SCHEMA_FILE, "r") as f:
             schema = json.load(f)
         validate(instance=j, schema=schema)
 
