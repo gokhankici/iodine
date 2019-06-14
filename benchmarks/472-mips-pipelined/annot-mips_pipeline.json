@@ -112,5 +112,14 @@
         "data_out"
       ]
     }
+  ],
+  "blacklist": [
+	{
+      "type": "initial_eq",
+      "variables": [
+        "m_MEM_DMEM_mem_array",
+        "m_RFILE_file_array"
+      ]
+    }
   ]
 }

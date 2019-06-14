@@ -5,7 +5,6 @@ import sys
 import collections
 import cplex
 import time
-import json
 
 from utils import debug, parse_cplex_input, val_to_int
 from annotation import AnnotationFile
@@ -258,7 +257,8 @@ class AssumptionSolver:
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("usage: assumptions.py <cplex.json> <annot json>", file=sys.stderr)
+        print("usage: assumptions.py <cplex.json> <annot json>",
+              file=sys.stderr)
         sys.exit(1)
     else:
         AssumptionSolver(sys.argv[1], sys.argv[2]).run()

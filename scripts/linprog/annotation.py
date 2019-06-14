@@ -2,45 +2,10 @@
 
 import collections
 import json
-import subprocess
 import sys
 from jsonschema import validate
 import os.path as p
 
-class Benchmark(collections.namedtuple("Benchmark", ["filename", "module", "annotfile"])):
-    """
-    Contains the information required to run a benchmark.
-    """
-    IVERILOG_DIR = p.realpath(p.join(p.dirname(__file__), "../../", "iverilog-parser"))
-    DEBUG = False
-
-    def run_iodine(self, extra_args=[]):
-        args = ["stack", "exec", "iodine", "--",
-                "--iverilog-dir", Benchmark.IVERILOG_DIR]
-
-        args.extend(extra_args)
-        args.extend([p.realpath(self.filename),
-                     self.module,
-                     p.realpath(self.annotfile)])
-
-        if Benchmark.DEBUG:
-            print("running:\n{}".format(" ".join(args)),
-                  file=sys.stderr)
-
-        rc = subprocess.run(args).returncode
-        if rc != 0:
-            print("iodine failed", file=sys.stderr)
-            sys.exit(rc)
-
-    def run_abduction(self):
-        """ Run Iodine but with the abduction feature """
-        self.run_iodine(["--abduction"])
-
-    def with_annot(self, annotfile):
-        """ Returns a new benchmark with the given annotation file """
-        return Benchmark(filename=self.filename,
-                         module=self.module,
-                         annotfile=annotfile)
 
 class Annotation:
     def __init__(self, *args, **kwargs):
@@ -81,7 +46,9 @@ class Annotation:
                     self.initial_eq.update(a["variables"])
 
             else:
-                raise Exception("Unsupported annotation:\n{}".format(json.dumps(a, indent=2)))
+                a_str = json.dumps(a, indent=2)
+                msg = "Unsupported annotation:\n{}".format(a_str)
+                raise Exception(msg)
 
     def to_json(self):
         """ Encodes the assumptions to JSON """
@@ -113,11 +80,11 @@ class Annotation:
     def set_always_eq(self, vs):
         self.always_eq = set(vs)
 
-
     def __len__(self):
         return len(self.sources) + len(self.sinks) + \
             len(self.initial_eq) + len(self.initial_eq_mod) + \
             len(self.always_eq) + len(self.assert_eq)
+
 
 class Qualifier:
     def __init__(self, *args):
@@ -131,7 +98,7 @@ class Qualifier:
 
     def parse_qualifiers(self, qs):
         """ Parse the qualifiers from an JSON array """
-        for q in j["qualifiers"]:
+        for q in qs:
             t = q["type"]
             if t == "implies":
                 self.qualif_implies.add((q["lhs"], frozenset(q["rhs"])))
@@ -142,7 +109,9 @@ class Qualifier:
             elif t == "assume":
                 self.qualif_assume.add(frozenset(q["variables"]))
             else:
-                raise Exception("Unsupported qualifier:\n{}".format(json.dumps(q, indent=2)))
+                q_str = json.dumps(q, indent=2)
+                msg = "Unsupported qualifier:\n{}".format(q_str)
+                raise Exception(msg)
 
     def to_json(self):
         """ Encodes the qualifiers to JSON """
@@ -170,7 +139,6 @@ class Qualifier:
 
         return j
 
-
     def __len__(self):
         return len(self.qualif_implies) + len(self.qualif_iff) + \
             len(self.qualif_pairs) + len(self.qualif_assume)
@@ -182,7 +150,8 @@ class AnnotationFile:
 
     def __init__(self, **kwargs):
         """
-        Required arguments: sources and sinks, or a filename that contains the annotations.
+        Required arguments: sources and sinks, or a filename that contains the
+        annotations.
         """
         if "sources" in kwargs and "sinks" in kwargs:
             self.annotations = Annotation(**kwargs)
@@ -192,7 +161,7 @@ class AnnotationFile:
             raise Exception("Unsupported arguments: {}".format(kwargs))
 
     def parse_file(self, filename):
-        up = lambda f: p.dirname(f)
+        def up(f): p.dirname(f)
 
         with open(filename, "r") as f:
             j = json.load(f)
@@ -205,7 +174,8 @@ class AnnotationFile:
         else:
             self.blacklist = Annotation()
 
-        assert(len(self.annotations.sources) > 0 and len(self.annotations.sinks) > 0)
+        assert(len(self.annotations.sources) > 0 and
+               len(self.annotations.sinks) > 0)
 
         if "qualifiers" in j:
             self.qualifiers = Qualifier(j["qualifiers"])
@@ -235,6 +205,7 @@ class AnnotationFile:
         with open(AnnotationFile.SCHEMA_FILE, "r") as f:
             schema = json.load(f)
         validate(instance=j, schema=schema)
+
 
 if __name__ == "__main__":
     a = AnnotationFile(filename=sys.argv[1])
