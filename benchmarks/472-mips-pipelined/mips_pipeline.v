@@ -26,7 +26,7 @@
 `include "alu_ctl.v"
 `include "add32.v"
 `include "rom32.v"
-`include "mem32-stub.v"
+`include "mem32.v"
 `include "reg_file.v"
 
 module mips_pipeline(clk, reset);

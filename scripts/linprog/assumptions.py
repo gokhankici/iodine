@@ -5,12 +5,8 @@ import sys
 import collections
 import cplex
 import time
-
-from utils import debug, parse_cplex_input, val_to_int
+from utils import parse_cplex_input, val_to_int
 from annotation import AnnotationFile
-
-# from networkx.algorithms.components import strongly_connected_components
-# import pudb
 
 
 class Variable(collections.namedtuple("Variable", ["node",
@@ -66,12 +62,16 @@ class AssumptionSolver:
                                       is_register=parsed["is_reg"][v])
                           for i, v in enumerate(self.g.nodes())}
 
-        # nodes we DO want to be "always_eq"
-        self.must_eq = set(self.variables[n] for n in parsed["must_eq"])
-
         # nodes that cannot be always_eq
         self.cannot_be_eq = set(self.variables[parsed["inv_names"][v]]
                                 for v in blacklist.initial_eq)
+
+        # nodes we DO want to be "always_eq"
+        self.must_eq = set(var
+                           for var in (self.variables[n]
+                                       for n in parsed["must_eq"])
+                           if is_node_markable(var.node) and
+                           var not in self.cannot_be_eq)
 
         # calculate costs of the nodes
         # node_costs : Node -> Int
@@ -87,9 +87,12 @@ class AssumptionSolver:
         Returns a mapping from node ids to their costs
         """
         costs = collections.defaultdict(int)
-        worklist = collections.deque(n
-                                     for n in self.g.nodes
-                                     if len(self.g.pred[n]) == 0)
+        srcs = set(self.annotation_file.annotations.sources)
+        worklist = collections.deque(v.node
+                                     for v in self.variables.values()
+                                     if len(self.g.pred[v.node]) == 0 or
+                                     v.name in srcs)
+        assert(len(worklist) > 0)
         done = set(worklist)
 
         while worklist:
@@ -128,10 +131,6 @@ class AssumptionSolver:
                 prob.linear_constraints.add(lin_expr=[le], senses="L", rhs=[0])
 
             for p in parents:
-                debug("{} * {} <- {}".
-                      format(c,
-                             var.name,
-                             ", ".join(v.name for v in parents)))
                 indices.append(p.var_index)
                 coefficients.append(-1)
 
@@ -205,7 +204,7 @@ class AssumptionSolver:
               file=sys.stderr)
 
         assert(sol.get_method() == sol.method.MIP)
-        prob.write("assumptions.lp")  # log the constraints to a file
+        # prob.write("assumptions.lp")  # log the constraints to a file
 
         # check if we have found an optimal solution
         if sol.get_status() == sol.status.MIP_optimal:
@@ -258,9 +257,11 @@ class AssumptionSolver:
         self.annotation_file.annotations.set_initial_eq(initial_eq)
 
     def run(self):
-        debug("Must equal:")
-        for v in self.must_eq:
-            debug(v.name)
+        print("-" * 80, file=sys.stderr)
+        print("Must equal:", file=sys.stderr)
+        for name in sorted(v.name for v in self.must_eq):
+            print("  " + name, file=sys.stderr)
+        print("-" * 80, file=sys.stderr)
 
         self.suggest_assumptions()
         print(self.annotation_file.dump())

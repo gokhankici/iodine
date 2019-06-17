@@ -8,6 +8,7 @@ g = parsed["graph"]
 names = parsed["names"]
 inv_names = parsed["inv_names"]
 is_reg = parsed["is_reg"]
+must_eq = parsed["must_eq"]
 
 
 def is_direct_edge(u, v):
@@ -24,3 +25,7 @@ def is_implicit_edge(u, v):
         if t == "Implicit":
             return True
     return False
+
+
+for n in must_eq:
+    print(names[n])
