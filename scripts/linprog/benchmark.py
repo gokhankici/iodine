@@ -10,7 +10,7 @@ class Benchmark(collections.namedtuple("Benchmark",
     """
     Contains the information required to run a benchmark.
     """
-    def run_iodine(self, extra_args=[]):
+    def run_iodine(self, extra_args=[], **kwargs):
         args = ["stack", "exec", "iodine", "--",
                 "--iverilog-dir", IVERILOG_DIR]
 
@@ -23,14 +23,11 @@ class Benchmark(collections.namedtuple("Benchmark",
             print("running:\n{}".format(" ".join(args)),
                   file=sys.stderr)
 
-        rc = subprocess.run(args).returncode
-        if rc != 0:
-            print("iodine failed", file=sys.stderr)
-            sys.exit(rc)
+        return subprocess.run(args, **kwargs).returncode
 
     def run_abduction(self):
         """ Run Iodine but with the abduction feature """
-        self.run_iodine(["--abduction"])
+        return self.run_iodine(["--abduction"])
 
     def with_annot(self, annotfile):
         """ Returns a new benchmark with the given annotation file """

@@ -19,8 +19,6 @@
         "MEM_MemRead",
         "MEM_MemWrite",
         "m_MEM_DMEM_address",
-        "m_RFILE_RegWrite",
-        "m_RFILE_WN",
         "reset"
       ]
     },

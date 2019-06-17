@@ -7,6 +7,7 @@ import subprocess
 import sys
 from config import BENCHMARK_DIR, LINPROG_DIR, DEBUG
 from benchmark import Benchmark
+from minimize import minimize
 
 # name, file and module of the benchmarks
 CONFIG = [("ctalu",
@@ -53,7 +54,9 @@ def err(msg):
 
 def create_tmp_annotfile(b):
     # creates the cplex.json file
-    b.run_abduction()
+    rc = b.run_abduction()
+    if rc != 0:
+        sys.exit(1)
 
     # run assumption.py and create the annot-last.json file
     with open(TMP_ANNOTFILE, "w") as f:
@@ -68,13 +71,18 @@ def create_tmp_annotfile(b):
         subprocess.run(["cat", TMP_ANNOTFILE])
 
 
-def run(b, skip):
-    if not skip:
+def run(b, args):
+    if not args.skip:
         create_tmp_annotfile(b)
 
     # re-run iodine with the new annot file
     b2 = b.with_annot(TMP_ANNOTFILE)
     b2.run_iodine()
+
+    if args.minimize:
+        af = minimize(b, TMP_ANNOTFILE)
+        with open(TMP_ANNOTFILE, "w") as f:
+            f.write(af.dump())
 
 
 if __name__ == "__main__":
@@ -88,15 +96,17 @@ if __name__ == "__main__":
     ap.add_argument("-a", "--annotation", help="Annotation JSON file")
     ap.add_argument("--skip", action="store_true",
                     help="Just run the benchmark with temp annotation file")
+    ap.add_argument("--minimize", action="store_true",
+                    help="Run the minimization step")
     args = ap.parse_args()
 
     if args.benchmark:
-        run(BENCHMARKS[args.benchmark], args.skip)
+        run(BENCHMARKS[args.benchmark], args)
     elif args.filename and args.module and args.annotation:
         b = Benchmark(filename=args.filename,
                       module=args.module,
                       annotfile=args.annotation)
-        run(b, args.skip)
+        run(b, args)
     else:
         ap.print_help()
         sys.exit(1)

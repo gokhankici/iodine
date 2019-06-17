@@ -12,13 +12,10 @@ cplex.dot
 cplex.pdf
 cplex.png
 
-graph.json
 graph.dot
 graph.pdf
 
 /output
-/output.json
-
-/annot-last.json
+/*.json
 
 /notes
