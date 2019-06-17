@@ -164,10 +164,10 @@ class AnnotationFile:
 
         self.annotations = Annotation(j["annotations"])
 
-        if "blacklist" in j:
-            self.blacklist = Annotation(j["blacklist"])
+        if "blocklist" in j:
+            self.blocklist = Annotation(j["blocklist"])
         else:
-            self.blacklist = Annotation()
+            self.blocklist = Annotation()
 
         assert(len(self.annotations.sources) > 0 and
                len(self.annotations.sinks) > 0)
@@ -183,8 +183,8 @@ class AnnotationFile:
         if len(self.qualifiers) > 0:
             a["qualifiers"] = self.qualifiers.to_json()
 
-        if len(self.blacklist) > 0:
-            a["blacklist"] = self.blacklist.to_json()
+        if len(self.blocklist) > 0:
+            a["blocklist"] = self.blocklist.to_json()
 
         AnnotationFile.validate_json(a)
         return a

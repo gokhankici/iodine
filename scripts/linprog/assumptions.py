@@ -42,9 +42,9 @@ class AssumptionSolver:
         self.g = parsed["graph"]
 
         # nodes we DO NOT want to MARK as "always_eq"
-        blacklist = self.annotation_file.blacklist
+        blocklist = self.annotation_file.blocklist
         cannot_mark_eq = set(parsed["inv_names"][v]
-                             for v in blacklist.always_eq)
+                             for v in blocklist.always_eq)
 
         def is_node_markable(n):
             return n not in cannot_mark_eq
@@ -64,7 +64,7 @@ class AssumptionSolver:
 
         # nodes that cannot be always_eq
         self.cannot_be_eq = set(self.variables[parsed["inv_names"][v]]
-                                for v in blacklist.initial_eq)
+                                for v in blocklist.initial_eq)
 
         # nodes we DO want to be "always_eq"
         self.must_eq = set(var

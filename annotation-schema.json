@@ -87,7 +87,7 @@
         ]
       }
     },
-    "blacklist": {
+    "blocklist": {
       "type": "array",
       "items": {
         "anyOf": [
