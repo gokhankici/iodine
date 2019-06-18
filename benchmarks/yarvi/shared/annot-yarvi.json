@@ -30,10 +30,10 @@
 		  "de_illegal_csr_access",
 		  "de_inst",
 		  "interrupt",
-		  "m_mem0_b_wr",
-		  "m_mem1_b_wr",
-		  "m_mem2_b_wr",
-		  "m_mem3_b_wr"
+		  "b_wr0",
+		  "b_wr1",
+		  "b_wr2",
+		  "b_wr3"
       ]
     },
     {

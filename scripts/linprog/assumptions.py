@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 # vim: set foldmethod=marker:
 
 import sys
