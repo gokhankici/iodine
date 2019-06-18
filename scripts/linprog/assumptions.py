@@ -7,6 +7,7 @@ import cplex
 import time
 from utils import parse_cplex_input, val_to_int
 from annotation import AnnotationFile
+from config import DEBUG
 
 
 class Variable(collections.namedtuple("Variable", ["node",
@@ -257,12 +258,12 @@ class AssumptionSolver:
         self.annotation_file.annotations.set_initial_eq(initial_eq)
 
     def run(self):
-        print("-" * 80, file=sys.stderr)
-        print("Must equal:", file=sys.stderr)
-        for name in sorted(v.name for v in self.must_eq):
-            print("  " + name, file=sys.stderr)
-        print("-" * 80, file=sys.stderr)
-
+        if DEBUG:
+            print("-" * 80, file=sys.stderr)
+            print("Must equal:", file=sys.stderr)
+            for name in sorted(v.name for v in self.must_eq):
+                print("  " + name, file=sys.stderr)
+            print("-" * 80, file=sys.stderr)
         self.suggest_assumptions()
         print(self.annotation_file.dump())
 

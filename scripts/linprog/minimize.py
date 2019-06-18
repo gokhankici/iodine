@@ -1,10 +1,11 @@
 from annotation import AnnotationFile
-from itertools import combinations
 import json
 import subprocess
 
 
 TMP_FILE = "tmp.json"
+ENABLE_AE = True
+ENABLE_IE = True
 
 
 def go(b, af, getter, setter):
@@ -30,12 +31,14 @@ def go(b, af, getter, setter):
 
 def minimize(b, annotfile):
     af = AnnotationFile(filename=annotfile)
-    ae = go(b, af,
-            (lambda af: af.annotations.always_eq),
-            (lambda af, v: af.annotations.set_always_eq(v)))
-    # ie = go(b, af,
-    #         (lambda af: af.annotations.initial_eq),
-    #         (lambda af, v: af.annotations.set_initial_eq(v)))
-    af.annotations.set_always_eq(ae)
-    # af.annotations.set_initial_eq(ie)
+    if ENABLE_AE:
+        ae = go(b, af,
+                (lambda af: af.annotations.always_eq),
+                (lambda af, v: af.annotations.set_always_eq(v)))
+        af.annotations.set_always_eq(ae)
+    if ENABLE_IE:
+        ie = go(b, af,
+                (lambda af: af.annotations.initial_eq),
+                (lambda af, v: af.annotations.set_initial_eq(v)))
+        af.annotations.set_initial_eq(ie)
     return af

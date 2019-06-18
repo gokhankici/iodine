@@ -77,7 +77,11 @@ def run(b, args):
 
     # re-run iodine with the new annot file
     b2 = b.with_annot(TMP_ANNOTFILE)
-    b2.run_iodine()
+    rc = b2.run_iodine(stdout=subprocess.DEVNULL)
+    if rc != 0:
+        print("ERROR: Iodine rejected {} !".format(TMP_ANNOTFILE),
+              file=sys.stderr)
+        sys.exit(1)
 
     if args.minimize:
         af = minimize(b, TMP_ANNOTFILE)

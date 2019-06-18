@@ -3,7 +3,16 @@
     {
       "type": "source",
       "variables": [
-        "de_inst"
+		  "de_inst",
+		  "readdata",
+		  "bus_req_read",
+		  "bus_req_write",
+		  "bus_req_address",
+		  "bus_req_data",
+		  "bus_csr_no",
+		  "bus_csr_read_enable",
+		  "bus_csr_write_enable",
+		  "bus_csr_writedata"
       ]
     },
     {
@@ -12,6 +21,60 @@
         "wb_wbv"
       ]
     },
+    {
+      "type": "always_eq",
+      "variables": [
+		  "csr_mtime",
+		  "csr_mtimecmp",
+		  "de_branch_taken",
+		  "de_illegal_csr_access",
+		  "de_inst",
+		  "interrupt",
+		  "m_mem0_b_wr",
+		  "m_mem1_b_wr",
+		  "m_mem2_b_wr",
+		  "m_mem3_b_wr"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "de_valid_",
+        "ex_csrd",
+        "ex_inst",
+        "ex_restart",
+        "ex_valid_",
+        "if_valid_"
+      ]
+    }
+  ],
+  "blocklist": [
+    {
+      "type": "always_eq",
+      "variables": [
+		  "ex_ld",
+		  "de_rs1_val_r",
+		  "de_rs2_val_r",
+		  "de_rs1_val",
+		  "de_rs2_val",
+		  "csr_mie",
+		  "csr_mip",
+		  "csr_mstatus",
+		  "ex_csr_res"
+	  ]
+	},
+    {
+      "type": "initial_eq",
+      "variables": [
+		  "regs",
+		  "m_mem0_mem",
+		  "m_mem1_mem",
+		  "m_mem2_mem",
+		  "m_mem3_mem"
+	  ]
+	}
+  ],
+  "history": [
     {
       "type": "initial_eq",
       "variables": [

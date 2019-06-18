@@ -510,7 +510,7 @@ module yarvi( input  wire        clock
    // REWRITE: supposed to be equal ex_load_addr[31]
    //          it's assumed that this should be eq in both runs
    // wire [31:0] ex_ld = ex_load_addr[31] ? readdata : ex_loaded_data;
-   wire ex_ld_condition; 
+   wire ex_ld_condition = ex_load_addr[31];
    wire [31:0] ex_ld = ex_ld_condition ? readdata : ex_loaded_data;
 
    reg  [31:0] ex_ld_shifted, ex_ld_res; // @annot{sanitize(ex_ld_shifted, ex_ld_res)}
