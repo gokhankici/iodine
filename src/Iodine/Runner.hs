@@ -9,6 +9,7 @@ module Iodine.Runner ( IodineArgs(..)
                       , main
                       ) where
 
+import           Iodine.Utils (silence)
 import qualified Iodine.Abduction.Runner as VAR
 import           Iodine.Language.Parser
 import           Iodine.Language.Types
@@ -79,6 +80,7 @@ data IodineArgs =
              , time        :: Bool
              , noFPOutput  :: Bool
              , annotFile   :: FilePath
+             , verbose     :: Bool
              }
   deriving (Show, Data, Typeable)
 
@@ -117,6 +119,9 @@ verylogArgs = IodineArgs { fileName    = def
                           , noFPOutput  = def
                                           &= explicit &= name "no-output"
                                           &= help "disable the output from fixpoint"
+                          , verbose     = def
+                                          &= explicit &= name "verbose"
+                                          &= help "enable verbose output"
                           }
               &= program programName
               &= summary summaryText
@@ -221,14 +226,13 @@ checkIR IodineArgs{..} = do
   fileContents <- readFile fileName
   let pipelineInput = ((fileName, fileContents), annotContents)
       fpst          = pipeline pipelineInput
+      withSilence   = if verbose then id else silence
 
   if | vcgen     -> saveQuery cfg (toFqFormat fpst) >> return True
      | abduction -> do let i = pipeline' pipelineInput
-                       -- let input = VAR.runner' $ i
-                       -- (safe, _) <- solve cfg $ toFpSt input
                        VAR.runner3 i
                        return True
-     | otherwise -> fmap fst (solve cfg fpst)
+     | otherwise -> fmap fst (withSilence $ solve cfg fpst)
 
   where
     cfg = defConfig { eliminate   = Some

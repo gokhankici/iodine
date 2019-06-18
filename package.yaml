@@ -46,6 +46,7 @@ library:
   source-dirs:           src
   exposed-modules:
   - Iodine.Runner
+  - Iodine.Utils
   ghc-options:
   - -Werror
   - -O2

@@ -96,16 +96,15 @@ toFqFormat fpst =
 
       custom2 n vs =
         [ mkQual
-          (symbol $ "Custom2_" ++ show n ++ "_" ++ show n2)
+          (symbol $ "Custom2_" ++ show n)
           [ QP (symbol "v") PatNone FInt
           , QP (symbol x1) (PatExact (symbol $ prefix ++ x1)) (FTC boolFTyCon)
           , QP (symbol x2) (PatExact (symbol $ prefix ++ x2)) (FTC boolFTyCon)
           ]
-          (FQT.PImp (eVar x1) (eVar x2))
+          (FQT.PIff (eVar x1) (eVar x2))
           (dummyPos "")
-        | (n2',(x1',x2')) <- zip ([1,3..] :: [Int]) (twoPairs vs)
-        , (n2, (x1,x2))   <- [(n2',(x1',x2')), (n2' + 1, (x2',x1'))]
-        , prefix          <- ["VLT_", "VRT_"]
+        | (x1,x2) <- twoPairs vs
+        , prefix  <- ["VLT_"]
         ]
 
       custom3 n l rs =

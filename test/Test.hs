@@ -6,6 +6,7 @@
 
 module Main (main) where
 
+import Iodine.Utils (silence)
 import qualified Iodine.Runner as R
 
 import Control.Lens hiding (simple, (<.>))
@@ -130,6 +131,7 @@ simple runner testDir =
             , "tr-test-11"
             , "merge-02"
             , "merge03"
+            , "merge04-1"
             , "merge04"
             , "secverilog-01"
             ]
@@ -316,8 +318,9 @@ runUnitTest :: TestArgs -> R.IodineArgs -> Runner
 runUnitTest ta va UnitTest{..} =
   if   ta ^. dryRun
   then it testName (printf "iodine %s %s %s\n" verilogFile moduleName af :: IO ())
-  else it testName $ R.run va' `shouldReturn` (testType == Succ)
+  else it testName $ (withSilence $ R.run va') `shouldReturn` (testType == Succ)
   where
+    withSilence = if ta ^. verbose then id else silence
     af  = case annotFile of
             Nothing -> let dir  = takeDirectory verilogFile
                            name = dropExtension $ takeBaseName verilogFile
@@ -327,4 +330,5 @@ runUnitTest ta va UnitTest{..} =
              , R.moduleName = moduleName
              , R.annotFile  = af
              , R.noSave     = True
+             , R.verbose    = ta ^. verbose
              }

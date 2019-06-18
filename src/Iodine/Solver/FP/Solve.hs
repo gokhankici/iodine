@@ -7,7 +7,6 @@ import Iodine.Language.Types
 import Iodine.Solver.Common
 import Iodine.Solver.FP.Types
 import Iodine.Solver.FP.FQ
-import Iodine.Utils
 
 import qualified Language.Fixpoint.Solver       as F
 import qualified Language.Fixpoint.Types        as FT
@@ -28,10 +27,7 @@ solve :: FC.Config -> FPSt -> IO (Bool, FT.FixSolution)
 -- -----------------------------------------------------------------------------
 solve cfg fpst = do
   let finfo     = toFqFormat fpst
-      wSilence = if   FC.minimize cfg
-                 then id
-                 else silence
-  res <- wSilence $ F.solve cfg finfo
+  res <- F.solve cfg finfo
   let stat = FT.resStatus res
   withColor (getColor stat) $ putStr (render $ FT.resultDoc $ fmap fst stat)
   putStrLn ""
