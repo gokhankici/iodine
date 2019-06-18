@@ -1,3 +1,14 @@
-#!/bin/sh
+#!/usr/bin/env python3
 
-stack exec iodine -- $@
+import os.path as p
+import subprocess
+import sys
+
+THIS_DIR = p.realpath(p.dirname(__file__))
+IVERILOG_DIR = p.join(THIS_DIR, "iverilog-parser")
+
+r = subprocess.run(["stack", "exec", "iodine", "--",
+                    "--iverilog-dir", IVERILOG_DIR] +
+                   sys.argv[1:],
+                   cwd=THIS_DIR)
+sys.exit(r.returncode)

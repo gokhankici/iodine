@@ -13,21 +13,5 @@
         "o"
       ]
     }
-  ],
-  "qualifiers": [
-    {
-      "type": "implies",
-      "lhs": "i1",
-      "rhs": [
-        "i2"
-      ]
-    },
-    {
-      "type": "implies",
-      "lhs": "i2",
-      "rhs": [
-        "i1"
-      ]
-    }
   ]
 }

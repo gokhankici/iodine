@@ -2,7 +2,8 @@ import collections
 import os.path as p
 import subprocess
 import sys
-from config import IVERILOG_DIR, DEBUG
+from config import IODINE_SCRIPT, ABDUCTION_OUTPUT, DEBUG
+import shutil
 
 
 class Benchmark(collections.namedtuple("Benchmark",
@@ -11,10 +12,7 @@ class Benchmark(collections.namedtuple("Benchmark",
     Contains the information required to run a benchmark.
     """
     def run_iodine(self, extra_args=[], **kwargs):
-        args = ["stack", "exec", "iodine", "--",
-                "--iverilog-dir", IVERILOG_DIR]
-
-        args.extend(extra_args)
+        args = [IODINE_SCRIPT] + extra_args
         args.extend([p.realpath(self.filename),
                      self.module,
                      p.realpath(self.annotfile)])
@@ -27,7 +25,10 @@ class Benchmark(collections.namedtuple("Benchmark",
 
     def run_abduction(self):
         """ Run Iodine but with the abduction feature """
-        return self.run_iodine(["--abduction"])
+        rc = self.run_iodine(["--abduction"])
+        if rc == 0:
+            shutil.move(ABDUCTION_OUTPUT, p.basename(ABDUCTION_OUTPUT))
+        return rc
 
     def with_annot(self, annotfile):
         """ Returns a new benchmark with the given annotation file """

@@ -12,14 +12,15 @@
     {
       "type": "sink",
       "variables": [
+        "out",
+        "inf",
         "snan",
         "qnan",
-        "div_by_zero",
-        "out",
         "ine",
         "overflow",
         "underflow",
-        "zero"
+        "zero",
+        "div_by_zero"
       ]
     }
   ],
