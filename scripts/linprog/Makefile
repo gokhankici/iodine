@@ -1,4 +1,4 @@
-PY_FILES = annotation.py assumptions.py benchmark.py config.py run utils.py testing.py minimize.py
+PY_FILES = annotation.py assumptions.py benchmark.py config.py run.py utils.py testing.py minimize.py
 JQ_TYPES = always_eq initial_eq
 
 lint:
