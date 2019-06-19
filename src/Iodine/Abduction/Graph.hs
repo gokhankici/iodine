@@ -67,36 +67,39 @@ toAbductionGraph as = foldl' goAB Gr.empty as
 goAB :: G -> AlwaysBlockA I -> G
 goAB g ab = g'
   where
-    (_, g') = goStmt (ab^.aSt^.ports) (mempty, g)  (ab^.aStmt)
+    g' = goStmt (ab^.aSt^.ports) (mempty, g)  (ab^.aStmt)
 
 type GoStmtData = (SQ.Seq I)
 type GoStmtAcc  = (GoStmtData, G)
 
-goStmt :: SQ.Seq (VarA I) -> GoStmtAcc -> StmtA I -> GoStmtAcc
+goStmt :: SQ.Seq (VarA I) -> GoStmtAcc -> StmtA I -> G
 goStmt prts acc@(implicits, g) s =
   case s of
-    Skip                -> acc
-    Block{..}           -> foldl' (goStmt prts) acc blockStmts
-    BlockingAsgn{..}    -> asgn lhs rhs
-    NonBlockingAsgn{..} -> asgn lhs rhs
-    IfStmt{..}          -> foldl' (goStmt prts) (withConds ifCond, g) [thenStmt, elseStmt]
+    Skip                -> g
+    Block{..}           -> foldl' (helper implicits) g blockStmts
+    BlockingAsgn{..}    -> asgn Blocking lhs rhs
+    NonBlockingAsgn{..} -> asgn NonBlocking lhs rhs
+    IfStmt{..}          -> foldl' (helper (withConds ifCond)) g [thenStmt, elseStmt]
   where
-    withConds e = implicits SQ.>< foldVariables e
-    asgn l r    = (implicits, goAsgn prts acc l r)
+    helper i accG = goStmt prts (i, accG)
+    withConds e   = implicits SQ.>< foldVariables e
+    asgn aTyp l r = goAsgn aTyp prts acc l r
 
-goAsgn :: SQ.Seq (VarA I) -> GoStmtAcc -> I -> VExprA I -> G
-goAsgn prts (implicits, g) (lName, lIndex) r = g''
+goAsgn :: AsgnType -> SQ.Seq (VarA I) -> GoStmtAcc -> I -> VExprA I -> G
+goAsgn a prts (implicits, g) (lName, lIndex) r = g''
   where
     g'  = foldl' (addEdge Implicit) g implicits
     g'' = foldl' (addEdge Direct) g' (foldVariables r)
 
-    addEdge typ g1 (rName, rIndex) =
-      if   Gr.hasEdge g1 (rIndex, lIndex)
-      then g1
-      else Gr.insEdge (rIndex, lIndex, typ) .
-           addNode (rIndex, rName) .
-           addNode (lIndex, lName) $
-           g1
+    addEdge e_typ g1 (rName, rIndex) =
+      Gr.insEdge (rIndex, lIndex, d) .
+      addNode (rIndex, rName) .
+      addNode (lIndex, lName) $
+      g1
+      where
+        d = EdgeData { edgeType = e_typ
+                     , asgnType = a
+                     }
 
     addNode (ind, name) g1 =
       case Gr.lab g1 ind of

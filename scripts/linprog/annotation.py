@@ -139,6 +139,11 @@ class Qualifier:
 
         return j
 
+    def set_pairs(self, pairs):
+        self.qualif_pairs.clear()
+        for p in pairs:
+            self.qualif_pairs.add(frozenset(p))
+
     def __len__(self):
         return len(self.qualif_implies) + len(self.qualif_iff) + \
             len(self.qualif_pairs) + len(self.qualif_assume)

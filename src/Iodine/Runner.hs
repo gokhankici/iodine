@@ -43,30 +43,28 @@ import qualified Data.ByteString.Lazy as B
 @
 iodine v1.0, (C) Rami Gokhan Kici 2019
 
-iodine [OPTIONS] FILE MODULE ANNOT_FILE
+iodine [OPTIONS] FILE MODULENAME ANNOT_FILE
 
 Common flags:
      --iverilog-dir=DIR        path of the iverilog-parser directory
      --ir                      just generate the IR file
-  -v --vcgen                   just generate the .fq file
+     --vcgen                   just generate the .fq file
   -m --minimize                run delta-debugging of fixpoint
      --no-save --nosave        do not save the fq file
   -a --abduction               run abduction algorithm
   -t --time                    print the runtime
      --no-output --nofpoutput  disable the output from fixpoint
+     --verbose                 enable verbose output
   -h --help                    Display help message
   -V --version                 Print version information
      --numeric-version         Print just the version number
 @
 
-Checks whether the given Verilog file runs in constant time.
+Verifies whether the given Verilog file runs in constant time.
 
-'fileName' and 'moduleName' are required:
 First argument is the path the to the verilog file.
 Second argument is the name of the root Verilog module in that file.
 Third argument is a JSON file that contains the annotations.
-
-By default, this project and @iverilog-parser@ is assumed to be located in the same folder.
 -}
 data IodineArgs =
   IodineArgs { fileName    :: FilePath -- this is used for both the Verilog and IR file
@@ -130,7 +128,7 @@ verylogArgs = IodineArgs { fileName    = def
   where
     programName = "iodine"
     summaryText = printf "%s v1.0, (C) Rami Gokhan Kici 2019" programName :: String
-    detailsText = [ "Checks whether the given Verilog file runs in constant time."
+    detailsText = [ "Verifies whether the given Verilog file runs in constant time."
                   , ""
                   , "First argument is the path the to the verilog file."
                   , "Second argument is the name of the root Verilog module in that file."
@@ -230,7 +228,7 @@ checkIR IodineArgs{..} = do
 
   if | vcgen     -> saveQuery cfg (toFqFormat fpst) >> return True
      | abduction -> do let i = pipeline' pipelineInput
-                       VAR.runner3 i
+                       VAR.runner i
                        return True
      | otherwise -> fmap fst (withSilence $ solve cfg fpst)
 

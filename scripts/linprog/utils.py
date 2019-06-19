@@ -4,7 +4,7 @@ import networkx as nx
 import subprocess
 import sys
 from config import DEBUG
-# import pudb
+import functools
 
 
 def debug(*args, **kwargs):
@@ -43,7 +43,8 @@ def parse_cplex_input(filename):
         if len(l) == 2:
             return (l[0], l[1])
         elif len(l) == 3:
-            return (l[0], l[1], dict(type=l[2]))
+            typ, asgn = l[2]
+            return (l[0], l[1], dict(type=typ, asgn=asgn))
         else:
             print("illegal edge: {}".format(l))
             sys.exit(1)
@@ -158,3 +159,7 @@ def val_to_int(v):
         print(msg, file=sys.stderr)
         sys.exit(1)
     return int(r)
+
+
+def foldl(func, acc, xs):
+    return functools.reduce(func, xs, acc)

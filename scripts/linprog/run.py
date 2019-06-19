@@ -2,49 +2,11 @@
 
 import argparse
 from os.path import join
-import os.path as p
 import subprocess
 import sys
-from config import BENCHMARK_DIR, LINPROG_DIR, DEBUG
-from benchmark import Benchmark
+from config import ABDUCTION_OUTPUT, LINPROG_DIR, DEBUG, TMP_ANNOTFILE
+from benchmark import Benchmark, BENCHMARKS
 from minimize import minimize
-
-# name, file and module of the benchmarks
-CONFIG = [("ctalu",
-           "xcrypto-ref/rtl/coprocessor/scarv_cop_palu.v",
-           "scarv_cop_palu"),
-          ("mips",
-           "472-mips-pipelined/mips_pipeline.v",
-           "mips_pipeline"),
-          ("yarvi",
-           "yarvi/shared/yarvi.v",
-           "yarvi"),
-          ("sha",
-           "crypto_cores/sha_core/trunk/rtl/sha256.v",
-           "sha256"),
-          ("fpu",
-           "fpu/verilog/fpu.v",
-           "fpu"),
-          ("fpu-div",
-           "fpu2/divider/divider.v",
-           "divider"),
-          ("modexp",
-           "crypto_cores/RSA4096/ModExp2/ModExp.v",
-           "ModExp")]
-
-
-def mk_bmk(filename, module):
-    full_filename = join(BENCHMARK_DIR, filename)
-    h, t = p.split(full_filename)
-    n, _ = p.splitext(t)
-    a = join(h, "annot-{}.json".format(n))
-    return Benchmark(filename=full_filename,
-                     module=module,
-                     annotfile=a)
-
-
-BENCHMARKS = {n: mk_bmk(f, m) for n, f, m in CONFIG}
-TMP_ANNOTFILE = "annot-last.json"
 
 
 def err(msg):
@@ -53,7 +15,6 @@ def err(msg):
 
 
 def create_tmp_annotfile(b):
-    # creates the cplex.json file
     rc = b.run_abduction()
     if rc != 0:
         sys.exit(1)
@@ -61,7 +22,7 @@ def create_tmp_annotfile(b):
     # run assumption.py and create the annot-last.json file
     with open(TMP_ANNOTFILE, "w") as f:
         args = [join(LINPROG_DIR, "assumptions.py"),
-                "cplex.json",
+                ABDUCTION_OUTPUT,
                 b.annotfile]
         r = subprocess.run(args, stdout=f)
     if r.returncode != 0:
@@ -76,7 +37,7 @@ def run(b, args):
         create_tmp_annotfile(b)
 
     # re-run iodine with the new annot file
-    b2 = b.with_annot(TMP_ANNOTFILE)
+    b2 = b.with_annotfile(TMP_ANNOTFILE)
     rc = b2.run_iodine(stdout=subprocess.DEVNULL)
     if rc != 0:
         print("ERROR: Iodine rejected {} !".format(TMP_ANNOTFILE),

@@ -649,8 +649,11 @@ module yarvi( input  wire        clock
       wb_csrd <= ex_csrd;
    end
 
+   // rewrite
+   wire interrupt_check = csr_mtime == csr_mtimecmp;
+
    always @(posedge clock) begin
-      if (csr_mtime == csr_mtimecmp) begin
+      if (interrupt_check) begin
          $display("Times up!");
          if (!csr_mie`MTIP)
            $display("  but the interrupt currently disabled");

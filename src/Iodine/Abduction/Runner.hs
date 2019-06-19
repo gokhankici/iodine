@@ -3,19 +3,14 @@
 {-# LANGUAGE MultiWayIf #-}
 
 module Iodine.Abduction.Runner ( runner
-                               , runner'
-                               , runner3
                                ) where
 
 import Iodine.Abduction.Graph
-import Iodine.Abduction.RandomSearch
 import Iodine.Abduction.Transform
 import Iodine.Abduction.Types
 import Iodine.Language.Types
 import Iodine.Solver.FP.Types
 import Iodine.Types
-
-import qualified Language.Fixpoint.Types.Config as FC
 
 import           Control.Lens
 import           Control.Monad.State.Lazy
@@ -29,20 +24,9 @@ import qualified Data.HashSet             as HS
 import qualified Data.IntSet              as IS
 
 --------------------------------------------------------------------------------
-runner :: FilePath -> FC.Config -> FPSt -> IO (Bool, Sol)
+runner :: Intermediary -> IO ()
 --------------------------------------------------------------------------------
-runner = abduction
-
---------------------------------------------------------------------------------
-runner' :: Intermediary -> Intermediary
---------------------------------------------------------------------------------
-runner' input = removeId (as', newAnnots)
-  where
-    inputWithIndex@(as', _) = giveId input
-    newAnnots = updateAnnotations inputWithIndex
-
-runner3 :: Intermediary -> IO ()
-runner3 input = B.writeFile "cplex.json" $ J.encode ci
+runner input = B.writeFile "cplex.json" $ J.encode ci
   where
     (as, (st, _)) = giveId input
     sinkIds       = [n | (_, n) <- HS.toList (st^.sinks)]
@@ -56,9 +40,6 @@ runner3 input = B.writeFile "cplex.json" $ J.encode ci
 
 giveId :: IntermediaryA Id -> IntermediaryA (Id, Int)
 giveId = fromProduct . giveUniqueId . toProduct
-
-removeId :: IntermediaryA (Id, Int) -> IntermediaryA Id
-removeId = fromProduct . undoUniqueId . toProduct
 
 -- MyProduct = (Seq (AlwaysBlock a), (AnnotSt a, [FPQualifier a]))
 type MyProduct a = Product (Compose Seq AlwaysBlockA) (Product AnnotStA (Compose Seq FPQualifierA)) a
@@ -93,8 +74,8 @@ cplexToMark g is = IS.toList $ execState loop initSt ^. _3
         else do let v = IS.findMin w
                 _1  %= IS.delete v -- remove node from worklist
                 let vParents = Gr.lpre g v
-                forM_ vParents $ \(u, typ) ->
-                  case typ of
+                forM_ vParents $ \(u, EdgeData{..}) ->
+                  case edgeType of
                     Direct   -> do c <- uses (_2 . _1) (IS.member u) -- check if seen directly before
                                    if c
                                      then return ()

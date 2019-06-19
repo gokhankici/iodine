@@ -9,7 +9,7 @@ ENABLE_IE = True
 
 
 def go(b, af, getter, setter):
-    new_b = b.with_annot(TMP_FILE)
+    new_b = b.with_annotfile(TMP_FILE)
     orig_vars = getter(af)
     needed = orig_vars.copy()
 

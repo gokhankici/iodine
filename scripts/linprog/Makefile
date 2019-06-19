@@ -1,4 +1,4 @@
-PY_FILES = annotation.py assumptions.py benchmark.py config.py run.py utils.py testing.py minimize.py
+PY_FILES = $(wildcard *.py)
 JQ_TYPES = always_eq initial_eq
 
 lint:
@@ -6,6 +6,9 @@ lint:
 
 $(JQ_TYPES): %:
 	cat annot-last.json | jq '.annotations | map(select(.type == "$@") | .variables) | add | sort'
+
+pairs:
+	cat annot-last.json | jq '.qualifiers | map(select(.type == "pairs") | .variables) | .[]'
 
 freeze:
 	pip freeze > requirements.txt

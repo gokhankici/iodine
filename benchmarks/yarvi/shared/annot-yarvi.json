@@ -24,12 +24,11 @@
     {
       "type": "always_eq",
       "variables": [
-		  "csr_mtime",
-		  "csr_mtimecmp",
 		  "de_branch_taken",
 		  "de_illegal_csr_access",
 		  "de_inst",
 		  "interrupt",
+		  "interrupt_check",
 		  "b_wr0",
 		  "b_wr1",
 		  "b_wr2",
