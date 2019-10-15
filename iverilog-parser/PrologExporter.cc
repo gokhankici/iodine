@@ -1017,13 +1017,28 @@ string PrologExporter::exportExpr(PExpr* expr) {
         assert(expr != NULL);
     }
 
-    PEIdent* id = dynamic_cast<PEIdent*>(expr);
-    if (id != NULL) {
+    if (PEIdent* id = dynamic_cast<PEIdent*>(expr); id != NULL) {
         return export_pform_name_to_prolog(id->path_);
     } else {
-        UninterpretedFunction uf(this, expr);
-        ufs.push_back(uf);
-        return uf.getOutput();
+        PECallFunction *cf = dynamic_cast<PECallFunction *>(expr);
+        bool isIgnoredUnary = false;
+        PExpr* unaryArg = NULL;
+        if (cf != NULL && cf->parms_.size() == 1) {
+            ostringstream oss;
+            oss << cf->path_;
+            string name = oss.str();
+            if (name == "$signed" || name == "$unsigned") {
+                isIgnoredUnary = true;
+                unaryArg = cf->parms_[0];
+            }
+        }
+        if (isIgnoredUnary) {
+            return exportExpr(unaryArg);
+        } else {
+            UninterpretedFunction uf(this, expr);
+            ufs.push_back(uf);
+            return uf.getOutput();
+        }
     }
 }
 

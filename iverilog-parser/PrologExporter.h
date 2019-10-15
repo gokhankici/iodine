@@ -274,7 +274,6 @@ public:
 
     UninterpretedFunction(PrologExporter* pe, PExpr* expr) {
         assert(expr != NULL);
-        FoldNames fn(pe);
 
         if (PECallFunction *cf = dynamic_cast<PECallFunction *>(expr); cf != NULL) {
             this->isVerilogFunction = true;
@@ -286,6 +285,7 @@ public:
                 this->inputs.push_back(pe->exportExpr(parmE));
             }
         } else {
+            FoldNames fn(pe);
             expr->accept(&fn);
             this->output = get_unique_name("");
 

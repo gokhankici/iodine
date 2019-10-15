@@ -467,7 +467,7 @@ identifier :: Parser Id
 identifier = lexeme (p >>= check)
   where
     p :: Parser Id
-    p = idCons <$> letterChar <*> (T.pack <$> many nonFirstChar)
+    p = idCons <$> (letterChar <|> char '_') <*> (T.pack <$> many nonFirstChar)
 
     nonFirstChar :: Parser Char
     nonFirstChar = satisfy (\a -> isDigit a || isLetter a || a == '_')
