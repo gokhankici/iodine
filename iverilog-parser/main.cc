@@ -63,7 +63,7 @@ const char NOTICE[] =
 # include  "t-dll.h"
 
 #include "Visitor.h"
-#include "PrologExporter.h"
+#include "IRExporter.h"
 
 #if defined(__MINGW32__) && !defined(HAVE_GETOPT_H)
 extern "C" int getopt(int argc, char*argv[], const char*fmt);
@@ -1085,7 +1085,7 @@ int main(int argc, char*argv[])
 				auto itr = pform_modules.find(perm_string::literal(module_name));
 				if (itr != pform_modules.end()) {
 					Module *mod = (*itr).second;
-					PrologExporter pe(o, mod);
+					IRExporter pe(o, mod);
 					mod->accept(&pe);
 				} else {
 					o << "ERROR: file '" << module_name << "' does not exist";
