@@ -73,6 +73,7 @@ class PProcess : public LineInfo {
       Statement*statement_;
 
     public:
+      VISITOR_FRIENDS;
       virtual void accept(Visitor* v) {
           v->visit(this);
       }

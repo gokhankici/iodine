@@ -44,8 +44,8 @@ enum IRStmt_AssignmentType
 class IRStmt_Assignment : public IRStmt
 {
 public:
-    IRStmt_Assignment(IRStmt_AssignmentType type, std::string &lhs, IRExpr *rhs)
-        : type(type), lhs(lhs), rhs(rhs)
+    IRStmt_Assignment(IRStmt_AssignmentType t, std::string &l, IRExpr *r)
+        : type(t), lhs(l), rhs(r)
     {
     }
     std::string toIRString();
@@ -59,8 +59,8 @@ private:
 class IRStmt_If : public IRStmt
 {
 public:
-    IRStmt_If(IRExpr *condition, IRStmt *thenStmt, IRStmt *elseStmt)
-        : condition(condition), thenStmt(thenStmt), elseStmt(elseStmt)
+    IRStmt_If(IRExpr *c, IRStmt *t, IRStmt *e)
+        : condition(c), thenStmt(t), elseStmt(e)
     {
     }
     std::string toIRString();

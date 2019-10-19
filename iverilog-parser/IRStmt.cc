@@ -45,7 +45,7 @@ string IRStmt_Assignment::toIRString()
         break;
     }
 
-    os << lhs << ", " << rhs->toIRString << ")";
+    os << lhs << ", " << rhs->toIRString() << ")";
 
     return os.str();
 }

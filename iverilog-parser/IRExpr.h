@@ -17,14 +17,14 @@ data IRExpr = Constant String
 class IRExpr
 {
 public:
-    virtual std::string toIRString() = 0;
+    virtual const std::string toIRString() = 0;
 };
 
 class IRExpr_Constant : public IRExpr
 {
 public:
-    IRExpr_Constant(std::string &constant) : constant(constant) {}
-    std::string toIRString();
+    IRExpr_Constant(std::string &c) : constant(c) {}
+    const std::string toIRString();
 
 private:
     std::string constant;
@@ -33,8 +33,13 @@ private:
 class IRExpr_Variable : public IRExpr
 {
 public:
-    IRExpr_Variable(std::string &variable) : variable(variable) {}
-    std::string toIRString();
+    IRExpr_Variable(std::string &v) : variable(v) {}
+    const std::string toIRString();
+
+    const std::string &getVariable()
+    {
+        return variable;
+    }
 
 private:
     std::string variable;
@@ -43,18 +48,18 @@ private:
 class IRExpr_UF : public IRExpr
 {
 public:
-    IRExpr_UF(std::string &function) : function(function) {}
-    IRExpr_UF(std::string &function, IRExpr *op1) : function(function)
+    IRExpr_UF(const char *f) : function(f) {}
+    IRExpr_UF(const char *f, IRExpr *o) : function(f)
     {
-        operands.push_back(op1);
+        operands.push_back(o);
     }
-    IRExpr_UF(std::string &function, IRExpr *op1, IRExpr *op2) : function(function)
+    IRExpr_UF(std::string &f, IRExpr *o1, IRExpr *o2) : function(f)
     {
-        operands.push_back(op1);
-        operands.push_back(op2);
+        operands.push_back(o1);
+        operands.push_back(o2);
     }
     void addOperand(IRExpr *operand);
-    std::string toIRString();
+    const std::string toIRString();
 
 private:
     std::string function;

@@ -6,17 +6,17 @@
 
 using namespace std;
 
-string IRExpr_Constant::toIRString()
+const string IRExpr_Constant::toIRString()
 {
     return constant;
 }
 
-string IRExpr_Variable::toIRString()
+const string IRExpr_Variable::toIRString()
 {
     return variable;
 }
 
-string IRExpr_UF::toIRString()
+const string IRExpr_UF::toIRString()
 {
     ostringstream os;
     os << "uf(" << function << ", [";
@@ -30,4 +30,9 @@ string IRExpr_UF::toIRString()
 
     os << "])";
     return os.str();
+}
+
+void IRExpr_UF::addOperand(IRExpr *operand)
+{
+    operands.push_back(operand);
 }

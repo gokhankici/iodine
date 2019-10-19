@@ -1074,26 +1074,33 @@ int main(int argc, char*argv[])
           cerr << "name of the toplevel module should be given with -M" << endl;
           exit (1);
       }
-      
-      {
-				ofstream prolog_out;
-				ostream &o = (prolog_path) ? prolog_out : cout;
-				if (prolog_path) {
-					prolog_out.open(prolog_path);
-				}
 
-				auto itr = pform_modules.find(perm_string::literal(module_name));
-				if (itr != pform_modules.end()) {
-					Module *mod = (*itr).second;
-					IRExporter pe(o, mod);
-					mod->accept(&pe);
-				} else {
-					o << "ERROR: file '" << module_name << "' does not exist";
-					return 1;
-				}
-			}
+	  {
+		  ofstream prolog_out;
+		  ostream &o = (prolog_path) ? prolog_out : cout;
+		  if (prolog_path)
+		  {
+			  prolog_out.open(prolog_path);
+		  }
 
-	/* If the user did not give specific module(s) to start with,
+		  auto itr = pform_modules.find(perm_string::literal(module_name));
+		  if (itr != pform_modules.end())
+		  {
+			  Module *mod = (*itr).second;
+			  // FIXME
+			  // IRExporter pe(o, mod);
+			  // mod->accept(&pe);
+			  IRExporter irExporter(mod);
+			  irExporter.extractModule()->dump(o);
+		  }
+		  else
+		  {
+			  o << "ERROR: file '" << module_name << "' does not exist";
+			  return 1;
+		  }
+	  }
+
+	  /* If the user did not give specific module(s) to start with,
 	   then look for modules that are not instantiated anywhere.  */
 
       if (roots.empty()) {
