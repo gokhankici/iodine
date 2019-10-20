@@ -37,7 +37,14 @@ class PEString;
 class PDelays;
 class data_type_t;
 
-#define VISITOR_FRIENDS friend class IRExporter; friend class FoldNames; friend class FoldNamesExtended; friend class UninterpretedFunction;
+#define VISITOR_FRIENDS                 \
+    friend class IRExporter;            \
+    friend class FoldNames;             \
+    friend class FoldNamesExtended;     \
+    friend class UninterpretedFunction; \
+    friend class PrologExporter;        \
+    friend class IRExprVisitor;         \
+    friend class IRStmtVisitor;
 
 class Visitor
 {

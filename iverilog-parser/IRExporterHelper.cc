@@ -23,6 +23,7 @@
 #include "ExprVisitor.h"
 #include "IRExpr.h"
 #include "IRStmt.h"
+#include "IRExprVisitor.h"
 
 #define UNW_LOCAL_ONLY
 #include <cxxabi.h>
@@ -46,7 +47,7 @@ bool IRExporter::isToplevel()
     return moduleInstantiation == NULL;
 }
 
-IRExpr *IRExporter::nameComponentToIRExpr(const perm_string &name, const std::list<index_component_t> &indices)
+const IRExpr *IRExporter::nameComponentToIRExpr(const perm_string &name, const std::list<index_component_t> &indices)
 {
     string nameStr(name.str());
     bool varExists = false;
@@ -164,13 +165,13 @@ IRExpr *IRExporter::nameComponentToIRExpr(const perm_string &name, const std::li
     }
 }
 
-IRExpr *IRExporter::pform_nameToIRExpr(const pform_name_t &that)
+const IRExpr *IRExporter::pform_nameToIRExpr(const pform_name_t &that)
 {
     pform_name_t::const_iterator cur;
 
     cur = that.begin();
     const name_component_t &n = *cur;
-    IRExpr *result = nameComponentToIRExpr(n.name, n.index);
+    const IRExpr *result = nameComponentToIRExpr(n.name, n.index);
 
     ++cur;
 
@@ -189,8 +190,25 @@ const string IRExporter::getWireName(PWire *w)
     return nameComponentToIRExpr(w->basename(), std::list<index_component_t>())->toIRString();
 }
 
-const IREvent *IRExporter::toIREvent(const PEEvent *)
+const IREvent *IRExporter::toIREvent(PEEvent *ev)
 {
-    // TODO
-    return NULL;
+    IREventType eventType;
+    switch (ev->type()) {
+    case PEEvent::POSEDGE:
+        eventType = IR_POSEDGE;
+        break;
+    case PEEvent::NEGEDGE:
+        eventType = IR_NEGEDGE;
+        break;
+    default:    
+        cerr << endl << "PEvent: NOT SUPPORTED: ";
+        ev->dump(cerr);
+        cerr << endl;
+        exit(1);
+    }
+
+    IRExprVisitor v;
+    ev->expr()->accept(&v);
+
+    return new IREvent(eventType, v.getIRExpr());
 }

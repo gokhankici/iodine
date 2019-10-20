@@ -20,7 +20,8 @@
 
 #include "Visitor.h"
 #include "IRExporter.h"
-#include "ExprVisitor.h"
+#include "IRExprVisitor.h"
+#include "IRStmtVisitor.h"
 
 #define UNW_LOCAL_ONLY
 #include <cxxabi.h>
@@ -64,17 +65,17 @@ IRModule *IRExporter::extractModule()
     // PGAssign, PGBuiltin, and PGModule
     for (auto gateItr = module->get_gates().begin(); gateItr != module->get_gates().end(); ++gateItr)
     {
-        const PGate *pg = *gateItr;
+        PGate *pg = *gateItr;
         const IRStmt *stmt;
-        if (const PGAssign *assignStmt = dynamic_cast<const PGAssign *>(pg))
+        if (PGAssign *assignStmt = dynamic_cast<PGAssign *>(pg))
         {
             stmt = toIRStmt(assignStmt);
         }
-        else if (const PGBuiltin *builtinStmt = dynamic_cast<const PGBuiltin *>(pg))
+        else if (PGBuiltin *builtinStmt = dynamic_cast<PGBuiltin *>(pg))
         {
             stmt = toIRStmt(builtinStmt);
         }
-        else if (const PGModule *moduleStmt = dynamic_cast<const PGModule *>(pg))
+        else if (PGModule *moduleStmt = dynamic_cast<PGModule *>(pg))
         {
             stmt = toIRStmt(moduleStmt);
         }
@@ -104,15 +105,31 @@ IRModule *IRExporter::extractModule()
             exit(1);
         case IVL_PR_ALWAYS:
             const PEventStatement *eventStmt = dynamic_cast<PEventStatement *>(process->statement_);
-            if (eventStmt->expr_.count() != 0)
+            const IREvent *irEvent;
+
+            if (eventStmt->expr_.count() == 0)
             {
-                cerr << "Event statement has multiple events:" << endl;
+                irEvent = new IREvent(IR_STAR, NULL);
+            }
+            else if (eventStmt->expr_.count() == 1)
+            {
+                if (eventStmt->expr_[0] == NULL)
+                {
+                    cerr << "PEventStatement: event expression is wait_fork" << endl;
+                    eventStmt->dump(cerr, 0);
+                    exit(1);
+                }
+                irEvent = toIREvent(eventStmt->expr_[0]);
+            }
+            else
+            {
+                cerr << "PEventStatement: multiple event expression" << endl;
                 eventStmt->dump(cerr, 0);
                 exit(1);
             }
-            const PEEvent *event = eventStmt->expr_[0];
-            const Statement *statement = eventStmt->statement_;
-            IRAlwaysBlock *ab = new IRAlwaysBlock(toIREvent(event), toIRStmt(statement));
+
+            Statement *statement = eventStmt->statement_;
+            IRAlwaysBlock *ab = new IRAlwaysBlock(irEvent, toIRStmt(statement));
             irModule->addAlwaysBlock(ab);
             break;
         }
@@ -316,44 +333,29 @@ void IRExporter::setModulePorts(IRModule *irModule)
     }
 }
 
-IRExpr *IRExporter::toIRExpr(const PExpr *)
+const IRExpr *IRExporter::toIRExpr(PExpr *expr)
 {
-    // TODO
-    return NULL;
+    IRExprVisitor v;
+    expr->accept(&v);
+    return v.getIRExpr();
 }
 
-IRStmt *IRExporter::toIRStmt(const PGAssign *)
+const IRStmt *IRExporter::toIRStmt(PGate *pgate)
 {
-    // TODO
-    return NULL;
+    IRStmtVisitor v;
+    pgate->accept(&v);
+    return v.getIRStmt();
 }
 
-IRStmt *IRExporter::toIRStmt(const PGBuiltin *)
+const IRStmt *IRExporter::toIRStmt(Statement *stmt)
 {
-    // TODO
-    return NULL;
+    IRStmtVisitor v;
+    stmt->accept(&v);
+    return v.getIRStmt();
 }
 
-IRStmt *IRExporter::toIRStmt(const PGModule *)
+bool IRExporter::isConstantExpr(PExpr *expr)
 {
-    // TODO
-    return NULL;
-}
-
-IRStmt *IRExporter::toIRStmt(const Statement *)
-{
-    // TODO
-    return NULL;
-}
-
-IRStmt *IRExporter::alwaysBlocktoIRStmt(const PEventStatement *)
-{
-    // TODO
-    return NULL;
-}
-
-bool IRExporter::isConstantExpr(PExpr *)
-{
-    // TODO
-    return false;
+    const IRExpr* irExpr = toIRExpr(expr);
+    return dynamic_cast<const IRExpr_Constant*>(irExpr) != NULL;
 }

@@ -1,0 +1,32 @@
+#ifndef IR_EXPR_VISITOR_H
+#define IR_EXPR_VISITOR_H
+
+#include "IRExpr.h"
+#include "ExprVisitor.h"
+
+class IRExprVisitor : public ExprVisitor
+{
+public:
+    IRExprVisitor() {}
+
+    void visit(PEIdent *);
+    void visit(PETernary *);
+    void visit(PEConcat *);
+    void visit(PECallFunction *);
+    void visit(PENumber *);
+    void visit(PEEvent *);
+    void visit(PEBinary *);
+    void visit(PEUnary *);
+    void visit(PEString *);
+
+    const IRExpr *getIRExpr()
+    {
+        assert(irExpr != NULL);
+        return irExpr;
+    }
+
+private:
+    IRExpr* irExpr = NULL;
+};
+
+#endif

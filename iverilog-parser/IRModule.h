@@ -37,9 +37,9 @@ public:
 
 enum IREventType
 {
-    IR_PosEdge,
-    IR_NegEdge,
-    IR_Star
+    IR_POSEDGE,
+    IR_NEGEDGE,
+    IR_STAR
 };
 
 class IREvent
@@ -51,7 +51,7 @@ public:
 
 private:
     IREventType eventType;
-    const IRExpr *event;
+    const IRExpr *event; // event is NULL if eventType is IR_Star
 };
 
 class IRAlwaysBlock

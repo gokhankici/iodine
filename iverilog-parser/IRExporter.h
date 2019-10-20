@@ -25,12 +25,10 @@ public:
     // IR Exporting Functions
     // -------------------------------------------------------------------------
     IRModule *extractModule();
-    IRExpr *toIRExpr(const PExpr *);
-    IRStmt *toIRStmt(const PGAssign *);
-    IRStmt *toIRStmt(const PGBuiltin *);
-    IRStmt *toIRStmt(const PGModule *);
-    IRStmt *toIRStmt(const Statement *);
-    IRStmt *alwaysBlocktoIRStmt(const PEventStatement *);
+    const IRExpr *toIRExpr(PExpr *);
+    const IRStmt *toIRStmt(PGate *);
+    const IRStmt *toIRStmt(Statement *);
+    const IREvent *toIREvent(PEEvent *);
     // -------------------------------------------------------------------------
 
     // -------------------------------------------------------------------------
@@ -40,9 +38,8 @@ public:
     void setModulePorts(IRModule *);
     bool isToplevel();
     bool isConstantExpr(PExpr *);
-    IRExpr *pform_nameToIRExpr(const pform_name_t &that);
-    IRExpr *nameComponentToIRExpr(const perm_string &, const std::list<index_component_t> &);
-    const IREvent *toIREvent(const PEEvent *);
+    const IRExpr *pform_nameToIRExpr(const pform_name_t &that);
+    const IRExpr *nameComponentToIRExpr(const perm_string &, const std::list<index_component_t> &);
     // -------------------------------------------------------------------------
 
 private:

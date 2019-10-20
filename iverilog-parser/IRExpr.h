@@ -17,14 +17,14 @@ data IRExpr = Constant String
 class IRExpr
 {
 public:
-    virtual const std::string toIRString() = 0;
+    virtual const std::string toIRString() const = 0;
 };
 
 class IRExpr_Constant : public IRExpr
 {
 public:
     IRExpr_Constant(std::string &c) : constant(c) {}
-    const std::string toIRString();
+    const std::string toIRString() const;
 
 private:
     std::string constant;
@@ -34,7 +34,7 @@ class IRExpr_Variable : public IRExpr
 {
 public:
     IRExpr_Variable(std::string &v) : variable(v) {}
-    const std::string toIRString();
+    const std::string toIRString() const;
 
     const std::string &getVariable()
     {
@@ -58,12 +58,12 @@ public:
         operands.push_back(o1);
         operands.push_back(o2);
     }
-    void addOperand(IRExpr *operand);
-    const std::string toIRString();
+    void addOperand(const IRExpr *operand);
+    const std::string toIRString() const;
 
 private:
     std::string function;
-    std::vector<IRExpr *> operands;
+    std::vector<const IRExpr *> operands;
 };
 
 #endif
