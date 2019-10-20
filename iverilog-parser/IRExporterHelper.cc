@@ -188,3 +188,9 @@ const string IRExporter::getWireName(PWire *w)
 {
     return nameComponentToIRExpr(w->basename(), std::list<index_component_t>())->toIRString();
 }
+
+const IREvent *IRExporter::toIREvent(const PEEvent *)
+{
+    // TODO
+    return NULL;
+}

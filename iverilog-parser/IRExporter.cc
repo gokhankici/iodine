@@ -57,24 +57,38 @@ IRModule *IRExporter::extractModule()
     for (map<perm_string, PWire *>::const_iterator wire = module->wires.begin(); wire != module->wires.end(); ++wire)
     {
         PWire *w = (*wire).second;
-        irModule->addVariable(getVariableType(w), getWireName(w));
+        IRVariable v(getVariableType(w), getWireName(w));
+        irModule->addVariable(v);
     }
 
-    // ###########################################################################
     // PGAssign, PGBuiltin, and PGModule
-    // ###########################################################################
-    IRStmt_Sequence gateStatements;
     for (auto gateItr = module->get_gates().begin(); gateItr != module->get_gates().end(); ++gateItr)
     {
-        // TODO
-        IRStmt *stmt = toIRStmt(*gateItr);
-        gateStatements.addStmt(stmt);
-    }
-    out << gateStatements.toIRString() << ",";
+        const PGate *pg = *gateItr;
+        const IRStmt *stmt;
+        if (const PGAssign *assignStmt = dynamic_cast<const PGAssign *>(pg))
+        {
+            stmt = toIRStmt(assignStmt);
+        }
+        else if (const PGBuiltin *builtinStmt = dynamic_cast<const PGBuiltin *>(pg))
+        {
+            stmt = toIRStmt(builtinStmt);
+        }
+        else if (const PGModule *moduleStmt = dynamic_cast<const PGModule *>(pg))
+        {
+            stmt = toIRStmt(moduleStmt);
+        }
+        else
+        {
+            cerr << "Unknown PGate:" << endl;
+            pg->dump(cerr, 0);
+            exit(1);
+        }
 
-    // ###########################################################################
-    // always, initial and final blocks
-    // ###########################################################################
+        irModule->addGateStatement(stmt);
+    }
+
+    // always blocks
     vector<const PEventStatement *> alwaysBlocks;
     for (list<PProcess *>::const_iterator idx = module->behaviors.begin(); idx != module->behaviors.end(); ++idx)
     {
@@ -89,27 +103,20 @@ IRModule *IRExporter::extractModule()
             process->dump(cerr, 0);
             exit(1);
         case IVL_PR_ALWAYS:
-            alwaysBlocks.push_back(dynamic_cast<PEventStatement *>(process->statement_));
+            const PEventStatement *eventStmt = dynamic_cast<PEventStatement *>(process->statement_);
+            if (eventStmt->expr_.count() != 0)
+            {
+                cerr << "Event statement has multiple events:" << endl;
+                eventStmt->dump(cerr, 0);
+                exit(1);
+            }
+            const PEEvent *event = eventStmt->expr_[0];
+            const Statement *statement = eventStmt->statement_;
+            IRAlwaysBlock *ab = new IRAlwaysBlock(toIREvent(event), toIRStmt(statement));
+            irModule->addAlwaysBlock(ab);
             break;
         }
     }
-    out << "[";
-    for (size_t i = 0; i < alwaysBlocks.size(); i++)
-    {
-        if (i > 0)
-            out << ", ";
-        out << alwaysBlocktoIRStmt(alwaysBlocks.at(i))->toIRString();
-    }
-    out << "])";
-
-    if (isToplevel())
-    {
-        out << "." << endl
-            << endl;
-    }
-
-    out << endl
-        << sep2 << endl;
 
     // ###########################################################################
     // missing functionality
@@ -303,7 +310,8 @@ void IRExporter::setModulePorts(IRModule *irModule)
             }
             }
 
-            irModule->addPort(portType, getVariableType(wire), portname);
+            IRPort irPort(portType, getVariableType(wire), portname);
+            irModule->addPort(irPort);
         }
     }
 }
@@ -314,7 +322,25 @@ IRExpr *IRExporter::toIRExpr(const PExpr *)
     return NULL;
 }
 
-IRStmt *IRExporter::toIRStmt(const PGate *)
+IRStmt *IRExporter::toIRStmt(const PGAssign *)
+{
+    // TODO
+    return NULL;
+}
+
+IRStmt *IRExporter::toIRStmt(const PGBuiltin *)
+{
+    // TODO
+    return NULL;
+}
+
+IRStmt *IRExporter::toIRStmt(const PGModule *)
+{
+    // TODO
+    return NULL;
+}
+
+IRStmt *IRExporter::toIRStmt(const Statement *)
 {
     // TODO
     return NULL;

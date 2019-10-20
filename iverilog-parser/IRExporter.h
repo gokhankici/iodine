@@ -26,7 +26,10 @@ public:
     // -------------------------------------------------------------------------
     IRModule *extractModule();
     IRExpr *toIRExpr(const PExpr *);
-    IRStmt *toIRStmt(const PGate *);
+    IRStmt *toIRStmt(const PGAssign *);
+    IRStmt *toIRStmt(const PGBuiltin *);
+    IRStmt *toIRStmt(const PGModule *);
+    IRStmt *toIRStmt(const Statement *);
     IRStmt *alwaysBlocktoIRStmt(const PEventStatement *);
     // -------------------------------------------------------------------------
 
@@ -39,6 +42,7 @@ public:
     bool isConstantExpr(PExpr *);
     IRExpr *pform_nameToIRExpr(const pform_name_t &that);
     IRExpr *nameComponentToIRExpr(const perm_string &, const std::list<index_component_t> &);
+    const IREvent *toIREvent(const PEEvent *);
     // -------------------------------------------------------------------------
 
 private:

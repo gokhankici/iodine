@@ -1,21 +1,13 @@
 #include "IRModule.h"
 
-void IRModule::addPort(IRPortType portType, IRVariableType variableType, const std::string &variableName)
+void IRModule::addPort(const IRPort &irPort)
 {
-    IRPort port;
-    IRVariable variable;
-    port.portType = portType;
-    port.variable.variableType = variableType;
-    port.variable.name = variableName;
-    ports.push_back(port);
+    ports.push_back(irPort);
 }
 
-void IRModule::addVariable(IRVariableType variableType, const std::string &variableName)
+void IRModule::addVariable(const IRVariable &irVariable)
 {
-    IRVariable variable;
-    variable.variableType = variableType;
-    variable.name = variableName;
-    variables.push_back(variable);
+    variables.push_back(irVariable);
 }
 
 void IRModule::dump(std::ostream &)
