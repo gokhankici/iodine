@@ -23,17 +23,17 @@ public:
 class IRExpr_Constant : public IRExpr
 {
 public:
-    IRExpr_Constant(std::string &c) : constant(c) {}
+    IRExpr_Constant(const std::string &c) : constant(c) {}
     const std::string toIRString() const;
 
 private:
-    std::string constant;
+    const std::string constant;
 };
 
 class IRExpr_Variable : public IRExpr
 {
 public:
-    IRExpr_Variable(std::string &v) : variable(v) {}
+    IRExpr_Variable(const std::string &v) : variable(v) {}
     const std::string toIRString() const;
 
     const std::string &getVariable()
@@ -42,13 +42,14 @@ public:
     }
 
 private:
-    std::string variable;
+    const std::string variable;
 };
 
 class IRExpr_UF : public IRExpr
 {
 public:
     IRExpr_UF(const char *f) : function(f) {}
+    IRExpr_UF(const std::string &f) : function(f) {}
     IRExpr_UF(const char *f, IRExpr *o) : function(f)
     {
         operands.push_back(o);
@@ -62,8 +63,33 @@ public:
     const std::string toIRString() const;
 
 private:
-    std::string function;
+    const std::string function;
     std::vector<const IRExpr *> operands;
+};
+
+class IRExpr_If : public IRExpr
+{
+public:
+    IRExpr_If(const IRExpr *c, const IRExpr *t, const IRExpr *e)
+        : condition(c), thenStmt(t), elseStmt(e)
+    {
+    }
+    const std::string toIRString() const;
+
+private:
+    const IRExpr *condition;
+    const IRExpr *thenStmt;
+    const IRExpr *elseStmt;
+};
+
+class IRExpr_String : public IRExpr
+{
+public:
+    IRExpr_String(const std::string &v) : value(v) {}
+    const std::string toIRString() const;
+
+private:
+    const std::string value;
 };
 
 #endif

@@ -49,7 +49,7 @@ static IRVariableType getVariableType(PWire *w)
     }
 }
 
-IRModule *IRExporter::extractModule()
+IRModule *IRExporter::extractModule() const
 {
     IRModule *irModule = new IRModule;
     setModulePorts(irModule);
@@ -261,7 +261,7 @@ IRModule *IRExporter::extractModule()
     return irModule;
 }
 
-void IRExporter::setModulePorts(IRModule *irModule)
+void IRExporter::setModulePorts(IRModule *irModule) const
 {
     irModule->setTopLevel(isToplevel());
     irModule->setModuleName(this->module->mod_name().str());
@@ -333,29 +333,29 @@ void IRExporter::setModulePorts(IRModule *irModule)
     }
 }
 
-const IRExpr *IRExporter::toIRExpr(PExpr *expr)
+const IRExpr *IRExporter::toIRExpr(PExpr *expr) const
 {
-    IRExprVisitor v;
+    IRExprVisitor v(this);
     expr->accept(&v);
     return v.getIRExpr();
 }
 
-const IRStmt *IRExporter::toIRStmt(PGate *pgate)
+const IRStmt *IRExporter::toIRStmt(PGate *pgate) const
 {
     IRStmtVisitor v;
     pgate->accept(&v);
     return v.getIRStmt();
 }
 
-const IRStmt *IRExporter::toIRStmt(Statement *stmt)
+const IRStmt *IRExporter::toIRStmt(Statement *stmt) const
 {
     IRStmtVisitor v;
     stmt->accept(&v);
     return v.getIRStmt();
 }
 
-bool IRExporter::isConstantExpr(PExpr *expr)
+bool IRExporter::isConstantExpr(PExpr *expr) const
 {
-    const IRExpr* irExpr = toIRExpr(expr);
-    return dynamic_cast<const IRExpr_Constant*>(irExpr) != NULL;
+    const IRExpr *irExpr = toIRExpr(expr);
+    return dynamic_cast<const IRExpr_Constant *>(irExpr) != NULL;
 }

@@ -4,10 +4,12 @@
 #include "IRExpr.h"
 #include "ExprVisitor.h"
 
+class IRExporter;
+
 class IRExprVisitor : public ExprVisitor
 {
 public:
-    IRExprVisitor() {}
+    IRExprVisitor(const IRExporter *ire) : irExporter(ire) {}
 
     void visit(PEIdent *);
     void visit(PETernary *);
@@ -26,7 +28,8 @@ public:
     }
 
 private:
-    IRExpr* irExpr = NULL;
+    const IRExpr *irExpr = NULL;
+    const IRExporter *irExporter;
 };
 
 #endif

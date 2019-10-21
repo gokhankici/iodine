@@ -24,22 +24,23 @@ public:
     // -------------------------------------------------------------------------
     // IR Exporting Functions
     // -------------------------------------------------------------------------
-    IRModule *extractModule();
-    const IRExpr *toIRExpr(PExpr *);
-    const IRStmt *toIRStmt(PGate *);
-    const IRStmt *toIRStmt(Statement *);
-    const IREvent *toIREvent(PEEvent *);
+    IRModule *extractModule() const;
+    const IRExpr *toIRExpr(PExpr *) const;
+    const IRStmt *toIRStmt(PGate *) const;
+    const IRStmt *toIRStmt(Statement *) const;
+    const IREvent *toIREvent(PEEvent *) const;
     // -------------------------------------------------------------------------
 
     // -------------------------------------------------------------------------
     // Helper Functions
     // -------------------------------------------------------------------------
-    const std::string getWireName(PWire *w);
-    void setModulePorts(IRModule *);
-    bool isToplevel();
-    bool isConstantExpr(PExpr *);
-    const IRExpr *pform_nameToIRExpr(const pform_name_t &that);
-    const IRExpr *nameComponentToIRExpr(const perm_string &, const std::list<index_component_t> &);
+    const std::string getWireName(PWire *w) const;
+    void setModulePorts(IRModule *) const;
+    bool isToplevel() const;
+    bool isConstantExpr(PExpr *) const;
+    const IRExpr *pform_nameToIRExpr(const pform_name_t &that) const;
+    const IRExpr *nameComponentToIRExpr(const perm_string &,
+                                        const std::list<index_component_t> &) const;
     // -------------------------------------------------------------------------
 
 private:

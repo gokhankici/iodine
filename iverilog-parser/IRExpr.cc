@@ -1,6 +1,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <iostream>
 
 #include "IRExpr.h"
 
@@ -35,4 +36,15 @@ const string IRExpr_UF::toIRString() const
 void IRExpr_UF::addOperand(const IRExpr *operand)
 {
     operands.push_back(operand);
+}
+
+const string IRExpr_If::toIRString() const
+{
+    cerr << "toIRString should not be called on the if expression!" << endl;
+    exit(1);
+}
+
+const string IRExpr_String::toIRString() const
+{
+    return "\"" + value + "\"";
 }
