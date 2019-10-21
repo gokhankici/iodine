@@ -53,7 +53,7 @@ void IRExprVisitor::visit(PECallFunction *cf)
         return;
     }
 
-    IRExpr_UF *uf = new IRExpr_UF("verilog(" + name + ")");
+    IRExpr_UF *uf = new IRExpr_UF("call_function(" + name + ")");
     for (auto parmE : cf->parms_)
     {
         IRExprVisitor v(irExporter);
@@ -83,51 +83,21 @@ void IRExprVisitor::visit(PEBinary *be)
     const char *fun;
     switch (be->op_)
     {
-    case 'a':
-        fun = "and";
-        break; // &&
-    case 'o':
-        fun = "or";
-        break; // ||
-    case 'e':
-        fun = "eq";
-        break; // ==
-    case 'n':
-        fun = "neq";
-        break; // !=
-    case 'l':
-        fun = "shl";
-        break; // <<
-    case 'r':
-        fun = "shr";
-        break; // >>
-    case '&':
-        fun = "bitwise-and";
-        break; // &
-    case '|':
-        fun = "bitwise-or";
-        break; // |
-    case '<':
-        fun = "lt";
-        break; // <
-    case '>':
-        fun = "gt";
-        break; // >
-    case '^':
-        fun = "xor";
-        break; // ^
-    case '+':
-        fun = "add";
-        break; // +
-    case '-':
-        fun = "sub";
-        break; // -
-    case '*':
-        fun = "mul";
-        break; // *
-    case '/':
-        fun = "div";
-        break; // /
+    case 'a': fun = "and";         break; // &&
+    case 'o': fun = "or";          break; // ||
+    case 'e': fun = "eq";          break; // ==
+    case 'n': fun = "neq";         break; // !=
+    case 'l': fun = "shl";         break; // <<
+    case 'r': fun = "shr";         break; // >>
+    case '&': fun = "bitwise-and"; break; // &
+    case '|': fun = "bitwise-or";  break; // |
+    case '<': fun = "lt";          break; // <
+    case '>': fun = "gt";          break; // >
+    case '^': fun = "xor";         break; // ^
+    case '+': fun = "add";         break; // +
+    case '-': fun = "sub";         break; // -
+    case '*': fun = "mul";         break; // *
+    case '/': fun = "div";         break; // /
     default:
         cerr << endl
              << "NOT SUPPORTED: Binary expr operand: " << be->op_ << endl;
@@ -157,15 +127,9 @@ void IRExprVisitor::visit(PEUnary *ue)
     const char *fun;
     switch (ue->op_)
     {
-    case 'm':
-        fun = "abs";
-        break;
-    case '!':
-        fun = "not";
-        break;
-    case '~':
-        fun = "neg";
-        break;
+    case 'm': fun = "abs"; break;
+    case '!': fun = "not"; break;
+    case '~': fun = "neg"; break;
     default:
         cerr << endl
              << "NOT SUPPORTED: Unary expr operand: " << ue->op_ << endl;
