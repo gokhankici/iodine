@@ -214,3 +214,13 @@ const IREvent *IRExporter::toIREvent(PEEvent *ev) const
 
     return new IREvent(eventType, v.getIRExpr());
 }
+
+bool IRExporter::moduleExists(const std::string &moduleName)
+{
+    return IRExporter::irModules.find(moduleName) != irModules.end();
+}
+
+void IRExporter::setModule(const std::string &moduleName, const IRModule *irModule)
+{
+    IRExporter::irModules.insert_or_assign(moduleName, irModule);
+}

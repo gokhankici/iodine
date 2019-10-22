@@ -15,17 +15,9 @@ void IRExprVisitor::visit(PEIdent *id)
 
 void IRExprVisitor::visit(PETernary *te)
 {
-    IRExprVisitor condV(irExporter);
-    IRExprVisitor thenV(irExporter);
-    IRExprVisitor elseV(irExporter);
-
-    te->expr_->accept(&condV);
-    te->tru_->accept(&thenV);
-    te->fal_->accept(&elseV);
-
-    irExpr = new IRExpr_If(condV.getIRExpr(),
-                           thenV.getIRExpr(),
-                           elseV.getIRExpr());
+    irExpr = new IRExpr_If(toIRExpr(te->expr_),
+                           toIRExpr(te->tru_),
+                           toIRExpr(te->fal_));
 }
 
 void IRExprVisitor::visit(PEConcat *cat)
@@ -33,9 +25,7 @@ void IRExprVisitor::visit(PEConcat *cat)
     IRExpr_UF *uf = new IRExpr_UF("concat");
     for (auto itr = cat->parms_.begin(); itr != cat->parms_.end(); ++itr)
     {
-        IRExprVisitor v(irExporter);
-        (*itr)->accept(&v);
-        uf->addOperand(v.getIRExpr());
+        uf->addOperand(toIRExpr(*itr));
     }
     irExpr = uf;
 }
@@ -56,9 +46,7 @@ void IRExprVisitor::visit(PECallFunction *cf)
     IRExpr_UF *uf = new IRExpr_UF("call_function(" + name + ")");
     for (auto parmE : cf->parms_)
     {
-        IRExprVisitor v(irExporter);
-        parmE->accept(&v);
-        uf->addOperand(v.getIRExpr());
+        uf->addOperand(toIRExpr(parmE));
     }
     irExpr = uf;
 }
@@ -110,16 +98,7 @@ void IRExprVisitor::visit(PEBinary *be)
         //    default:  out << op_;   break;
     }
 
-    IRExpr_UF *uf = new IRExpr_UF(fun);
-
-    IRExprVisitor lv(irExporter), rv(irExporter);
-    be->left_->accept(&lv);
-    be->right_->accept(&rv);
-
-    uf->addOperand(lv.getIRExpr());
-    uf->addOperand(rv.getIRExpr());
-
-    irExpr = uf;
+    irExpr = new IRExpr_UF(fun, toIRExpr(be->left_), toIRExpr(be->right_));
 }
 
 void IRExprVisitor::visit(PEUnary *ue)
@@ -136,14 +115,7 @@ void IRExprVisitor::visit(PEUnary *ue)
         exit(1);
     }
 
-    IRExpr_UF *uf = new IRExpr_UF(fun);
-
-    IRExprVisitor v(irExporter);
-    ue->expr_->accept(&v);
-
-    uf->addOperand(v.getIRExpr());
-
-    irExpr = uf;
+    irExpr = new IRExpr_UF(fun, toIRExpr(ue->expr_));
 }
 
 void IRExprVisitor::visit(PEString *s)

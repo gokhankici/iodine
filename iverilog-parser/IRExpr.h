@@ -50,11 +50,11 @@ class IRExpr_UF : public IRExpr
 public:
     IRExpr_UF(const char *f) : function(f) {}
     IRExpr_UF(const std::string &f) : function(f) {}
-    IRExpr_UF(const char *f, IRExpr *o) : function(f)
+    IRExpr_UF(const char *f, const IRExpr *o) : function(f)
     {
         operands.push_back(o);
     }
-    IRExpr_UF(std::string &f, IRExpr *o1, IRExpr *o2) : function(f)
+    IRExpr_UF(const char *f, const IRExpr *o1, const IRExpr *o2) : function(f)
     {
         operands.push_back(o1);
         operands.push_back(o2);
@@ -77,9 +77,9 @@ public:
     const std::string toIRString() const;
 
 private:
-    const IRExpr *condition;
-    const IRExpr *thenStmt;
-    const IRExpr *elseStmt;
+    const IRExpr *const condition;
+    const IRExpr *const thenStmt;
+    const IRExpr *const elseStmt;
 };
 
 class IRExpr_String : public IRExpr

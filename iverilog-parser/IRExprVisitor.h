@@ -27,9 +27,16 @@ public:
         return irExpr;
     }
 
+    const IRExpr *toIRExpr(PExpr *expr)
+    {
+        IRExprVisitor v(irExporter);
+        expr->accept(&v);
+        return v.getIRExpr();
+    }
+
 private:
     const IRExpr *irExpr = NULL;
-    const IRExporter *irExporter;
+    const IRExporter *const irExporter;
 };
 
 #endif

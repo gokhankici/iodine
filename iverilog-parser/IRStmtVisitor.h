@@ -17,11 +17,14 @@
 #include "IRExpr.h"
 #include "IRStmt.h"
 #include "Visitor.h"
+#include "IRExprVisitor.h"
+
+class IRExporter;
 
 class IRStmtVisitor : public Visitor
 {
 public:
-    IRStmtVisitor() {}
+    IRStmtVisitor(const IRExporter *ire) : irExporter(ire) {}
 
     void visit(Module* o)         { std::cerr << "NOT SUPPORTED: " << typeid(*this).name() << " @ " << typeid(*o).name() << std::endl; exit(1); }
 
@@ -31,16 +34,16 @@ public:
     void visit(PGBuiltin*)        ;
     void visit(PGModule*)         ;
 
-    void visit(Statement*)        ;
-    void visit(PProcess*)         ;
-    void visit(PEventStatement*)  ;
+    void visit(Statement* o)      { std::cerr << "NOT SUPPORTED: " << typeid(*this).name() << " @ " << typeid(*o).name() << std::endl; exit(1); }
+    void visit(PProcess* o)       { std::cerr << "NOT SUPPORTED: " << typeid(*this).name() << " @ " << typeid(*o).name() << std::endl; exit(1); }
+    void visit(PEventStatement* o){ std::cerr << "NOT SUPPORTED: " << typeid(*this).name() << " @ " << typeid(*o).name() << std::endl; exit(1); }
     void visit(PCondit*)          ;
     void visit(PAssign*)          ;
     void visit(PAssignNB*)        ;
     void visit(PBlock*)           ;
     void visit(PCase*)            ;
     void visit(PCallTask*)        ;
-    void visit(PForStatement*)    ;
+    void visit(PForStatement* o)  { std::cerr << "NOT SUPPORTED: " << typeid(*this).name() << " @ " << typeid(*o).name() << std::endl; exit(1); } 
 
     void visit(PExpr* o)          { std::cerr << "NOT SUPPORTED: " << typeid(*this).name() << " @ " << typeid(*o).name() << std::endl; exit(1); }
     void visit(PEIdent* o)        { std::cerr << "NOT SUPPORTED: " << typeid(*this).name() << " @ " << typeid(*o).name() << std::endl; exit(1); }
@@ -62,8 +65,23 @@ public:
         return irStmt;
     }
 
+    const IRExpr *toIRExpr(PExpr *expr) const
+    {
+        IRExprVisitor v(irExporter);
+        expr->accept(&v);
+        return v.getIRExpr();
+    }
+
+    const IRStmt *toIRStmt(Statement *stmt) const
+    {
+        IRStmtVisitor v(irExporter);
+        stmt->accept(&v);
+        return v.getIRStmt();
+    }
+
 private:
-    IRStmt* irStmt = NULL;
+    const IRStmt *irStmt = NULL;
+    const IRExporter *const irExporter;
 };
 
 #endif

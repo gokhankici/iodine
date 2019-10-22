@@ -32,6 +32,8 @@ using namespace std;
 
 extern std::map<perm_string, Module *> pform_modules;
 
+std::unordered_map<std::string, const IRModule*> IRExporter::irModules;
+
 static IRVariableType getVariableType(PWire *w)
 {
     switch (w->get_wire_type())
@@ -49,7 +51,7 @@ static IRVariableType getVariableType(PWire *w)
     }
 }
 
-IRModule *IRExporter::extractModule() const
+const IRModule *IRExporter::extractModule() const
 {
     IRModule *irModule = new IRModule;
     setModulePorts(irModule);
@@ -342,14 +344,14 @@ const IRExpr *IRExporter::toIRExpr(PExpr *expr) const
 
 const IRStmt *IRExporter::toIRStmt(PGate *pgate) const
 {
-    IRStmtVisitor v;
+    IRStmtVisitor v(this);
     pgate->accept(&v);
     return v.getIRStmt();
 }
 
 const IRStmt *IRExporter::toIRStmt(Statement *stmt) const
 {
-    IRStmtVisitor v;
+    IRStmtVisitor v(this);
     stmt->accept(&v);
     return v.getIRStmt();
 }

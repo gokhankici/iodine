@@ -7,12 +7,12 @@
 
 using namespace std;
 
-void IRStmt_Sequence::addStmt(IRStmt *stmt)
+void IRStmt_Sequence::addStmt(const IRStmt *stmt)
 {
     statements.push_back(stmt);
 }
 
-string IRStmt_Sequence::toIRString()
+const string IRStmt_Sequence::toIRString() const
 {
     ostringstream os;
     os << "block([";
@@ -28,20 +28,20 @@ string IRStmt_Sequence::toIRString()
     return os.str();
 }
 
-string IRStmt_Assignment::toIRString()
+const string IRStmt_Assignment::toIRString() const
 {
     ostringstream os;
 
     switch (type)
     {
-    case NonBlockingAsgn:
-        os << "nb_asgn(";
+    case IR_NON_BLOCKING_ASSIGNMENT:
+        os << "nb_asn(";
         break;
-    case BlockingAsgn:
-        os << "b_asgn(";
+    case IR_BLOCKING_ASSIGNMENT:
+        os << "b_asn(";
         break;
-    case ContAsgn:
-        os << "b_asgn(";
+    case IR_CONTINUOUS_ASSIGNMENT:
+        os << "asn(";
         break;
     }
 
@@ -50,7 +50,7 @@ string IRStmt_Assignment::toIRString()
     return os.str();
 }
 
-string IRStmt_If::toIRString()
+const string IRStmt_If::toIRString() const
 {
     ostringstream os;
 
@@ -62,7 +62,32 @@ string IRStmt_If::toIRString()
     return os.str();
 }
 
-string IRStmt_Skip::toIRString()
+const string IRStmt_Skip::toIRString() const
 {
     return "skip";
+}
+
+const string IRStmt_ModuleInstance::toIRString() const
+{
+    ostringstream os;
+
+    os << "mod_inst("
+       << module_type << ", "
+       << module_name << ", "
+       << "[";
+
+    bool isFirst = true;
+    for (auto p : portMapping)
+    {
+        if (!isFirst)
+            os << ", ";
+        os << "("
+           << "\"" << p.first << "\""
+           << ", " << p.second->toIRString()
+           << ")";
+        isFirst = false;
+    }
+
+    os << "])";
+    return os.str();
 }

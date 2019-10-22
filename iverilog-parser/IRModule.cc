@@ -10,7 +10,7 @@ void IRModule::addVariable(const IRVariable &irVariable)
     variables.push_back(irVariable);
 }
 
-void IRModule::dump(std::ostream &)
+void IRModule::dump(std::ostream &) const
 {
     // TODO
 }

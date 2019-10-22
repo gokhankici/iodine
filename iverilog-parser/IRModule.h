@@ -72,7 +72,7 @@ public:
     IRModule() : isTopLevel(false) {}
     void addPort(const IRPort &);
     void addVariable(const IRVariable &);
-    void dump(std::ostream &);
+    void dump(std::ostream &) const;
 
     void setTopLevel(bool value) { isTopLevel = value; }
     void setModuleName(const char *value) { moduleName = value; }
