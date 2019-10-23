@@ -18,8 +18,8 @@
 class IRExporter
 {
 public:
-    IRExporter(Module *m) : out(std::cout), module(m), moduleInstantiation(NULL) {}
-    IRExporter(Module *m, PGModule *mi) : out(std::cout), module(m), moduleInstantiation(mi) {}
+    IRExporter(Module *m) : module(m), moduleInstantiation(NULL) {}
+    IRExporter(Module *m, PGModule *mi) : module(m), moduleInstantiation(mi) {}
 
     // -------------------------------------------------------------------------
     // IR Exporting Functions
@@ -29,6 +29,7 @@ public:
     const IRStmt *toIRStmt(PGate *) const;
     const IRStmt *toIRStmt(Statement *) const;
     const IREvent *toIREvent(PEEvent *) const;
+    void dumpIR(ostream&) const;
     // -------------------------------------------------------------------------
 
     // -------------------------------------------------------------------------
@@ -45,10 +46,19 @@ public:
     static void setModule(const std::string &moduleName, const IRModule *irModule);
     // -------------------------------------------------------------------------
 
+    const Module *getModule() const
+    {
+        return module;
+    }
+
+    const PGModule *getModuleInstantiation() const
+    {
+        return moduleInstantiation;
+    }
+
 private:
-    ostream &out;
-    const Module *module;
-    const PGModule *moduleInstantiation;
+    const Module *const module;
+    const PGModule *const moduleInstantiation;
 
     static const string prolog_comment;
     static const string sep;

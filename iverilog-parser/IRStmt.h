@@ -46,7 +46,7 @@ enum IRStmt_AssignmentType
 class IRStmt_Assignment : public IRStmt
 {
 public:
-    IRStmt_Assignment(IRStmt_AssignmentType t, std::string &l, IRExpr *r)
+    IRStmt_Assignment(IRStmt_AssignmentType t, const std::string &l, const IRExpr *r)
         : type(t), lhs(l), rhs(r)
     {
     }

@@ -47,7 +47,8 @@ bool IRExporter::isToplevel() const
     return moduleInstantiation == NULL;
 }
 
-const IRExpr *IRExporter::nameComponentToIRExpr(const perm_string &name, const std::list<index_component_t> &indices) const
+const IRExpr *IRExporter::nameComponentToIRExpr(const perm_string &name,
+                                                const std::list<index_component_t> &indices) const
 {
     string nameStr(name.str());
     bool varExists = false;
@@ -136,28 +137,33 @@ const IRExpr *IRExporter::nameComponentToIRExpr(const perm_string &name, const s
 
     if (!indices.empty())
     {
-        IRExpr_UF *indexExpr = new IRExpr_UF("indexExpr");
+        IRExpr_Select* selectExpr = new IRExpr_Select(i);
+
         for (auto idx = indices.begin(); idx != indices.end(); ++idx)
         {
             const index_component_t &ic = (*idx);
             switch (ic.sel)
             {
             case index_component_t::SEL_BIT:
-                indexExpr->addOperand(toIRExpr(ic.msb));
+                selectExpr->addIndex(toIRExpr(ic.msb));
                 break;
             case index_component_t::SEL_PART:
             case index_component_t::SEL_IDX_UP:
             case index_component_t::SEL_IDX_DO:
-                indexExpr->addOperand(toIRExpr(ic.msb));
-                indexExpr->addOperand(toIRExpr(ic.lsb));
+                selectExpr->addIndex(toIRExpr(ic.msb));
+                selectExpr->addIndex(toIRExpr(ic.lsb));
                 break;
             case index_component_t::SEL_BIT_LAST:
+                selectExpr->addIndex(new IRExpr_Constant("$"));
+                break;
             default:
+                cerr << "unknown bit: " << ic.sel << endl;
+                exit(1);
                 break;
             }
         }
 
-        return indexExpr;
+        return selectExpr;
     }
     else
     {

@@ -2,6 +2,7 @@
 #include <vector>
 #include <sstream>
 #include <iostream>
+#include <assert.h>
 
 #include "IRExpr.h"
 
@@ -47,4 +48,15 @@ const string IRExpr_If::toIRString() const
 const string IRExpr_String::toIRString() const
 {
     return "\"" + value + "\"";
+}
+
+const string IRExpr_Select::toIRString() const
+{
+    assert(!indices.empty());
+    ostringstream os;
+    os << "select(" << '"' << variable << '"';
+    for(auto i: indices)
+        os << ", " << i->toIRString();
+    os << ")";
+    return os.str();
 }

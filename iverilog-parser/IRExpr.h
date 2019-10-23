@@ -12,6 +12,9 @@
 data IRExpr = Constant String
             | Variable String
             | UninterpretedFunction String [IRExpr]
+            | IfThenElse IRExpr IRExpr IRExpr
+            | String String
+            | Select String List[IRExpr]
 */
 
 class IRExpr
@@ -20,6 +23,7 @@ public:
     virtual const std::string toIRString() const = 0;
 };
 
+// constant
 class IRExpr_Constant : public IRExpr
 {
 public:
@@ -30,13 +34,13 @@ private:
     const std::string constant;
 };
 
+// variable
 class IRExpr_Variable : public IRExpr
 {
 public:
     IRExpr_Variable(const std::string &v) : variable(v) {}
     const std::string toIRString() const;
-
-    const std::string &getVariable()
+    const std::string &getVariable() const
     {
         return variable;
     }
@@ -45,6 +49,7 @@ private:
     const std::string variable;
 };
 
+// uninterpreted function
 class IRExpr_UF : public IRExpr
 {
 public:
@@ -59,6 +64,7 @@ public:
         operands.push_back(o1);
         operands.push_back(o2);
     }
+    IRExpr_UF(const IRExpr_UF &other) : function(other.function), operands(other.operands) {}
     void addOperand(const IRExpr *operand);
     const std::string toIRString() const;
 
@@ -67,6 +73,7 @@ private:
     std::vector<const IRExpr *> operands;
 };
 
+// Ternary if expression
 class IRExpr_If : public IRExpr
 {
 public:
@@ -90,6 +97,31 @@ public:
 
 private:
     const std::string value;
+};
+
+// variable[i1][i2:i3][i4]...
+class IRExpr_Select : public IRExpr
+{
+public:
+    IRExpr_Select(const std::string &v) : variable(v) {}
+    void addIndex(const IRExpr *i)
+    {
+        indices.push_back(i);
+    }
+    const std::string &getVariable() const
+    {
+        return variable;
+    }
+    const std::vector<const IRExpr *> &getIndices() const
+    {
+        return indices;
+    }
+
+    const std::string toIRString() const;
+
+private:
+    const std::string variable;
+    std::vector<const IRExpr *> indices;
 };
 
 #endif

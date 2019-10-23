@@ -82,6 +82,18 @@ public:
 private:
     const IRStmt *irStmt = NULL;
     const IRExporter *const irExporter;
+
+    const IRStmt *doAssignment(IRStmt_AssignmentType t, PExpr *lhs, PExpr *rhs) const
+    {
+        return doAssignment(t, toIRExpr(lhs), toIRExpr(rhs));
+    }
+
+    const IRStmt *doAssignment(IRStmt_AssignmentType t, PExpr *lhs, const IRExpr *rhs) const
+    {
+        return doAssignment(t, toIRExpr(lhs), rhs);
+    }
+
+    const IRStmt *doAssignment(IRStmt_AssignmentType t, const IRExpr *lhs, const IRExpr *rhs) const;
 };
 
 #endif

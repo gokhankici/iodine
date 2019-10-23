@@ -53,6 +53,10 @@ static IRVariableType getVariableType(PWire *w)
 
 const IRModule *IRExporter::extractModule() const
 {
+    string module_name(module->mod_name().str());
+    assert(moduleExists(module_name));
+    setModule(module_name, NULL);
+
     IRModule *irModule = new IRModule;
     setModulePorts(irModule);
 
@@ -143,8 +147,7 @@ const IRModule *IRExporter::extractModule() const
     // skipping variable initializations
     if (module->var_inits.size() != 0)
     {
-        out << endl
-            << prolog_comment << "skipping variable initializations" << endl;
+        cerr << "skipping variable initializations" << endl;
         for (unsigned i = 0; i < module->var_inits.size(); i++)
         {
             Statement *s = module->var_inits[i];
@@ -260,6 +263,7 @@ const IRModule *IRExporter::extractModule() const
         exit(1);
     }
 
+    setModule(module_name, irModule);
     return irModule;
 }
 
@@ -360,4 +364,16 @@ bool IRExporter::isConstantExpr(PExpr *expr) const
 {
     const IRExpr *irExpr = toIRExpr(expr);
     return dynamic_cast<const IRExpr_Constant *>(irExpr) != NULL;
+}
+
+void IRExporter::dumpIR(ostream &out) const
+{
+    assert(!IRExporter::irModules.empty());
+
+    for (auto itr = IRExporter::irModules.begin(); itr != IRExporter::irModules.end(); itr++)
+    {
+        itr->second->dump(out);
+        out << endl;
+        itr++;
+    }
 }

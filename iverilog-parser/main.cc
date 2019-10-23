@@ -1091,7 +1091,8 @@ int main(int argc, char*argv[])
 			  // IRExporter pe(o, mod);
 			  // mod->accept(&pe);
 			  IRExporter irExporter(mod);
-			  irExporter.extractModule()->dump(o);
+			  irExporter.extractModule();
+			  irExporter.dumpIR(o);
 		  }
 		  else
 		  {

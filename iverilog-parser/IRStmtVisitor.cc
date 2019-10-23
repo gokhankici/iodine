@@ -4,8 +4,7 @@
 #include "IRStmtVisitor.h"
 #include "IRExprVisitor.h"
 
-static IRStmt* doAssignment(IRStmt_AssignmentType, PExpr* lhs, PExpr* rhs);
-static IRStmt* doAssignment(IRStmt_AssignmentType, PExpr* lhs, IRExpr* rhs);
+using namespace std;
 
 void IRStmtVisitor::visit(PGAssign *ga)
 {
@@ -256,14 +255,33 @@ void IRStmtVisitor::visit(PCallTask *ct)
     }
 }
 
-static IRStmt *doAssignment(IRStmt_AssignmentType, PExpr *, PExpr *)
+const IRStmt *IRStmtVisitor::doAssignment(IRStmt_AssignmentType assignmentType,
+                                          const IRExpr *lhs,
+                                          const IRExpr *rhs) const
 {
-    // TODO
-    return NULL;
-}
-
-static IRStmt *doAssignment(IRStmt_AssignmentType, PExpr *, IRExpr *)
-{
-    // TODO
-    return NULL;
+    if (auto lhsVar = dynamic_cast<const IRExpr_Variable *>(lhs))
+    {
+        return new IRStmt_Assignment(assignmentType,
+                                     lhsVar->getVariable(),
+                                     rhs);
+    }
+    else if (auto lhsSelect = dynamic_cast<const IRExpr_Select *>(lhs))
+    {
+        IRExpr_UF *newRhs = new IRExpr_UF("write to index");
+        newRhs->addOperand(new IRExpr_Variable(lhsSelect->getVariable()));
+        for (auto i : lhsSelect->getIndices())
+        {
+            newRhs->addOperand(i);
+        }
+        newRhs->addOperand(rhs);
+        return new IRStmt_Assignment(assignmentType,
+                                     lhsVar->getVariable(),
+                                     newRhs);
+    }
+    else
+    {
+        cerr << "Lhs is not a variable or a select expression" << endl;
+        cerr << lhs->toIRString() << " = " << rhs->toIRString() << endl;
+        exit(1);
+    }
 }
