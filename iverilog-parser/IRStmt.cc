@@ -5,6 +5,8 @@
 #include "IRExpr.h"
 #include "IRStmt.h"
 
+#include "IRExporterHelper.h"
+
 using namespace std;
 
 void IRStmt_Sequence::addStmt(const IRStmt *stmt)
@@ -12,26 +14,13 @@ void IRStmt_Sequence::addStmt(const IRStmt *stmt)
     statements.push_back(stmt);
 }
 
-const string IRStmt_Sequence::toIRString() const
+std::ostream &IRStmt_Sequence::print(std::ostream &os) const
 {
-    ostringstream os;
-    os << "block([";
-
-    for (size_t i = 0; i < statements.size(); i++)
-    {
-        if (i > 0)
-            os << ", ";
-        os << statements.at(i)->toIRString();
-    }
-
-    os << "])";
-    return os.str();
+    return os << "block(" << statements << ")";
 }
 
-const string IRStmt_Assignment::toIRString() const
+std::ostream &IRStmt_Assignment::print(std::ostream &os) const
 {
-    ostringstream os;
-
     switch (type)
     {
     case IR_NON_BLOCKING_ASSIGNMENT:
@@ -45,32 +34,21 @@ const string IRStmt_Assignment::toIRString() const
         break;
     }
 
-    os << lhs << ", " << rhs->toIRString() << ")";
-
-    return os.str();
+    return os << lhs << ", " << *rhs << ")";
 }
 
-const string IRStmt_If::toIRString() const
+std::ostream &IRStmt_If::print(std::ostream &os) const
 {
-    ostringstream os;
-
-    os << "ite("
-       << condition->toIRString() << ", "
-       << thenStmt->toIRString() << ", "
-       << elseStmt->toIRString() << ")";
-
-    return os.str();
+    return os << "ite(" << *condition << ", " << *thenStmt << ", " << *elseStmt << ")";
 }
 
-const string IRStmt_Skip::toIRString() const
+inline std::ostream &IRStmt_Skip::print(std::ostream &os) const
 {
-    return "skip";
+    return os << "skip";
 }
 
-const string IRStmt_ModuleInstance::toIRString() const
+std::ostream &IRStmt_ModuleInstance::print(std::ostream &os) const
 {
-    ostringstream os;
-
     os << "mod_inst("
        << module_type << ", "
        << module_name << ", "
@@ -83,11 +61,15 @@ const string IRStmt_ModuleInstance::toIRString() const
             os << ", ";
         os << "("
            << "\"" << p.first << "\""
-           << ", " << p.second->toIRString()
+           << ", " << *p.second
            << ")";
         isFirst = false;
     }
 
-    os << "])";
-    return os.str();
+    return os << "])";
+}
+
+inline std::ostream &operator<<(std::ostream &out, const IRStmt &stmt)
+{
+    return stmt.print(out);
 }

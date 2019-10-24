@@ -27,7 +27,7 @@ M = LineInfo.o StringHeap.o
 TT = t-dll.o t-dll-api.o t-dll-expr.o t-dll-proc.o t-dll-analog.o
 FF = cprop.o nodangle.o synth.o synth2.o syn-rules.o
 
-MY_OBJS = IRExpr.o IRStmt.o IRModule.o IRExporter.o IRExporterHelper.o IRExprVisitor.o IRStmtVisitor.o
+MY_OBJS = IRExpr.o IRStmt.o IRModule.o IRExporter.o IRExprVisitor.o IRStmtVisitor.o
 
 O = main.o async.o design_dump.o discipline.o dup_expr.o elaborate.o \
     elab_expr.o elaborate_analog.o elab_lval.o elab_net.o \

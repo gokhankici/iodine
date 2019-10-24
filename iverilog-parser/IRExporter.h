@@ -29,7 +29,6 @@ public:
     const IRStmt *toIRStmt(PGate *) const;
     const IRStmt *toIRStmt(Statement *) const;
     const IREvent *toIREvent(PEEvent *) const;
-    void dumpIR(ostream&) const;
     // -------------------------------------------------------------------------
 
     // -------------------------------------------------------------------------
@@ -68,6 +67,8 @@ private:
     static const string nopStmt;
 
     static std::unordered_map<std::string, const IRModule *> irModules;
+
+    friend std::ostream &operator<<(std::ostream &, const IRExporter &);
 };
 
 #endif // PROLOG_EXPORTER_H

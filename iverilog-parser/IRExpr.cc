@@ -5,33 +5,23 @@
 #include <assert.h>
 
 #include "IRExpr.h"
+#include "IRExporterHelper.h"
 
 using namespace std;
 
-const string IRExpr_Constant::toIRString() const
+inline ostream &IRExpr_Constant::print(ostream &out) const
 {
-    return constant;
+    return out << constant;
 }
 
-const string IRExpr_Variable::toIRString() const
+inline std::ostream &IRExpr_Variable::print(ostream &out) const
 {
-    return variable;
+    return out << variable;
 }
 
-const string IRExpr_UF::toIRString() const
+std::ostream &IRExpr_UF::print(ostream &out) const
 {
-    ostringstream os;
-    os << "uf(" << function << ", [";
-
-    for (size_t i = 0; i < operands.size(); i++)
-    {
-        if (i > 0)
-            os << ", ";
-        os << operands.at(i)->toIRString();
-    }
-
-    os << "])";
-    return os.str();
+    return out << "uf(" << function << ", " << operands << ")";
 }
 
 void IRExpr_UF::addOperand(const IRExpr *operand)
@@ -39,24 +29,31 @@ void IRExpr_UF::addOperand(const IRExpr *operand)
     operands.push_back(operand);
 }
 
-const string IRExpr_If::toIRString() const
+std::ostream &IRExpr_If::print(ostream &) const
 {
     cerr << "toIRString should not be called on the if expression!" << endl;
     exit(1);
 }
 
-const string IRExpr_String::toIRString() const
+inline std::ostream &IRExpr_String::print(ostream &out) const
 {
-    return "\"" + value + "\"";
+    return out << '"' << value << '"';
 }
 
-const string IRExpr_Select::toIRString() const
+std::ostream &IRExpr_Select::print(ostream &os) const
 {
     assert(!indices.empty());
+    return os << "select(" << '"' << variable << '"' << ", " << indices << ")";
+}
+
+inline std::ostream &operator<<(std::ostream &out, const IRExpr &expr)
+{
+    return expr.print(out);
+}
+
+std::string IRExpr::toIRString() const
+{
     ostringstream os;
-    os << "select(" << '"' << variable << '"';
-    for(auto i: indices)
-        os << ", " << i->toIRString();
-    os << ")";
+    print(os);
     return os.str();
 }

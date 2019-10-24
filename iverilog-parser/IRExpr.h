@@ -20,7 +20,8 @@ data IRExpr = Constant String
 class IRExpr
 {
 public:
-    virtual const std::string toIRString() const = 0;
+    virtual std::ostream &print(std::ostream &) const = 0;
+    std::string toIRString() const;
 };
 
 // constant
@@ -28,7 +29,7 @@ class IRExpr_Constant : public IRExpr
 {
 public:
     IRExpr_Constant(const std::string &c) : constant(c) {}
-    const std::string toIRString() const;
+    std::ostream &print(std::ostream &) const;
 
 private:
     const std::string constant;
@@ -39,7 +40,7 @@ class IRExpr_Variable : public IRExpr
 {
 public:
     IRExpr_Variable(const std::string &v) : variable(v) {}
-    const std::string toIRString() const;
+    std::ostream &print(std::ostream &) const;
     const std::string &getVariable() const
     {
         return variable;
@@ -66,7 +67,7 @@ public:
     }
     IRExpr_UF(const IRExpr_UF &other) : function(other.function), operands(other.operands) {}
     void addOperand(const IRExpr *operand);
-    const std::string toIRString() const;
+    std::ostream &print(std::ostream &) const;
 
 private:
     const std::string function;
@@ -81,7 +82,7 @@ public:
         : condition(c), thenStmt(t), elseStmt(e)
     {
     }
-    const std::string toIRString() const;
+    std::ostream &print(std::ostream &) const;
 
 private:
     const IRExpr *const condition;
@@ -93,7 +94,7 @@ class IRExpr_String : public IRExpr
 {
 public:
     IRExpr_String(const std::string &v) : value(v) {}
-    const std::string toIRString() const;
+    std::ostream &print(std::ostream &) const;
 
 private:
     const std::string value;
@@ -116,12 +117,13 @@ public:
     {
         return indices;
     }
-
-    const std::string toIRString() const;
+    std::ostream &print(std::ostream &) const;
 
 private:
     const std::string variable;
     std::vector<const IRExpr *> indices;
 };
+
+std::ostream &operator<<(std::ostream &, const IRExpr &);
 
 #endif

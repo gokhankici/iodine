@@ -366,14 +366,216 @@ bool IRExporter::isConstantExpr(PExpr *expr) const
     return dynamic_cast<const IRExpr_Constant *>(irExpr) != NULL;
 }
 
-void IRExporter::dumpIR(ostream &out) const
+std::ostream &operator<<(std::ostream &out, const IRExporter &)
 {
     assert(!IRExporter::irModules.empty());
 
     for (auto itr = IRExporter::irModules.begin(); itr != IRExporter::irModules.end(); itr++)
     {
-        itr->second->dump(out);
-        out << endl;
-        itr++;
+        out << *(itr->second) << endl;
     }
+
+    return out;
+}
+
+// -----------------------------------------------------------------------------
+// HELPER METHODS
+// -----------------------------------------------------------------------------
+
+extern std::map<perm_string, Module *> pform_modules;
+
+const string IRExporter::prolog_comment = "% ";
+const string IRExporter::sep = "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%";
+const string IRExporter::sep2 = "%-------------------------------------------------------------------------------";
+const string IRExporter::missing_id = "id_MISSING_ID";
+const string IRExporter::id_prefix = ""; // "v_";
+const string IRExporter::nopStmt = "skip";
+
+bool IRExporter::isToplevel() const
+{
+    return moduleInstantiation == NULL;
+}
+
+const IRExpr *IRExporter::nameComponentToIRExpr(const perm_string &name,
+                                                const std::list<index_component_t> &indices) const
+{
+    string nameStr(name.str());
+    bool varExists = false;
+    PExpr *paramExp = NULL;
+
+    // check if variable is a parameter
+    if (auto paramItr = module->parameters.find(name); paramItr != module->parameters.end())
+    {
+        varExists = true;
+        paramExp = paramItr->second.expr;
+    }
+    else if (auto localParamItr = module->localparams.find(name); localParamItr != module->localparams.end())
+    {
+        varExists = true;
+        paramExp = localParamItr->second.expr;
+    }
+
+    if (paramExp)
+    {
+        if (moduleInstantiation == NULL)
+        {
+            return toIRExpr(paramExp);
+        }
+
+        if (moduleInstantiation->overrides_ && (!moduleInstantiation->overrides_->empty()))
+        {
+            auto orItr = moduleInstantiation->overrides_->begin();
+            auto allParamsItr = module->param_names.begin();
+
+            while (allParamsItr != module->param_names.end())
+            {
+                perm_string paramName = *allParamsItr;
+                PExpr *overriddenExp = *orItr;
+
+                if (strcmp(paramName.str(), name.str()) == 0)
+                {
+                    if (overriddenExp == NULL)
+                    {
+                        break;
+                    }
+                    return toIRExpr(overriddenExp);
+                }
+
+                ++orItr;
+                ++allParamsItr;
+            }
+        }
+
+        if (moduleInstantiation->parms_)
+        {
+            assert(moduleInstantiation->overrides_ == NULL);
+
+            for (unsigned i = 0; i < moduleInstantiation->nparms_; i++)
+            {
+                named<PExpr *> &n = moduleInstantiation->parms_[i];
+
+                if (strcmp(n.name.str(), name.str()) == 0)
+                {
+                    return toIRExpr(n.parm);
+                }
+            }
+        }
+
+        return toIRExpr(paramExp);
+    }
+
+    if (!varExists)
+    {
+        varExists =
+            (module->wires.find(name) != module->wires.end()) ||
+            (module->funcs.find(name) != module->funcs.end());
+    }
+
+    if (!varExists)
+    {
+        cerr << endl
+             << "cannot find variable '" << nameStr << "' in module " << module->mod_name() << endl;
+        exit(1);
+    }
+
+    ostringstream os;
+
+    os << id_prefix << nameStr;
+
+    string i = os.str();
+
+    if (!indices.empty())
+    {
+        IRExpr_Select *selectExpr = new IRExpr_Select(i);
+
+        for (auto idx = indices.begin(); idx != indices.end(); ++idx)
+        {
+            const index_component_t &ic = (*idx);
+            switch (ic.sel)
+            {
+            case index_component_t::SEL_BIT:
+                selectExpr->addIndex(toIRExpr(ic.msb));
+                break;
+            case index_component_t::SEL_PART:
+            case index_component_t::SEL_IDX_UP:
+            case index_component_t::SEL_IDX_DO:
+                selectExpr->addIndex(toIRExpr(ic.msb));
+                selectExpr->addIndex(toIRExpr(ic.lsb));
+                break;
+            case index_component_t::SEL_BIT_LAST:
+                selectExpr->addIndex(new IRExpr_Constant("$"));
+                break;
+            default:
+                cerr << "unknown bit: " << ic.sel << endl;
+                exit(1);
+                break;
+            }
+        }
+
+        return selectExpr;
+    }
+    else
+    {
+        return new IRExpr_Variable(i);
+    }
+}
+
+const IRExpr *IRExporter::pform_nameToIRExpr(const pform_name_t &that) const
+{
+    pform_name_t::const_iterator cur;
+
+    cur = that.begin();
+    const name_component_t &n = *cur;
+    const IRExpr *result = nameComponentToIRExpr(n.name, n.index);
+
+    ++cur;
+
+    if (cur != that.end())
+    {
+        cerr << endl
+             << "NOT SUPPORTED: multiple name components: " << that << endl;
+        exit(1);
+    }
+
+    return result;
+}
+
+const string IRExporter::getWireName(PWire *w) const
+{
+    return nameComponentToIRExpr(w->basename(), std::list<index_component_t>())->toIRString();
+}
+
+const IREvent *IRExporter::toIREvent(PEEvent *ev) const
+{
+    IREventType eventType;
+    switch (ev->type())
+    {
+    case PEEvent::POSEDGE:
+        eventType = IR_POSEDGE;
+        break;
+    case PEEvent::NEGEDGE:
+        eventType = IR_NEGEDGE;
+        break;
+    default:
+        cerr << endl
+             << "PEvent: NOT SUPPORTED: ";
+        ev->dump(cerr);
+        cerr << endl;
+        exit(1);
+    }
+
+    IRExprVisitor v(this);
+    ev->expr()->accept(&v);
+
+    return new IREvent(eventType, v.getIRExpr());
+}
+
+bool IRExporter::moduleExists(const std::string &moduleName)
+{
+    return IRExporter::irModules.find(moduleName) != irModules.end();
+}
+
+void IRExporter::setModule(const std::string &moduleName, const IRModule *irModule)
+{
+    IRExporter::irModules.insert_or_assign(moduleName, irModule);
 }

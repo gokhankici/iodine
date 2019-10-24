@@ -22,7 +22,7 @@ data IRStmt = Sequence [IRStmt]
 class IRStmt
 {
 public:
-    virtual const std::string toIRString() const = 0;
+    virtual std::ostream& print(std::ostream&) const = 0;
 };
 
 class IRStmt_Sequence : public IRStmt
@@ -30,7 +30,7 @@ class IRStmt_Sequence : public IRStmt
 public:
     IRStmt_Sequence() {}
     void addStmt(const IRStmt *stmt);
-    const std::string toIRString() const;
+    std::ostream& print(std::ostream&) const;
 
 private:
     std::vector<const IRStmt *> statements;
@@ -50,7 +50,7 @@ public:
         : type(t), lhs(l), rhs(r)
     {
     }
-    const std::string toIRString() const;
+    std::ostream& print(std::ostream&) const;
 
 private:
     IRStmt_AssignmentType type;
@@ -65,7 +65,7 @@ public:
         : condition(c), thenStmt(t), elseStmt(e)
     {
     }
-    const std::string toIRString() const;
+    std::ostream& print(std::ostream&) const;
 
 private:
     const IRExpr *const condition;
@@ -78,7 +78,7 @@ class IRStmt_ModuleInstance : public IRStmt
 public:
     IRStmt_ModuleInstance(const std::string &mt, const std::string &mn)
         : module_type(mt), module_name(mn) {}
-    const std::string toIRString() const;
+    std::ostream& print(std::ostream&) const;
 
     void setPort(const std::string &portName, const IRExpr *portValue)
     {
@@ -96,7 +96,9 @@ class IRStmt_Skip : public IRStmt
 {
 public:
     IRStmt_Skip() {}
-    const std::string toIRString() const;
+    std::ostream& print(std::ostream&) const;
 };
+
+std::ostream &operator<<(std::ostream &, const IRStmt &);
 
 #endif
