@@ -59,13 +59,6 @@ private:
     const Module *const module;
     const PGModule *const moduleInstantiation;
 
-    static const string prolog_comment;
-    static const string sep;
-    static const string sep2;
-    static const string missing_id;
-    static const string id_prefix;
-    static const string nopStmt;
-
     static std::unordered_map<std::string, const IRModule *> irModules;
 
     friend std::ostream &operator<<(std::ostream &, const IRExporter &);

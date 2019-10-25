@@ -54,7 +54,12 @@ static IRVariableType getVariableType(PWire *w)
 const IRModule *IRExporter::extractModule() const
 {
     string module_name(module->mod_name().str());
-    assert(moduleExists(module_name));
+    if (moduleExists(module_name))
+    {
+        backtrace();
+        cerr << module_name << " is already extracted, why bother?" << endl;
+        exit(1);
+    }
     setModule(module_name, NULL);
 
     IRModule *irModule = new IRModule;
@@ -384,13 +389,6 @@ std::ostream &operator<<(std::ostream &out, const IRExporter &)
 
 extern std::map<perm_string, Module *> pform_modules;
 
-const string IRExporter::prolog_comment = "% ";
-const string IRExporter::sep = "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%";
-const string IRExporter::sep2 = "%-------------------------------------------------------------------------------";
-const string IRExporter::missing_id = "id_MISSING_ID";
-const string IRExporter::id_prefix = ""; // "v_";
-const string IRExporter::nopStmt = "skip";
-
 bool IRExporter::isToplevel() const
 {
     return moduleInstantiation == NULL;
@@ -478,15 +476,10 @@ const IRExpr *IRExporter::nameComponentToIRExpr(const perm_string &name,
         exit(1);
     }
 
-    ostringstream os;
-
-    os << id_prefix << nameStr;
-
-    string i = os.str();
-
+    IRExpr_Variable* v = new IRExpr_Variable(nameStr, module);
     if (!indices.empty())
     {
-        IRExpr_Select *selectExpr = new IRExpr_Select(i);
+        IRExpr_Select *selectExpr = new IRExpr_Select(v);
 
         for (auto idx = indices.begin(); idx != indices.end(); ++idx)
         {
@@ -516,7 +509,7 @@ const IRExpr *IRExporter::nameComponentToIRExpr(const perm_string &name,
     }
     else
     {
-        return new IRExpr_Variable(i);
+        return v;
     }
 }
 

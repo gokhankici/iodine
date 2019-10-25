@@ -57,3 +57,8 @@ std::string IRExpr::toIRString() const
     print(os);
     return os.str();
 }
+
+bool operator==(const IRExpr_Variable& v1, const IRExpr_Variable& v2)
+{
+    return v1.variable == v2.variable && v1.moduleName == v2.moduleName;
+}

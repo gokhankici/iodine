@@ -15,7 +15,7 @@ std::ostream &operator<<(std::ostream &out,
         out << *elements.at(0);
     }
 
-    for (unsigned i = 0; i < element_count; i++)
+    for (unsigned i = 1; i < element_count; i++)
     {
         out << ", " << *elements.at(i);
     }
@@ -34,12 +34,14 @@ std::ostream &operator<<(std::ostream &out,
         out << elements.at(0);
     }
 
-    for (unsigned i = 0; i < element_count; i++)
+    for (unsigned i = 1; i < element_count; i++)
     {
         out << ", " << elements.at(i);
     }
 
     return out << "]";
 }
+
+void backtrace();
 
 #endif

@@ -70,6 +70,7 @@ data IodineArgs =
   IodineArgs { fileName    :: FilePath -- this is used for both the Verilog and IR file
              , moduleName  :: String
              , iverilogDir :: FilePath
+             , printIR     :: Bool
              , ir          :: Bool
              , vcgen       :: Bool
              , minimize    :: Bool
@@ -96,6 +97,9 @@ verylogArgs = IodineArgs { fileName    = def
                                           &= typDir
                                           &= explicit &= name "iverilog-dir"
                                           &= help "path of the iverilog-parser directory"
+                          , printIR     = def
+                                          &= explicit &= name "print-ir"
+                                          &= help "just run the verilog parser"
                           , ir          = def
                                           &= explicit &= name "ir"
                                           &= help "just generate the IR file"
@@ -219,7 +223,8 @@ generateIR IodineArgs{..} = do
 -- -----------------------------------------------------------------------------
 checkIR :: IodineArgs -> IO Bool
 -- -----------------------------------------------------------------------------
-checkIR IodineArgs{..} = do
+checkIR IodineArgs{..} | printIR   = (readFile fileName) >>= putStrLn >> return True
+                       | otherwise = do
   annotContents <- B.readFile annotFile
   fileContents <- readFile fileName
   let pipelineInput = ((fileName, fileContents), annotContents)

@@ -4,6 +4,8 @@
 #include <vector>
 #include <string>
 
+#include "Module.h"
+
 // -----------------------------------------------------------------------------
 // IR Expressions
 // -----------------------------------------------------------------------------
@@ -14,7 +16,7 @@ data IRExpr = Constant String
             | UninterpretedFunction String [IRExpr]
             | IfThenElse IRExpr IRExpr IRExpr
             | String String
-            | Select String List[IRExpr]
+            | Select IRExpr List[IRExpr]
 */
 
 class IRExpr
@@ -39,15 +41,24 @@ private:
 class IRExpr_Variable : public IRExpr
 {
 public:
-    IRExpr_Variable(const std::string &v) : variable(v) {}
+    IRExpr_Variable(const std::string &v, const Module* m) : variable(v), moduleName(m->mod_name().str()) {}
+    IRExpr_Variable(const IRExpr_Variable &other) : variable(other.variable), moduleName(other.moduleName) {}
+
     std::ostream &print(std::ostream &) const;
-    const std::string &getVariable() const
+    friend bool operator==(const IRExpr_Variable& v1, const IRExpr_Variable& v2);
+
+    class Hash
     {
-        return variable;
-    }
+    public:
+        size_t operator()(const IRExpr_Variable& v) const
+        {
+            return std::hash<std::string>()(v.variable) + 37 * std::hash<std::string>()(v.moduleName);
+        }
+    };
 
 private:
     const std::string variable;
+    const std::string moduleName;
 };
 
 // uninterpreted function
@@ -104,12 +115,12 @@ private:
 class IRExpr_Select : public IRExpr
 {
 public:
-    IRExpr_Select(const std::string &v) : variable(v) {}
+    IRExpr_Select(const IRExpr_Variable *v) : variable(v) {}
     void addIndex(const IRExpr *i)
     {
         indices.push_back(i);
     }
-    const std::string &getVariable() const
+    const IRExpr_Variable *getVariable() const
     {
         return variable;
     }
@@ -120,7 +131,7 @@ public:
     std::ostream &print(std::ostream &) const;
 
 private:
-    const std::string variable;
+    const IRExpr_Variable *const variable;
     std::vector<const IRExpr *> indices;
 };
 

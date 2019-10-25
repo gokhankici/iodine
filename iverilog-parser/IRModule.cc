@@ -71,12 +71,15 @@ inline std::ostream &operator<<(std::ostream &out, const IREvent &e)
 
 inline std::ostream &operator<<(std::ostream &out, const IRAlwaysBlock &ab)
 {
-    return out << "always(" << ab.event << ", " << ab.statement << ")";
+    return out << "always(" << *ab.event << ", " << *ab.statement << ")";
 }
 
 std::ostream &operator<<(std::ostream &out, const IRModule &irModule)
 {
     out << (irModule.isTopLevel ? "topmodule" : "module") << "(";
+    out << irModule.moduleName << ", ";
+    if (!irModule.isTopLevel)
+        out << irModule.instanceName << ", ";
     out << irModule.ports << ", ";
     out << irModule.variables << ", ";
     out << irModule.gateStatements << ", ";

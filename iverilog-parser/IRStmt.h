@@ -46,7 +46,7 @@ enum IRStmt_AssignmentType
 class IRStmt_Assignment : public IRStmt
 {
 public:
-    IRStmt_Assignment(IRStmt_AssignmentType t, const std::string &l, const IRExpr *r)
+    IRStmt_Assignment(IRStmt_AssignmentType t, const IRExpr_Variable *l, const IRExpr *r)
         : type(t), lhs(l), rhs(r)
     {
     }
@@ -54,7 +54,7 @@ public:
 
 private:
     IRStmt_AssignmentType type;
-    const std::string lhs;
+    const IRExpr_Variable* const lhs;
     const IRExpr *const rhs;
 };
 
@@ -80,16 +80,16 @@ public:
         : module_type(mt), module_name(mn) {}
     std::ostream& print(std::ostream&) const;
 
-    void setPort(const std::string &portName, const IRExpr *portValue)
-    {
-        bool ok = portMapping.insert({portName, portValue}).second;
-        assert(ok);
-    }
+    void setPort(const IRExpr_Variable &, const IRExpr *);
+    const IRExpr* getPort(const IRExpr_Variable&) const;
 
 private:
     const std::string module_type;
     const std::string module_name;
-    std::unordered_map<std::string, const IRExpr *> portMapping;
+    std::unordered_map<IRExpr_Variable,
+                       const IRExpr *,
+                       IRExpr_Variable::Hash>
+        portMapping;
 };
 
 class IRStmt_Skip : public IRStmt

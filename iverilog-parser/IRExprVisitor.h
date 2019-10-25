@@ -3,6 +3,7 @@
 
 #include "IRExpr.h"
 #include "ExprVisitor.h"
+#include "IRExporterHelper.h"
 
 class IRExporter;
 
@@ -23,7 +24,11 @@ public:
 
     const IRExpr *getIRExpr()
     {
-        assert(irExpr != NULL);
+        if (irExpr == NULL)
+        {
+            backtrace();
+            assert(irExpr != NULL);
+        }
         return irExpr;
     }
 

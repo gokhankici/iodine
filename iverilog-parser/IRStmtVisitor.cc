@@ -74,10 +74,10 @@ void IRStmtVisitor::visit(PGModule *gm)
         exit(1);
     }
 
-    const string module_type(gm->get_type().str());
-    const string module_name(gm->get_name().str());
+    const string module_name(gm->get_type().str());
+    const string instance_name(gm->get_name().str());
 
-    IRStmt_ModuleInstance* mi = new IRStmt_ModuleInstance(module_type, module_name);
+    IRStmt_ModuleInstance* mi = new IRStmt_ModuleInstance(module_name, instance_name);
 
     if (gm->pins_) {
         for (unsigned i=0; i < gm->npins_; i++) {
@@ -85,15 +85,15 @@ void IRStmtVisitor::visit(PGModule *gm)
             PExpr* expr = gm->pins_[i].parm;
 
             if(expr == NULL) {
-                cerr << "module instance " << module_name
-                     << " of type " << module_type
+                cerr << "module instance " << instance_name
+                     << " of type " << module_name
                      << " has a null pin for " << name
                      << endl;
                 gm->dump(cerr, 0);
                 exit(1);
             }
 
-            mi->setPort(name, toIRExpr(expr));
+            mi->setPort(IRExpr_Variable(name, mod), toIRExpr(expr));
         }
     } else {
         PGate *g = (PGate *)gm;
@@ -102,23 +102,21 @@ void IRStmtVisitor::visit(PGModule *gm)
             PExpr* expr = g->pin(i);
             if(expr == NULL) {
                 cerr << "module instance " << module_name
-                     << " of type " << module_type
+                     << " of type " << module_name
                      << " has a null pin for " << name
                      << endl;
                 gm->dump(cerr, 0);
                 exit(1);
             }
 
-            mi->setPort(name, toIRExpr(expr));
+            mi->setPort(IRExpr_Variable(name, mod), toIRExpr(expr));
         }
     }
 
-    if (!IRExporter::moduleExists(module_type))
+    if (!IRExporter::moduleExists(module_name))
     {
-        // set it to NULL for now in order to eliminate redundant work
-        IRExporter::setModule(module_type, NULL);
         IRExporter submoduleExporter(mod, gm);
-        IRExporter::setModule(module_type, submoduleExporter.extractModule());
+        submoduleExporter.extractModule();
     }
 
     irStmt = mi;
@@ -139,7 +137,7 @@ void IRStmtVisitor::visit(PAssign *ba)
         exit(1);
     }
 
-    doAssignment(IR_BLOCKING_ASSIGNMENT, ba->lval_, ba->rval_);
+    irStmt = doAssignment(IR_BLOCKING_ASSIGNMENT, ba->lval_, ba->rval_);
 }
 
 void IRStmtVisitor::visit(PAssignNB *nba)
@@ -156,7 +154,7 @@ void IRStmtVisitor::visit(PAssignNB *nba)
         cerr << endl;
     }
 
-    doAssignment(IR_NON_BLOCKING_ASSIGNMENT, nba->lval_, nba->rval_);
+    irStmt = doAssignment(IR_NON_BLOCKING_ASSIGNMENT, nba->lval_, nba->rval_);
 }
 
 void IRStmtVisitor::visit(PBlock *b)
@@ -169,7 +167,7 @@ void IRStmtVisitor::visit(PBlock *b)
 
     if (b->list_.size() == 0)
     {
-        return;
+        irStmt = new IRStmt_Skip();
     }
 
     IRStmt_Sequence *irSeq = new IRStmt_Sequence();
@@ -262,20 +260,20 @@ const IRStmt *IRStmtVisitor::doAssignment(IRStmt_AssignmentType assignmentType,
     if (auto lhsVar = dynamic_cast<const IRExpr_Variable *>(lhs))
     {
         return new IRStmt_Assignment(assignmentType,
-                                     lhsVar->getVariable(),
+                                     lhsVar,
                                      rhs);
     }
     else if (auto lhsSelect = dynamic_cast<const IRExpr_Select *>(lhs))
     {
         IRExpr_UF *newRhs = new IRExpr_UF("write to index");
-        newRhs->addOperand(new IRExpr_Variable(lhsSelect->getVariable()));
+        newRhs->addOperand(lhsSelect->getVariable());
         for (auto i : lhsSelect->getIndices())
         {
             newRhs->addOperand(i);
         }
         newRhs->addOperand(rhs);
         return new IRStmt_Assignment(assignmentType,
-                                     lhsVar->getVariable(),
+                                     lhsSelect->getVariable(),
                                      newRhs);
     }
     else

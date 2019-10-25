@@ -18,6 +18,7 @@
 #include "IRStmt.h"
 #include "Visitor.h"
 #include "IRExprVisitor.h"
+#include "IRExporterHelper.h"
 
 class IRExporter;
 
@@ -61,7 +62,10 @@ public:
 
     const IRStmt *getIRStmt()
     {
-        assert(irStmt != NULL);
+        if (irStmt == NULL) {
+            backtrace();
+            assert(irStmt);
+        }
         return irStmt;
     }
 

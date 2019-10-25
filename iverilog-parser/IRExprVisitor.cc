@@ -86,6 +86,7 @@ void IRExprVisitor::visit(PEBinary *be)
     case '-': fun = "sub";         break; // -
     case '*': fun = "mul";         break; // *
     case '/': fun = "div";         break; // /
+    case '%': fun = "mod";         break; // /
     default:
         cerr << endl
              << "NOT SUPPORTED: Binary expr operand: " << be->op_ << endl;
@@ -109,6 +110,8 @@ void IRExprVisitor::visit(PEUnary *ue)
     case 'm': fun = "abs"; break;
     case '!': fun = "not"; break;
     case '~': fun = "neg"; break;
+    case '&': fun = "and"; break;
+    case '|': fun = "or";  break;
     default:
         cerr << endl
              << "NOT SUPPORTED: Unary expr operand: " << ue->op_ << endl;

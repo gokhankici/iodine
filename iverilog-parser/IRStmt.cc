@@ -1,6 +1,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <unordered_map>
 
 #include "IRExpr.h"
 #include "IRStmt.h"
@@ -12,6 +13,19 @@ using namespace std;
 void IRStmt_Sequence::addStmt(const IRStmt *stmt)
 {
     statements.push_back(stmt);
+}
+
+void IRStmt_ModuleInstance::setPort(const IRExpr_Variable &port, const IRExpr *value)
+{
+    bool ok = portMapping.insert({port, value}).second;
+    assert(ok);
+}
+
+const IRExpr *IRStmt_ModuleInstance::getPort(const IRExpr_Variable &port) const
+{
+    auto lookup = portMapping.find(port);
+    assert(lookup != portMapping.end());
+    return lookup->second;
 }
 
 std::ostream &IRStmt_Sequence::print(std::ostream &os) const
@@ -34,7 +48,7 @@ std::ostream &IRStmt_Assignment::print(std::ostream &os) const
         break;
     }
 
-    return os << lhs << ", " << *rhs << ")";
+    return os << *lhs << ", " << *rhs << ")";
 }
 
 std::ostream &IRStmt_If::print(std::ostream &os) const
