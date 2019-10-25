@@ -9,6 +9,8 @@
 
 using namespace std;
 
+IRExpr::~IRExpr() {}
+
 inline ostream &IRExpr_Constant::print(ostream &out) const
 {
     return out << constant;
@@ -29,10 +31,9 @@ void IRExpr_UF::addOperand(const IRExpr *operand)
     operands.push_back(operand);
 }
 
-std::ostream &IRExpr_If::print(ostream &) const
+std::ostream &IRExpr_If::print(ostream &out) const
 {
-    cerr << "toIRString should not be called on the if expression!" << endl;
-    exit(1);
+    return out << "ite_expr(" << *condition << ", " << *thenExpr << ", " << *elseExpr << ")";
 }
 
 inline std::ostream &IRExpr_String::print(ostream &out) const

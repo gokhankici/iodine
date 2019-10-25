@@ -368,7 +368,9 @@ const IRStmt *IRExporter::toIRStmt(Statement *stmt) const
 bool IRExporter::isConstantExpr(PExpr *expr) const
 {
     const IRExpr *irExpr = toIRExpr(expr);
-    return dynamic_cast<const IRExpr_Constant *>(irExpr) != NULL;
+    bool result = irExpr->isConstant();
+    delete(irExpr);
+    return result;
 }
 
 std::ostream &operator<<(std::ostream &out, const IRExporter &)

@@ -124,9 +124,9 @@ void IRStmtVisitor::visit(PGModule *gm)
 
 void IRStmtVisitor::visit(PCondit *c)
 {
-    irStmt = new IRStmt_If(toIRExpr(c->expr_),
-                           toIRStmt(c->if_),
-                           toIRStmt(c->else_));
+    const IRStmt *thenStmt = (c->if_) ? toIRStmt(c->if_) : new IRStmt_Skip();
+    const IRStmt *elseStmt = (c->else_) ? toIRStmt(c->else_) : new IRStmt_Skip();
+    irStmt = new IRStmt_If(toIRExpr(c->expr_), thenStmt, elseStmt);
 }
 
 void IRStmtVisitor::visit(PAssign *ba)

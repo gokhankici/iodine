@@ -22,6 +22,7 @@ data IRStmt = Sequence [IRStmt]
 class IRStmt
 {
 public:
+    virtual ~IRStmt() = 0;
     virtual std::ostream& print(std::ostream&) const = 0;
 };
 
@@ -29,6 +30,13 @@ class IRStmt_Sequence : public IRStmt
 {
 public:
     IRStmt_Sequence() {}
+    ~IRStmt_Sequence()
+    {
+        for (auto s : statements)
+        {
+            delete (s);
+        }
+    }
     void addStmt(const IRStmt *stmt);
     std::ostream& print(std::ostream&) const;
 
@@ -46,9 +54,11 @@ enum IRStmt_AssignmentType
 class IRStmt_Assignment : public IRStmt
 {
 public:
-    IRStmt_Assignment(IRStmt_AssignmentType t, const IRExpr_Variable *l, const IRExpr *r)
-        : type(t), lhs(l), rhs(r)
+    IRStmt_Assignment(IRStmt_AssignmentType t, const IRExpr_Variable *l, const IRExpr *r) : type(t), lhs(l), rhs(r) {}
+    ~IRStmt_Assignment()
     {
+        delete(lhs);
+        delete(rhs);
     }
     std::ostream& print(std::ostream&) const;
 
@@ -65,6 +75,12 @@ public:
         : condition(c), thenStmt(t), elseStmt(e)
     {
     }
+    ~IRStmt_If()
+    {
+        delete (condition);
+        delete (thenStmt);
+        delete (elseStmt);
+    }
     std::ostream& print(std::ostream&) const;
 
 private:
@@ -78,6 +94,15 @@ class IRStmt_ModuleInstance : public IRStmt
 public:
     IRStmt_ModuleInstance(const std::string &mt, const std::string &mn)
         : module_type(mt), module_name(mn) {}
+    ~IRStmt_ModuleInstance()
+    {
+        for (auto itr = portMapping.begin();
+             itr != portMapping.end();
+             itr++)
+        {
+            delete(itr->second);
+        }
+    }
     std::ostream& print(std::ostream&) const;
 
     void setPort(const IRExpr_Variable &, const IRExpr *);

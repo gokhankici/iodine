@@ -10,6 +10,8 @@
 
 using namespace std;
 
+IRStmt::~IRStmt() {}
+
 void IRStmt_Sequence::addStmt(const IRStmt *stmt)
 {
     statements.push_back(stmt);
@@ -53,7 +55,7 @@ std::ostream &IRStmt_Assignment::print(std::ostream &os) const
 
 std::ostream &IRStmt_If::print(std::ostream &os) const
 {
-    return os << "ite(" << *condition << ", " << *thenStmt << ", " << *elseStmt << ")";
+    return os << "ite_stmt(" << *condition << ", " << *thenStmt << ", " << *elseStmt << ")";
 }
 
 inline std::ostream &IRStmt_Skip::print(std::ostream &os) const

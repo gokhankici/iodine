@@ -72,6 +72,12 @@ public:
     const IRExpr *toIRExpr(PExpr *expr) const
     {
         IRExprVisitor v(irExporter);
+        if (expr == NULL)
+        {
+            backtrace();
+            cerr << "IRStmtVisitor::toIRExpr is given a null expression!" << endl;
+            exit(1);
+        }
         expr->accept(&v);
         return v.getIRExpr();
     }
@@ -79,6 +85,12 @@ public:
     const IRStmt *toIRStmt(Statement *stmt) const
     {
         IRStmtVisitor v(irExporter);
+        if (stmt == NULL)
+        {
+            backtrace();
+            cerr << "IRStmtVisitor::toIRStmt is given a null statement!" << endl;
+            exit(1);
+        }
         stmt->accept(&v);
         return v.getIRStmt();
     }

@@ -22,7 +22,9 @@ data IRExpr = Constant String
 class IRExpr
 {
 public:
+    virtual ~IRExpr() = 0;
     virtual std::ostream &print(std::ostream &) const = 0;
+    virtual bool isConstant() const = 0;
     std::string toIRString() const;
 };
 
@@ -32,6 +34,10 @@ class IRExpr_Constant : public IRExpr
 public:
     IRExpr_Constant(const std::string &c) : constant(c) {}
     std::ostream &print(std::ostream &) const;
+    bool isConstant() const
+    {
+        return true;
+    }
 
 private:
     const std::string constant;
@@ -43,7 +49,10 @@ class IRExpr_Variable : public IRExpr
 public:
     IRExpr_Variable(const std::string &v, const Module* m) : variable(v), moduleName(m->mod_name().str()) {}
     IRExpr_Variable(const IRExpr_Variable &other) : variable(other.variable), moduleName(other.moduleName) {}
-
+    bool isConstant() const
+    {
+        return false;
+    }
     std::ostream &print(std::ostream &) const;
     friend bool operator==(const IRExpr_Variable& v1, const IRExpr_Variable& v2);
 
@@ -77,7 +86,20 @@ public:
         operands.push_back(o2);
     }
     IRExpr_UF(const IRExpr_UF &other) : function(other.function), operands(other.operands) {}
+    ~IRExpr_UF()
+    {
+        for (auto e : operands)
+        {
+            delete (e);
+        }
+    }
     void addOperand(const IRExpr *operand);
+    bool isConstant() const
+    {
+        return std::all_of(operands.begin(), operands.end(),
+                           [](const IRExpr *e) { return e->isConstant(); });
+    }
+
     std::ostream &print(std::ostream &) const;
 
 private:
@@ -90,15 +112,27 @@ class IRExpr_If : public IRExpr
 {
 public:
     IRExpr_If(const IRExpr *c, const IRExpr *t, const IRExpr *e)
-        : condition(c), thenStmt(t), elseStmt(e)
+        : condition(c), thenExpr(t), elseExpr(e)
     {
+    }
+    ~IRExpr_If()
+    {
+        delete(condition);
+        delete(thenExpr);
+        delete(elseExpr);
+    }
+    bool isConstant() const
+    {
+        return condition->isConstant() &&
+               thenExpr->isConstant() &&
+               elseExpr->isConstant();
     }
     std::ostream &print(std::ostream &) const;
 
 private:
     const IRExpr *const condition;
-    const IRExpr *const thenStmt;
-    const IRExpr *const elseStmt;
+    const IRExpr *const thenExpr;
+    const IRExpr *const elseExpr;
 };
 
 class IRExpr_String : public IRExpr
@@ -106,6 +140,10 @@ class IRExpr_String : public IRExpr
 public:
     IRExpr_String(const std::string &v) : value(v) {}
     std::ostream &print(std::ostream &) const;
+    bool isConstant() const
+    {
+        return true;
+    }
 
 private:
     const std::string value;
@@ -116,6 +154,13 @@ class IRExpr_Select : public IRExpr
 {
 public:
     IRExpr_Select(const IRExpr_Variable *v) : variable(v) {}
+    ~IRExpr_Select() {
+        delete (variable);
+        for (auto i : indices)
+        {
+            delete (i);
+        }
+    }
     void addIndex(const IRExpr *i)
     {
         indices.push_back(i);
@@ -129,6 +174,10 @@ public:
         return indices;
     }
     std::ostream &print(std::ostream &) const;
+    bool isConstant() const
+    {
+        return false;
+    }
 
 private:
     const IRExpr_Variable *const variable;

@@ -73,8 +73,8 @@ void IRExprVisitor::visit(PEBinary *be)
     {
     case 'a': fun = "and";         break; // &&
     case 'o': fun = "or";          break; // ||
-    case 'e': fun = "eq";          break; // ==
-    case 'n': fun = "neq";         break; // !=
+    case 'e': fun = "logic_eq";    break; // ==
+    case 'n': fun = "logic_neq";   break; // !=
     case 'l': fun = "shl";         break; // <<
     case 'r': fun = "shr";         break; // >>
     case '&': fun = "bitwise-and"; break; // &
@@ -86,16 +86,18 @@ void IRExprVisitor::visit(PEBinary *be)
     case '-': fun = "sub";         break; // -
     case '*': fun = "mul";         break; // *
     case '/': fun = "div";         break; // /
-    case '%': fun = "mod";         break; // /
+    case '%': fun = "mod";         break; // %
+    case 'R': fun = "arith-rs";    break; // >>>
+    case 'G': fun = "ge";          break; // >=
+    case 'p': fun = "exp";         break; // **
+    case 'E': fun = "case_eq";     break; // ===
+    case 'L': fun = "le";          break; // <=
+    case 'N': fun = "case_neq";    break; // !==
     default:
         cerr << endl
              << "NOT SUPPORTED: Binary expr operand: " << be->op_ << endl;
+        be->dump(cerr);
         exit(1);
-        //    case 'E': out << "==="; break;
-        //    case 'L': out << "<=";  break;
-        //    case 'N': out << "!=="; break;
-        //    case 'p': out << "**";  break;
-        //    case 'R': out << ">>>"; break;
         //    default:  out << op_;   break;
     }
 
@@ -107,11 +109,12 @@ void IRExprVisitor::visit(PEUnary *ue)
     const char *fun;
     switch (ue->op_)
     {
-    case 'm': fun = "abs"; break;
-    case '!': fun = "not"; break;
-    case '~': fun = "neg"; break;
-    case '&': fun = "and"; break;
-    case '|': fun = "or";  break;
+    case 'm': fun = "abs";  break;
+    case '!': fun = "not";  break;
+    case '~': fun = "neg";  break;
+    case '&': fun = "and";  break;
+    case '|': fun = "or";   break;
+    case '-': fun = "neg";  break;
     default:
         cerr << endl
              << "NOT SUPPORTED: Unary expr operand: " << ue->op_ << endl;
