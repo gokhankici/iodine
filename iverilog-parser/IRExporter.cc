@@ -69,7 +69,7 @@ const IRModule *IRExporter::extractModule() const
     for (map<perm_string, PWire *>::const_iterator wire = module->wires.begin(); wire != module->wires.end(); ++wire)
     {
         PWire *w = (*wire).second;
-        IRVariable v(getVariableType(w), getWireName(w));
+        IRVariable v(getVariableType(w), getPermString(w->basename()));
         irModule->addVariable(v);
     }
 
@@ -274,13 +274,7 @@ const IRModule *IRExporter::extractModule() const
 
 void IRExporter::setModulePorts(IRModule *irModule) const
 {
-    irModule->setTopLevel(isToplevel());
     irModule->setModuleName(this->module->mod_name().str());
-
-    if (!isToplevel())
-    {
-        irModule->setInstanceName(this->moduleInstantiation->get_name().str());
-    }
 
     // print formal parameters
     if (module->port_count() > 0)
@@ -294,10 +288,10 @@ void IRExporter::setModulePorts(IRModule *irModule) const
                 exit(1);
             }
 
-            string portname = nameComponentToIRExpr(p->name, std::list<index_component_t>())->toIRString();
-            string firstExprStr = pform_nameToIRExpr(p->expr[0]->path())->toIRString();
+            string portname = getPermString(p->name);
+            auto firstExpr = dynamic_cast<const IRExpr_Variable*>(pform_nameToIRExpr(p->expr[0]->path()));
 
-            if (p->expr.size() != 1 || portname.compare(firstExprStr) != 0)
+            if (p->expr.size() != 1 || firstExpr == NULL || portname.compare(firstExpr->getOnlyVariableName()) != 0)
             {
                 cerr << "port in " << module->mod_name() << " has weird internal connections" << endl;
                 cerr << "    ." << p->name << "(" << *p->expr[0];
@@ -535,9 +529,21 @@ const IRExpr *IRExporter::pform_nameToIRExpr(const pform_name_t &that) const
     return result;
 }
 
-const string IRExporter::getWireName(PWire *w) const
+const string IRExporter::getPermString(const perm_string& ps) const
 {
-    return nameComponentToIRExpr(w->basename(), std::list<index_component_t>())->toIRString();
+    const IRExpr *e = nameComponentToIRExpr(ps, std::list<index_component_t>());
+    if (auto v = dynamic_cast<const IRExpr_Variable *>(e))
+    {
+        string result(v->getOnlyVariableName());
+        delete(e);
+        return result;
+    }
+    else
+    {
+        backtrace();
+        cerr << "Given perm string did not return a variable:" << *e << endl;
+        exit(1);
+    }
 }
 
 const IREvent *IRExporter::toIREvent(PEEvent *ev) const

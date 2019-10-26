@@ -75,8 +75,7 @@ std::ostream &IRStmt_ModuleInstance::print(std::ostream &os) const
     {
         if (!isFirst)
             os << ", ";
-        os << "("
-           << "\"" << p.first << "\""
+        os << "(" << p.first.getOnlyVariableName()
            << ", " << *p.second
            << ")";
         isFirst = false;

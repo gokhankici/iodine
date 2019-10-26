@@ -16,6 +16,7 @@
 data IRStmt = Sequence [IRStmt]
             | Assignment AsgnType String IRExpr
             | IfStmt IRExpr IRStmt IRStmt
+            | ModuleInstance String String [(Variable, IRExpr)]
             | Skip
 */
 

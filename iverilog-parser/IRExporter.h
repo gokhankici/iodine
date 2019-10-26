@@ -34,7 +34,7 @@ public:
     // -------------------------------------------------------------------------
     // Helper Functions
     // -------------------------------------------------------------------------
-    const std::string getWireName(PWire *w) const;
+    const std::string getPermString(const perm_string&) const;
     void setModulePorts(IRModule *) const;
     bool isToplevel() const;
     bool isConstantExpr(PExpr *) const;

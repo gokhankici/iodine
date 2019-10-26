@@ -76,22 +76,18 @@ private:
 class IRModule
 {
 public:
-    IRModule() : isTopLevel(false) {}
+    IRModule() {}
     void addPort(const IRPort &);
     void addVariable(const IRVariable &);
 
-    void setTopLevel(bool value) { isTopLevel = value; }
     void setModuleName(const char *value) { moduleName = value; }
-    void setInstanceName(const char *value) { instanceName = value; }
     void addGateStatement(const IRStmt *stmt) { gateStatements.push_back(stmt); }
     void addAlwaysBlock(const IRAlwaysBlock *ab) { alwaysBlocks.push_back(ab); }
 
     friend std::ostream &operator<<(std::ostream &, const IRModule &);
 
 private:
-    bool isTopLevel;
     std::string moduleName;
-    std::string instanceName;
     std::vector<IRPort> ports;
     std::vector<IRVariable> variables;
     std::vector<const IRStmt *> gateStatements;

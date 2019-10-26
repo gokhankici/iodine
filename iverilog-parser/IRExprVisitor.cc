@@ -43,7 +43,7 @@ void IRExprVisitor::visit(PECallFunction *cf)
         return;
     }
 
-    IRExpr_UF *uf = new IRExpr_UF("call_function(" + name + ")");
+    IRExpr_UF *uf = new IRExpr_UF("call_function_" + name);
     for (auto parmE : cf->parms_)
     {
         uf->addOperand(toIRExpr(parmE));
@@ -77,8 +77,8 @@ void IRExprVisitor::visit(PEBinary *be)
     case 'n': fun = "logic_neq";   break; // !=
     case 'l': fun = "shl";         break; // <<
     case 'r': fun = "shr";         break; // >>
-    case '&': fun = "bitwise-and"; break; // &
-    case '|': fun = "bitwise-or";  break; // |
+    case '&': fun = "bitwise_and"; break; // &
+    case '|': fun = "bitwise_or";  break; // |
     case '<': fun = "lt";          break; // <
     case '>': fun = "gt";          break; // >
     case '^': fun = "xor";         break; // ^
@@ -87,7 +87,7 @@ void IRExprVisitor::visit(PEBinary *be)
     case '*': fun = "mul";         break; // *
     case '/': fun = "div";         break; // /
     case '%': fun = "mod";         break; // %
-    case 'R': fun = "arith-rs";    break; // >>>
+    case 'R': fun = "arith_rs";    break; // >>>
     case 'G': fun = "ge";          break; // >=
     case 'p': fun = "exp";         break; // **
     case 'E': fun = "case_eq";     break; // ===

@@ -55,6 +55,10 @@ public:
     }
     std::ostream &print(std::ostream &) const;
     friend bool operator==(const IRExpr_Variable& v1, const IRExpr_Variable& v2);
+    const std::string& getOnlyVariableName() const
+    {
+        return variable;
+    }
 
     class Hash
     {

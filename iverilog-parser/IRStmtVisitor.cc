@@ -216,7 +216,7 @@ void IRStmtVisitor::visit(PCase *c)
         }
         else
         {
-            IRExpr_UF *uf = new IRExpr_UF("switch-eq", switchExpr);
+            IRExpr_UF *uf = new IRExpr_UF("switch_eq", switchExpr);
             for (auto idx_expr : cur->expr)
             {
                 uf->addOperand(toIRExpr(idx_expr));
@@ -265,7 +265,7 @@ const IRStmt *IRStmtVisitor::doAssignment(IRStmt_AssignmentType assignmentType,
     }
     else if (auto lhsSelect = dynamic_cast<const IRExpr_Select *>(lhs))
     {
-        IRExpr_UF *newRhs = new IRExpr_UF("write to index");
+        IRExpr_UF *newRhs = new IRExpr_UF("write_to_index");
         newRhs->addOperand(lhsSelect->getVariable());
         for (auto i : lhsSelect->getIndices())
         {

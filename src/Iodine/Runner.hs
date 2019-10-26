@@ -223,8 +223,7 @@ generateIR IodineArgs{..} = do
 -- -----------------------------------------------------------------------------
 checkIR :: IodineArgs -> IO Bool
 -- -----------------------------------------------------------------------------
-checkIR IodineArgs{..} | printIR   = (readFile fileName) >>= putStrLn >> return True
-                       | otherwise = do
+checkIR IodineArgs{..} = do
   annotContents <- B.readFile annotFile
   fileContents <- readFile fileName
   let pipelineInput = ((fileName, fileContents), annotContents)
@@ -235,6 +234,10 @@ checkIR IodineArgs{..} | printIR   = (readFile fileName) >>= putStrLn >> return 
      | abduction -> do let i = pipeline' pipelineInput
                        VAR.runner i
                        return True
+     | printIR   -> do
+         putStrLn fileContents
+         print $ parseWithoutConversion (fileName, fileContents)
+         return True
      | otherwise -> fmap fst (withSilence $ solve cfg fpst)
 
   where

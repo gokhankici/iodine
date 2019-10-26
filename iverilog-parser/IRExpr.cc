@@ -13,12 +13,12 @@ IRExpr::~IRExpr() {}
 
 inline ostream &IRExpr_Constant::print(ostream &out) const
 {
-    return out << constant;
+    return out << "const(" << constant << ")";
 }
 
 inline std::ostream &IRExpr_Variable::print(ostream &out) const
 {
-    return out << variable;
+    return out << "var(" << variable << ", " << moduleName << ")";
 }
 
 std::ostream &IRExpr_UF::print(ostream &out) const
@@ -38,13 +38,13 @@ std::ostream &IRExpr_If::print(ostream &out) const
 
 inline std::ostream &IRExpr_String::print(ostream &out) const
 {
-    return out << '"' << value << '"';
+    return out << "str(" << value << ")";
 }
 
 std::ostream &IRExpr_Select::print(ostream &os) const
 {
     assert(!indices.empty());
-    return os << "select(" << '"' << variable << '"' << ", " << indices << ")";
+    return os << "select(" << *variable << ", " << indices << ")";
 }
 
 inline std::ostream &operator<<(std::ostream &out, const IRExpr &expr)
