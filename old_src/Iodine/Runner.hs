@@ -4,22 +4,22 @@
 {-# LANGUAGE MultiWayIf #-}
 
 module Iodine.Runner ( IodineArgs(..)
-                     , parseArgs
-                     , run
-                     , main
-                     ) where
+                      , parseArgs
+                      , run
+                      , main
+                      ) where
 
--- import           Iodine.Utils (silence)
--- import qualified Iodine.Abduction.Runner as VAR
+import           Iodine.Utils (silence)
+import qualified Iodine.Abduction.Runner as VAR
 import           Iodine.Language.Parser
--- import           Iodine.Language.Types
--- import           Iodine.Pipeline
--- import           Iodine.Solver.FP.FQ
--- import           Iodine.Solver.FP.Solve
+import           Iodine.Language.Types
+import           Iodine.Pipeline
+import           Iodine.Solver.FP.FQ
+import           Iodine.Solver.FP.Solve
 -- import           Iodine.Transform.FP.VCGen
 
--- import Language.Fixpoint.Types (saveQuery)
--- import Language.Fixpoint.Types.Config as FC
+import Language.Fixpoint.Types (saveQuery)
+import Language.Fixpoint.Types.Config as FC
 
 import Control.Exception
 import Control.Monad
@@ -34,7 +34,7 @@ import Text.Printf
 
 -- import Debug.Trace
 -- import Control.DeepSeq
--- import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString.Lazy as B
 
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
@@ -153,7 +153,7 @@ main = do
 run :: IodineArgs -> IO Bool
 -- -----------------------------------------------------------------------------
 -- | Runs the verification process, and returns 'True' if the program is constant time.
-run a = (normalizePaths a >>= generateIR >>= checkIR) `catch` peHandle -- `catch` passHandle
+run a = (normalizePaths a >>= generateIR >>= checkIR) `catch` peHandle `catch` passHandle
 
 -- | Parses the command line arguments (e.g. from 'getArgs') into 'IodineArgs'.
 parseArgs :: [String] -> IO IodineArgs
@@ -224,33 +224,29 @@ generateIR IodineArgs{..} = do
 checkIR :: IodineArgs -> IO Bool
 -- -----------------------------------------------------------------------------
 checkIR IodineArgs{..} = do
-  -- annotContents <- B.readFile annotFile
+  annotContents <- B.readFile annotFile
   fileContents <- readFile fileName
-  -- let pipelineInput = ((fileName, fileContents), annotContents)
-      -- fpst          = pipeline pipelineInput
-      -- withSilence   = if verbose then id else silence
+  let pipelineInput = ((fileName, fileContents), annotContents)
+      fpst          = pipeline pipelineInput
+      withSilence   = if verbose then id else silence
 
-  -- if | vcgen     -> saveQuery cfg (toFqFormat fpst) >> return True
-  --    | abduction -> do let i = pipeline' pipelineInput
-  --                      VAR.runner i
-  --                      return True
-  --    | printIR   -> do
-  --        putStrLn fileContents
-  --        print $ parseWithoutConversion (fileName, fileContents)
-  --        return True
-  --    | otherwise -> fmap fst (withSilence $ solve cfg fpst)
+  if | vcgen     -> saveQuery cfg (toFqFormat fpst) >> return True
+     | abduction -> do let i = pipeline' pipelineInput
+                       VAR.runner i
+                       return True
+     | printIR   -> do
+         putStrLn fileContents
+         print $ parseWithoutConversion (fileName, fileContents)
+         return True
+     | otherwise -> fmap fst (withSilence $ solve cfg fpst)
 
-  putStrLn fileContents
-  print $ parseWithoutConversion (fileName, fileContents)
-  return True
-
-  -- where
-  --   cfg = defConfig { eliminate   = Some
-  --                   , save        = not noSave
-  --                   , srcFile     = fileName
-  --                   , metadata    = True
-  --                   , FC.minimize = minimize
-  --                   }
+  where
+    cfg = defConfig { eliminate   = Some
+                    , save        = not noSave
+                    , srcFile     = fileName
+                    , metadata    = True
+                    , FC.minimize = minimize
+                    }
 
 
 -- -----------------------------------------------------------------------------
@@ -260,10 +256,10 @@ checkIR IodineArgs{..} = do
 peHandle :: IRParseError -> IO Bool
 peHandle e = renderError e >>= hPutStrLn stderr >> return False
 
--- passHandle :: PassError -> IO Bool
--- passHandle (PassError msg)  = hPutStrLn stderr msg >> return False
--- passHandle CycleError{..} = do
---   writeFile "/tmp/cycle.dot" cycleStr
---   hPutStrLn stderr "Cycle is written to /tmp/cycle.dot"
---   hPutStrLn stderr cycleErrorStr
---   return False
+passHandle :: PassError -> IO Bool
+passHandle (PassError msg)  = hPutStrLn stderr msg >> return False
+passHandle CycleError{..} = do
+  writeFile "/tmp/cycle.dot" cycleStr
+  hPutStrLn stderr "Cycle is written to /tmp/cycle.dot"
+  hPutStrLn stderr cycleErrorStr
+  return False

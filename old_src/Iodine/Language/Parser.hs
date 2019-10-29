@@ -31,6 +31,8 @@ import           Iodine.Language.Types
 
 type Parser = MP.Parsec MP.SourcePos String
 
+type L = SQ.Seq
+
 type VIR_Event       = VIR.Event VIR.Expr
 type VIR_Stmt        = VIR.Stmt VIR.Expr
 type VIR_AlwaysBlock = VIR.AlwaysBlock VIR.Stmt VIR.Expr
@@ -213,7 +215,7 @@ identifier :: Parser Id
 identifier = lexeme (p >>= check)
   where
     p :: Parser Id
-    p = T.cons <$> (MPC.letterChar <|> MPC.char '_') <*> (T.pack <$> MP.many nonFirstChar)
+    p = idCons <$> (MPC.letterChar <|> MPC.char '_') <*> (T.pack <$> MP.many nonFirstChar)
 
     nonFirstChar :: Parser Char
     nonFirstChar = MP.satisfy (\a -> isDigit a || isLetter a || a == '_')

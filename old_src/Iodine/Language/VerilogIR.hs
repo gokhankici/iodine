@@ -11,9 +11,12 @@ module Iodine.Language.VerilogIR ( Expr (..)
                                  , AlwaysBlock (..)
                                  ) where
 
-import           Iodine.Language.Types
+import           Iodine.Language.Types (Id)
 
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Sequence       as SQ
+
+type L = SQ.Seq
 
 data Expr a =
   Constant { exprValue :: Id
