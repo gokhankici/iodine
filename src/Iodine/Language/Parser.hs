@@ -12,42 +12,36 @@ module Iodine.Language.Parser ( parse
                               , IRParseError (..)
                               ) where
 
-import           Control.Arrow
 import           Control.Exception
--- import           Control.Lens
 import           Control.Monad (void)
--- import           Control.Monad.State.Lazy
 import           Data.Char (isLetter, isDigit)
 import           Data.Foldable (toList)
 import           Data.Hashable
 import qualified Data.HashMap.Strict        as HM
--- import qualified Data.HashSet               as S
 import qualified Data.Text                  as T
 import           Data.Typeable
 import           Text.Megaparsec            ((<|>))
 import qualified Text.Megaparsec            as MP
 import qualified Text.Megaparsec.Char       as MPC
 import qualified Text.Megaparsec.Char.Lexer as MPL
--- import           Text.Printf
 import qualified Data.Sequence              as SQ
 
 import qualified Iodine.Language.VerilogIR as VIR
-
--- import Iodine.Utils
-import Iodine.Language.Types
-import Iodine.Solver.FP.Types
-
-type ParseInput  = ((FilePath, String), (SQ.Seq Annotation, SQ.Seq FPQualifier))
-type ParseOutput = ((St, AnnotSt), SQ.Seq FPQualifier)
+import           Iodine.Language.Types
 
 type Parser = MP.Parsec MP.SourcePos String
-type L = SQ.Seq
-type ParsedIR = L (VIR.Module ())
 
-parse :: ParseInput -> ParseOutput
-parse = first parseWithoutConversion >>>
-        arr (\(o,(a,q)) -> ((o, a),q)) >>>
-        first makeState
+type L = SQ.Seq
+
+type VIR_Event       = VIR.Event VIR.Expr
+type VIR_Stmt        = VIR.Stmt VIR.Expr
+type VIR_AlwaysBlock = VIR.AlwaysBlock VIR.Stmt VIR.Expr
+type VIR_Module      = VIR.Module VIR.Stmt VIR.Expr
+
+type ParsedIR = L (VIR_Module ())
+
+parse :: a
+parse = undefined
 
 parseWithoutConversion :: (FilePath, String) -> ParsedIR
 parseWithoutConversion (fp, s) = parseWith (many parseModule)
@@ -57,14 +51,11 @@ parseWithoutConversion (fp, s) = parseWith (many parseModule)
         Right e     -> e
         Left bundle -> throw (IRParseError (myParseErrorPretty bundle))
 
-makeState :: (ParsedIR, SQ.Seq Annotation) -> (St, AnnotSt)
-makeState = undefined
-
 --------------------------------------------------------------------------------
 -- | IR Parser
 --------------------------------------------------------------------------------
 
-parseModule :: Parser (VIR.Module ())
+parseModule :: Parser (VIR_Module ())
 parseModule =
   parseTerm "module" $
   VIR.Module
@@ -104,7 +95,7 @@ parseExpr =
     constVar :: Parser Id
     constVar = T.pack <$> MP.many MPC.alphaNumChar
 
-parseStmt :: Parser (VIR.Stmt ())
+parseStmt :: Parser (VIR_Stmt ())
 parseStmt =
   parseTerm "block" (VIR.Block <$> list parseStmt <*> parseData) <|>
   parseAsn "b_asn" VIR.Blocking <|>
@@ -128,13 +119,13 @@ parseStmt =
                    <*> (comma *> parseExpr)
                    <*> parseData
 
-parseEvent :: Parser (VIR.Event ())
+parseEvent :: Parser (VIR_Event ())
 parseEvent =
   parseTerm "posedge" (VIR.PosEdge <$> parseExpr <*> parseData) <|>
   parseTerm "negedge" (VIR.NegEdge <$> parseExpr <*> parseData) <|>
   (rWord "star" *> return (VIR.Star ()))
 
-parseAlwaysBlock :: Parser (VIR.AlwaysBlock ())
+parseAlwaysBlock :: Parser (VIR_AlwaysBlock ())
 parseAlwaysBlock =
   parseTerm "always" (VIR.AlwaysBlock
                      <$> parseEvent
