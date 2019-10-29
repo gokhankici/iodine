@@ -11,9 +11,9 @@ module Iodine.Runner ( IodineArgs(..)
 
 -- import           Iodine.Utils (silence)
 -- import qualified Iodine.Abduction.Runner as VAR
-import           Iodine.Language.Parser
+import           Iodine.Language.IRParser
 -- import           Iodine.Language.Types
--- import           Iodine.Pipeline
+import           Iodine.Pipeline
 -- import           Iodine.Solver.FP.FQ
 -- import           Iodine.Solver.FP.Solve
 -- import           Iodine.Transform.FP.VCGen
@@ -21,22 +21,22 @@ import           Iodine.Language.Parser
 -- import Language.Fixpoint.Types (saveQuery)
 -- import Language.Fixpoint.Types.Config as FC
 
-import Control.Exception
-import Control.Monad
-import System.Console.CmdArgs.Implicit
-import System.Directory
-import System.Environment
-import System.Exit
-import System.FilePath.Posix
-import System.IO
-import System.Process
-import Text.Printf
+import           Control.Exception
+import           Control.Monad
+-- import qualified Data.ByteString.Lazy            as B
+import           System.Console.CmdArgs.Implicit
+import           System.Directory
+import           System.Environment
+import           System.Exit
+import           System.FilePath.Posix
+import           System.IO
+import           System.Process
+import           Text.Printf
 
 -- import qualified Data.Sequence as SQ
 
 -- import Debug.Trace
 -- import Control.DeepSeq
--- import qualified Data.ByteString.Lazy as B
 
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
@@ -209,7 +209,7 @@ generateIR IodineArgs{..} = do
           printMsg "Generating IR from the following Verilog file failed:" err
           exitFailure
 
-    printMsg msg err = 
+    printMsg msg err =
       forM_ (msg:[verilogFile, preprocFile, err]) (hPutStrLn stderr)
 
     verilogFile = fileName
@@ -225,9 +225,14 @@ generateIR IodineArgs{..} = do
 -- -----------------------------------------------------------------------------
 checkIR :: IodineArgs -> IO Bool
 -- -----------------------------------------------------------------------------
-checkIR IodineArgs{..} = do
-  -- annotContents <- B.readFile annotFile
-  fileContents <- readFile fileName
+checkIR IodineArgs{..}
+  | printIR = do
+      fileContents <- readFile fileName
+      putStrLn fileContents
+      print $ parse (fileName, fileContents)
+      return True
+  | otherwise = pipeline (fileName, annotFile)
+
   -- let pipelineInput = ((fileName, fileContents), annotContents)
       -- fpst          = pipeline pipelineInput
       -- withSilence   = if verbose then id else silence
@@ -242,10 +247,6 @@ checkIR IodineArgs{..} = do
   --        return True
   --    | otherwise -> fmap fst (withSilence $ solve cfg fpst)
 
-  putStrLn fileContents
-  let modules = parseWithoutConversion (fileName, fileContents)
-  print modules
-  return True
 
   -- where
   --   cfg = defConfig { eliminate   = Some

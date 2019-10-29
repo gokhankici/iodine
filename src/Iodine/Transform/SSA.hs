@@ -4,9 +4,11 @@
 module Iodine.Transform.SSA
   ( Expr(..)
   , ssa
+  , SSAIR
   )
 where
 
+import           Iodine.Language.IRParser (ParsedIR)
 import           Iodine.Language.VerilogIR hiding (Expr)
 import qualified Iodine.Language.VerilogIR as VIR
 import           Iodine.Language.Types
@@ -16,10 +18,12 @@ import           Control.Monad.State.Lazy
 
 import Debug.Trace
 
+type SSAIR = L (Module Stmt Expr ())
+
 data Expr a = VExpr (VIR.Expr a) | PhiNode (L (VIR.Expr a)) a
             deriving (Show)
 
-ssa :: L (Module Stmt VIR.Expr a) -> L (Module Stmt Expr a)
+ssa :: ParsedIR -> SSAIR
 ssa modules = fmap ((mapStmt ssaStmt) . (mapExpr VExpr)) modules
 
 ssaStmt :: Stmt Expr a -> Stmt Expr a

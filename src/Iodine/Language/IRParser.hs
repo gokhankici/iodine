@@ -6,11 +6,11 @@
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Iodine.Language.Parser
+module Iodine.Language.IRParser
   ( parse
-  , parseWithoutConversion
   , renderError
   , IRParseError (..)
+  , ParsedIR
   )
 where
 
@@ -40,11 +40,8 @@ type VIR_Module      = VIR.Module VIR.Stmt VIR.Expr
 
 type ParsedIR = L (VIR_Module ())
 
-parse :: a
-parse = undefined
-
-parseWithoutConversion :: (FilePath, String) -> ParsedIR
-parseWithoutConversion (fp, s) = parseWith (many parseModule)
+parse :: (FilePath, String) -> ParsedIR
+parse (fp, s) = parseWith (many parseModule)
   where
     parseWith p =
       case MP.runParser (whole p) fp s of
