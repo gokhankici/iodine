@@ -19,21 +19,21 @@ void IRStmtVisitor::visit(PGAssign *ga)
         exit(1);
     }
 
-    irStmt = doAssignment(IR_CONTINUOUS_ASSIGNMENT, ga->pin(0), ga->pin(1));
+    irStmt = doAssignment(IRStmt_AssignmentType::CONTINUOUS, ga->pin(0), ga->pin(1));
 }
 
 void IRStmtVisitor::visit(PGBuiltin *gb)
 {
     unsigned inputCnt = 0;
-    const char* fun;
+    IRUFOp fun;
     switch (gb->type()) {
-    case PGBuiltin::AND:  fun = "and";  inputCnt = 2; break;
-    case PGBuiltin::NAND: fun = "nand"; inputCnt = 2; break;
-    case PGBuiltin::OR:   fun = "or";   inputCnt = 2; break;
-    case PGBuiltin::NOR:  fun = "nor";  inputCnt = 2; break;
-    case PGBuiltin::XOR:  fun = "xor";  inputCnt = 2; break;
-    case PGBuiltin::XNOR: fun = "xnor"; inputCnt = 2; break;
-    case PGBuiltin::NOT:  fun = "not";  inputCnt = 1; break;
+    case PGBuiltin::AND:  fun = IRBinaryOp::AND;  inputCnt = 2; break;
+    case PGBuiltin::NAND: fun = IRBinaryOp::NAND; inputCnt = 2; break;
+    case PGBuiltin::OR:   fun = IRBinaryOp::OR;   inputCnt = 2; break;
+    case PGBuiltin::NOR:  fun = IRBinaryOp::NOR;  inputCnt = 2; break;
+    case PGBuiltin::XOR:  fun = IRBinaryOp::XOR;  inputCnt = 2; break;
+    case PGBuiltin::XNOR: fun = IRBinaryOp::XNOR; inputCnt = 2; break;
+    case PGBuiltin::NOT:  fun = IRUnaryOp::NOT;  inputCnt = 1; break;
     default:
         cerr << "NOT SUPPORTED: builtin gate type: " << gb->type() << endl;
         exit(1);
@@ -54,7 +54,7 @@ void IRStmtVisitor::visit(PGBuiltin *gb)
         uf->addOperand(toIRExpr(gb->pin(i)));
     }
 
-    irStmt = doAssignment(IR_CONTINUOUS_ASSIGNMENT, lhs, uf);
+    irStmt = doAssignment(IRStmt_AssignmentType::CONTINUOUS, lhs, uf);
 }
 
 extern std::map<perm_string,Module*> pform_modules;
@@ -137,7 +137,7 @@ void IRStmtVisitor::visit(PAssign *ba)
         exit(1);
     }
 
-    irStmt = doAssignment(IR_BLOCKING_ASSIGNMENT, ba->lval_, ba->rval_);
+    irStmt = doAssignment(IRStmt_AssignmentType::BLOCKING, ba->lval_, ba->rval_);
 }
 
 void IRStmtVisitor::visit(PAssignNB *nba)
@@ -154,7 +154,7 @@ void IRStmtVisitor::visit(PAssignNB *nba)
         cerr << endl;
     }
 
-    irStmt = doAssignment(IR_NON_BLOCKING_ASSIGNMENT, nba->lval_, nba->rval_);
+    irStmt = doAssignment(IRStmt_AssignmentType::NON_BLOCKING, nba->lval_, nba->rval_);
 }
 
 void IRStmtVisitor::visit(PBlock *b)
@@ -216,7 +216,7 @@ void IRStmtVisitor::visit(PCase *c)
         }
         else
         {
-            IRExpr_UF *uf = new IRExpr_UF("switch_eq", switchExpr);
+            IRExpr_UF *uf = new IRExpr_UF(IROtherOp::CASE, switchExpr);
             for (auto idx_expr : cur->expr)
             {
                 uf->addOperand(toIRExpr(idx_expr));
@@ -265,7 +265,7 @@ const IRStmt *IRStmtVisitor::doAssignment(IRStmt_AssignmentType assignmentType,
     }
     else if (auto lhsSelect = dynamic_cast<const IRExpr_Select *>(lhs))
     {
-        IRExpr_UF *newRhs = new IRExpr_UF("write_to_index");
+        IRExpr_UF *newRhs = new IRExpr_UF(IROtherOp::WRITE_TO_INDEX);
         newRhs->addOperand(lhsSelect->getVariable());
         for (auto i : lhsSelect->getIndices())
         {

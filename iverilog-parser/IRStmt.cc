@@ -39,13 +39,13 @@ std::ostream &IRStmt_Assignment::print(std::ostream &os) const
 {
     switch (type)
     {
-    case IR_NON_BLOCKING_ASSIGNMENT:
+    case IRStmt_AssignmentType::NON_BLOCKING:
         os << "nb_asn(";
         break;
-    case IR_BLOCKING_ASSIGNMENT:
+    case IRStmt_AssignmentType::BLOCKING:
         os << "b_asn(";
         break;
-    case IR_CONTINUOUS_ASSIGNMENT:
+    case IRStmt_AssignmentType::CONTINUOUS:
         os << "asn(";
         break;
     }

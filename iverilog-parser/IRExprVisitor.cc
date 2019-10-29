@@ -22,7 +22,7 @@ void IRExprVisitor::visit(PETernary *te)
 
 void IRExprVisitor::visit(PEConcat *cat)
 {
-    IRExpr_UF *uf = new IRExpr_UF("concat");
+    IRExpr_UF *uf = new IRExpr_UF(IROtherOp::CONCAT);
     for (auto itr = cat->parms_.begin(); itr != cat->parms_.end(); ++itr)
     {
         uf->addOperand(toIRExpr(*itr));
@@ -43,7 +43,7 @@ void IRExprVisitor::visit(PECallFunction *cf)
         return;
     }
 
-    IRExpr_UF *uf = new IRExpr_UF("call_function_" + name);
+    IRExpr_UF *uf = new IRExpr_UF(IRCallFunctionOp(name));
     for (auto parmE : cf->parms_)
     {
         uf->addOperand(toIRExpr(parmE));
@@ -68,31 +68,31 @@ void IRExprVisitor::visit(PEEvent *)
 
 void IRExprVisitor::visit(PEBinary *be)
 {
-    const char *fun;
+    IRBinaryOp fun;
     switch (be->op_)
     {
-    case 'a': fun = "and";         break; // &&
-    case 'o': fun = "or";          break; // ||
-    case 'e': fun = "logic_eq";    break; // ==
-    case 'n': fun = "logic_neq";   break; // !=
-    case 'l': fun = "shl";         break; // <<
-    case 'r': fun = "shr";         break; // >>
-    case '&': fun = "bitwise_and"; break; // &
-    case '|': fun = "bitwise_or";  break; // |
-    case '<': fun = "lt";          break; // <
-    case '>': fun = "gt";          break; // >
-    case '^': fun = "xor";         break; // ^
-    case '+': fun = "add";         break; // +
-    case '-': fun = "sub";         break; // -
-    case '*': fun = "mul";         break; // *
-    case '/': fun = "div";         break; // /
-    case '%': fun = "mod";         break; // %
-    case 'R': fun = "arith_rs";    break; // >>>
-    case 'G': fun = "ge";          break; // >=
-    case 'p': fun = "exp";         break; // **
-    case 'E': fun = "case_eq";     break; // ===
-    case 'L': fun = "le";          break; // <=
-    case 'N': fun = "case_neq";    break; // !==
+    case 'a': fun = IRBinaryOp::AND;         break; // &&
+    case 'o': fun = IRBinaryOp::OR;          break; // ||
+    case 'e': fun = IRBinaryOp::LOGIC_EQ;    break; // ==
+    case 'n': fun = IRBinaryOp::LOGIC_NEQ;   break; // !=
+    case 'l': fun = IRBinaryOp::SHL;         break; // <<
+    case 'r': fun = IRBinaryOp::SHR;         break; // >>
+    case '&': fun = IRBinaryOp::BITWISE_AND; break; // &
+    case '|': fun = IRBinaryOp::BITWISE_OR;  break; // |
+    case '<': fun = IRBinaryOp::LT;          break; // <
+    case '>': fun = IRBinaryOp::GT;          break; // >
+    case '^': fun = IRBinaryOp::XOR;         break; // ^
+    case '+': fun = IRBinaryOp::ADD;         break; // +
+    case '-': fun = IRBinaryOp::SUB;         break; // -
+    case '*': fun = IRBinaryOp::MUL;         break; // *
+    case '/': fun = IRBinaryOp::DIV;         break; // /
+    case '%': fun = IRBinaryOp::MOD;         break; // %
+    case 'R': fun = IRBinaryOp::ARITH_RS;    break; // >>>
+    case 'G': fun = IRBinaryOp::GE;          break; // >=
+    case 'p': fun = IRBinaryOp::EXP;         break; // **
+    case 'E': fun = IRBinaryOp::CASE_EQ;     break; // ===
+    case 'L': fun = IRBinaryOp::LE;          break; // <=
+    case 'N': fun = IRBinaryOp::CASE_NEQ;    break; // !==
     default:
         cerr << endl
              << "NOT SUPPORTED: Binary expr operand: " << be->op_ << endl;
@@ -106,15 +106,15 @@ void IRExprVisitor::visit(PEBinary *be)
 
 void IRExprVisitor::visit(PEUnary *ue)
 {
-    const char *fun;
+    IRUnaryOp fun;
     switch (ue->op_)
     {
-    case 'm': fun = "abs";  break;
-    case '!': fun = "not";  break;
-    case '~': fun = "neg";  break;
-    case '&': fun = "and";  break;
-    case '|': fun = "or";   break;
-    case '-': fun = "neg";  break;
+    case 'm': fun = IRUnaryOp::ABS;      break;
+    case '!': fun = IRUnaryOp::NOT;      break;
+    case '~': fun = IRUnaryOp::NEGATE;   break;
+    case '&': fun = IRUnaryOp::AND;      break;
+    case '|': fun = IRUnaryOp::OR;       break;
+    case '-': fun = IRUnaryOp::NEGATIVE; break;
     default:
         cerr << endl
              << "NOT SUPPORTED: Unary expr operand: " << ue->op_ << endl;

@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <variant>
 
 #include "Module.h"
 
@@ -74,17 +75,71 @@ private:
     const std::string moduleName;
 };
 
+enum class IRUnaryOp
+{
+    ABS,
+    AND,
+    NEGATE,
+    NEGATIVE,
+    NOT,
+    OR
+};
+
+enum class IRBinaryOp
+{
+    ADD,
+    AND,
+    ARITH_RS,
+    BITWISE_AND,
+    BITWISE_OR,
+    CASE_EQ,
+    CASE_NEQ,
+    DIV,
+    EXP,
+    GE,
+    GT,
+    LE,
+    LOGIC_EQ,
+    LOGIC_NEQ,
+    LT,
+    MOD,
+    MUL,
+    NAND,
+    NOR,
+    OR,
+    SHL,
+    SHR,
+    SUB,
+    XNOR,
+    XOR
+};
+
+enum class IROtherOp
+{
+    CASE,
+    CONCAT,
+    WRITE_TO_INDEX
+};
+
+class IRCallFunctionOp
+{
+public:
+    IRCallFunctionOp(const std::string& f): function(f) {}
+    const std::string function;
+};
+
+typedef std::variant<IRUnaryOp, IRBinaryOp, IROtherOp, IRCallFunctionOp> IRUFOp;
+
 // uninterpreted function
 class IRExpr_UF : public IRExpr
 {
 public:
-    IRExpr_UF(const char *f) : function(f) {}
-    IRExpr_UF(const std::string &f) : function(f) {}
-    IRExpr_UF(const char *f, const IRExpr *o) : function(f)
+    IRExpr_UF(const IRUFOp &f) : function(f) {}
+    IRExpr_UF(const IRUFOp& f, const IRExpr *o) : function(f)
     {
         operands.push_back(o);
     }
-    IRExpr_UF(const char *f, const IRExpr *o1, const IRExpr *o2) : function(f)
+    IRExpr_UF(const IRUFOp &f, const IRExpr *o1, const IRExpr *o2) : function(f)
     {
         operands.push_back(o1);
         operands.push_back(o2);
@@ -107,7 +162,7 @@ public:
     std::ostream &print(std::ostream &) const;
 
 private:
-    const std::string function;
+    IRUFOp function;
     std::vector<const IRExpr *> operands;
 };
 

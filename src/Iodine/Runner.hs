@@ -32,6 +32,8 @@ import System.IO
 import System.Process
 import Text.Printf
 
+-- import qualified Data.Sequence as SQ
+
 -- import Debug.Trace
 -- import Control.DeepSeq
 -- import qualified Data.ByteString.Lazy as B
@@ -241,7 +243,8 @@ checkIR IodineArgs{..} = do
   --    | otherwise -> fmap fst (withSilence $ solve cfg fpst)
 
   putStrLn fileContents
-  print $ parseWithoutConversion (fileName, fileContents)
+  let modules = parseWithoutConversion (fileName, fileContents)
+  print modules
   return True
 
   -- where

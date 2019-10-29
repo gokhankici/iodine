@@ -45,11 +45,11 @@ private:
     std::vector<const IRStmt *> statements;
 };
 
-enum IRStmt_AssignmentType
+enum class IRStmt_AssignmentType
 {
-    IR_CONTINUOUS_ASSIGNMENT,
-    IR_BLOCKING_ASSIGNMENT,
-    IR_NON_BLOCKING_ASSIGNMENT
+    CONTINUOUS,
+    BLOCKING,
+    NON_BLOCKING
 };
 
 class IRStmt_Assignment : public IRStmt

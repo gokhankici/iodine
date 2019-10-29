@@ -8,16 +8,16 @@
 #include "IRExpr.h"
 #include "IRStmt.h"
 
-enum IRPortType
+enum class IRPortType
 {
-    IR_INPUT,
-    IR_OUTPUT
+    INPUT,
+    OUTPUT
 };
 
-enum IRVariableType
+enum class IRVariableType
 {
-    IR_WIRE,
-    IR_REGISTER
+    WIRE,
+    REGISTER
 };
 
 class IRVariable
@@ -38,11 +38,11 @@ public:
     const IRVariable variable;
 };
 
-enum IREventType
+enum class IREventType
 {
-    IR_POSEDGE,
-    IR_NEGEDGE,
-    IR_STAR
+    POSEDGE,
+    NEGEDGE,
+    STAR
 };
 
 class IREvent

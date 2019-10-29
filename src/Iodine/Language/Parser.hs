@@ -6,11 +6,13 @@
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Iodine.Language.Parser ( parse
-                              , parseWithoutConversion
-                              , renderError
-                              , IRParseError (..)
-                              ) where
+module Iodine.Language.Parser
+  ( parse
+  , parseWithoutConversion
+  , renderError
+  , IRParseError (..)
+  )
+where
 
 import           Control.Exception
 import           Control.Monad (void)

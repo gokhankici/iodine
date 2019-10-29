@@ -19,9 +19,9 @@ std::ostream &operator<<(std::ostream &out, const IRVariableType &t)
 {
     switch (t)
     {
-    case IR_REGISTER:
+    case IRVariableType::REGISTER:
         return out << "register";
-    case IR_WIRE:
+    case IRVariableType::WIRE:
         return out << "wire";
     default:
         cerr << "missing ir variable type: " << t << endl;
@@ -33,9 +33,9 @@ std::ostream &operator<<(std::ostream &out, const IRPortType &t)
 {
     switch (t)
     {
-    case IR_INPUT:
+    case IRPortType::INPUT:
         return out << "input";
-    case IR_OUTPUT:
+    case IRPortType::OUTPUT:
         return out << "output";
     default:
         cerr << "missing ir port type: " << t << endl;
@@ -57,14 +57,14 @@ inline std::ostream &operator<<(std::ostream &out, const IREvent &e)
 {
     switch (e.eventType)
     {
-    case IR_POSEDGE:
+    case IREventType::POSEDGE:
         return out << "posedge(" << *e.event << ")";
-    case IR_NEGEDGE:
+    case IREventType::NEGEDGE:
         return out << "negedge(" << *e.event << ")";
-    case IR_STAR:
+    case IREventType::STAR:
         return out << "star";
     default:
-        cerr << "missing ir event type: " << e.eventType << endl;
+        cerr << "missing ir event type" << endl;
         exit(1);
     }
 }

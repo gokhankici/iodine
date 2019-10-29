@@ -40,10 +40,10 @@ static IRVariableType getVariableType(PWire *w)
     {
     case NetNet::WIRE:
     case NetNet::IMPLICIT:
-        return IRVariableType::IR_WIRE;
+        return IRVariableType::WIRE;
     case NetNet::REG:
     case NetNet::IMPLICIT_REG:
-        return IRVariableType::IR_REGISTER;
+        return IRVariableType::REGISTER;
     default:
         cerr << "Not supported net:" << endl;
         w->dump(cerr, 0);
@@ -120,7 +120,7 @@ const IRModule *IRExporter::extractModule() const
 
             if (eventStmt->expr_.count() == 0)
             {
-                irEvent = new IREvent(IR_STAR, NULL);
+                irEvent = new IREvent(IREventType::STAR, NULL);
             }
             else if (eventStmt->expr_.count() == 1)
             {
@@ -319,10 +319,10 @@ void IRExporter::setModulePorts(IRModule *irModule) const
             switch (wire->get_port_type())
             {
             case PortType::PINPUT:
-                portType = IRPortType::IR_INPUT;
+                portType = IRPortType::INPUT;
                 break;
             case PortType::POUTPUT:
-                portType = IRPortType::IR_OUTPUT;
+                portType = IRPortType::OUTPUT;
                 break;
             default:
             {
@@ -552,10 +552,10 @@ const IREvent *IRExporter::toIREvent(PEEvent *ev) const
     switch (ev->type())
     {
     case PEEvent::POSEDGE:
-        eventType = IR_POSEDGE;
+        eventType = IREventType::POSEDGE;
         break;
     case PEEvent::NEGEDGE:
-        eventType = IR_NEGEDGE;
+        eventType = IREventType::NEGEDGE;
         break;
     default:
         cerr << endl
