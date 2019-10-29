@@ -14,6 +14,9 @@ module Iodine.Language.IRParser
   )
 where
 
+import           Iodine.Language.IR
+import           Iodine.Language.Types
+
 import           Control.Exception
 import           Control.Monad (void)
 import           Data.Char (isLetter, isDigit)
@@ -28,17 +31,8 @@ import qualified Text.Megaparsec.Char       as MPC
 import qualified Text.Megaparsec.Char.Lexer as MPL
 import qualified Data.Sequence              as SQ
 
-import qualified Iodine.Language.VerilogIR as VIR
-import           Iodine.Language.Types
-
 type Parser = MP.Parsec MP.SourcePos String
-
-type VIR_Event       = VIR.Event VIR.Expr
-type VIR_Stmt        = VIR.Stmt VIR.Expr
-type VIR_AlwaysBlock = VIR.AlwaysBlock VIR.Stmt VIR.Expr
-type VIR_Module      = VIR.Module VIR.Stmt VIR.Expr
-
-type ParsedIR = L (VIR_Module ())
+type ParsedIR = L (Module ())
 
 parse :: (FilePath, String) -> ParsedIR
 parse (fp, s) = parseWith (many parseModule)
@@ -52,10 +46,10 @@ parse (fp, s) = parseWith (many parseModule)
 -- | IR Parser
 --------------------------------------------------------------------------------
 
-parseModule :: Parser (VIR_Module ())
+parseModule :: Parser (Module ())
 parseModule =
   parseTerm "module" $
-  VIR.Module
+  Module
   <$> identifier
   <*> (comma *> list parsePort)
   <*> (comma *> list parseVariable)
@@ -63,28 +57,28 @@ parseModule =
   <*> (comma *> list parseAlwaysBlock)
   <*> parseData
 
-parsePort :: Parser (VIR.Port ())
+parsePort :: Parser Port
 parsePort =
-  parseTerm "input" (VIR.Input  <$> parseVariable <*> parseData) <|>
-  parseTerm "output" (VIR.Output  <$> parseVariable <*> parseData)
+  parseTerm "input"  (Input   <$> parseVariable) <|>
+  parseTerm "output" (Output  <$> parseVariable)
 
-parseVariable :: Parser (VIR.Variable ())
+parseVariable :: Parser Variable
 parseVariable =
-  parseTerm "wire"     (VIR.Wire     <$> identifier <*> parseData) <|>
-  parseTerm "register" (VIR.Register <$> identifier <*> parseData)
+  parseTerm "wire"     (Wire     <$> identifier) <|>
+  parseTerm "register" (Register <$> identifier)
 
-parseExpr :: Parser (VIR.Expr ())
+parseExpr :: Parser (Expr ())
 parseExpr =
-  parseTerm "const" (VIR.Constant <$> constVar <*> parseData) <|>
-  parseTerm "var" (VIR.Variable <$> identifier <*> (comma *> identifier) <*> parseData) <|>
-  parseTerm "uf" (VIR.UF <$> identifier <*> (comma *> list parseExpr) <*> parseData) <|>
-  parseTerm "ite_expr" (VIR.IfExpr
+  parseTerm "const" (Constant <$> constVar <*> parseData) <|>
+  parseTerm "var" (Variable <$> identifier <*> (comma *> identifier) <*> parseData) <|>
+  parseTerm "uf" (UF <$> identifier <*> (comma *> list parseExpr) <*> parseData) <|>
+  parseTerm "ite_expr" (IfExpr
                         <$> parseExpr
                         <*> (comma *> parseExpr)
                         <*> (comma *> parseExpr)
                         <*> parseData) <|>
-  parseTerm "str" (VIR.Str <$> identifier <*> parseData) <|>
-  parseTerm "select" (VIR.Select
+  parseTerm "str" (Str <$> identifier <*> parseData) <|>
+  parseTerm "select" (Select
                       <$> parseExpr
                       <*> (comma *> list parseExpr)
                       <*> parseData)
@@ -92,39 +86,39 @@ parseExpr =
     constVar :: Parser Id
     constVar = T.pack <$> MP.many MPC.alphaNumChar
 
-parseStmt :: Parser (VIR_Stmt ())
+parseStmt :: Parser (Stmt ())
 parseStmt =
-  parseTerm "block" (VIR.Block <$> list parseStmt <*> parseData) <|>
-  parseAsn "b_asn" VIR.Blocking <|>
-  parseAsn "nb_asn" VIR.NonBlocking <|>
-  parseAsn "asn" VIR.Continuous <|>
-  parseTerm "ite_stmt" (VIR.IfStmt
+  parseTerm "block" (Block <$> list parseStmt <*> parseData) <|>
+  parseAsn "b_asn" Blocking <|>
+  parseAsn "nb_asn" NonBlocking <|>
+  parseAsn "asn" Continuous <|>
+  parseTerm "ite_stmt" (IfStmt
                         <$> parseExpr
                         <*> (comma *> parseStmt)
                         <*> (comma *> parseStmt)
                         <*> parseData) <|>
-  parseTerm "mod_inst" (VIR.ModuleInstance
+  parseTerm "mod_inst" (ModuleInstance
                         <$> identifier
                         <*> (comma *> identifier)
                         <*> (comma *> parseMap identifier parseExpr)
                         <*> parseData) <|>
-  (rWord "skip" *> return (VIR.Skip ()))
+  (rWord "skip" *> return (Skip ()))
   where
     parseAsn k t = parseTerm k $
-                   VIR.Assignment t
+                   Assignment t
                    <$> parseExpr
                    <*> (comma *> parseExpr)
                    <*> parseData
 
-parseEvent :: Parser (VIR_Event ())
+parseEvent :: Parser (Event ())
 parseEvent =
-  parseTerm "posedge" (VIR.PosEdge <$> parseExpr <*> parseData) <|>
-  parseTerm "negedge" (VIR.NegEdge <$> parseExpr <*> parseData) <|>
-  (rWord "star" *> return (VIR.Star ()))
+  parseTerm "posedge" (PosEdge <$> parseExpr <*> parseData) <|>
+  parseTerm "negedge" (NegEdge <$> parseExpr <*> parseData) <|>
+  (rWord "star" *> return (Star ()))
 
-parseAlwaysBlock :: Parser (VIR_AlwaysBlock ())
+parseAlwaysBlock :: Parser (AlwaysBlock ())
 parseAlwaysBlock =
-  parseTerm "always" (VIR.AlwaysBlock
+  parseTerm "always" (AlwaysBlock
                      <$> parseEvent
                      <*> (comma *> parseStmt)
                      <*> parseData)

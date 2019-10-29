@@ -1,54 +1,68 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Iodine.Transform.SSA
-  ( Expr(..)
-  , ssa
+  ( ssa
   , SSAIR
   )
 where
 
-import           Iodine.Language.IRParser (ParsedIR)
-import           Iodine.Language.VerilogIR hiding (Expr)
-import qualified Iodine.Language.VerilogIR as VIR
-import           Iodine.Language.Types
+import Iodine.Language.IRParser (ParsedIR)
+import Iodine.Language.IR
+import Iodine.Language.Types
 
-import           Data.Monoid ((<>))
+import           Control.Lens
 import           Control.Monad.State.Lazy
+-- import qualified Data.HashMap.Strict as HM
+import           GHC.Generics (Generic)
 
-import Debug.Trace
+data St = St { _abId   :: Int   -- id for always blocks
+             , _stmtId :: Int   -- id for statements
+             -- , _varId  :: HM.HashMap Id Int -- id for variables
+             }
+        deriving (Generic)
 
-type SSAIR = L (Module Stmt Expr ())
+makeLenses ''St
 
-data Expr a = VExpr (VIR.Expr a) | PhiNode (L (VIR.Expr a)) a
-            deriving (Show)
+type S = State St
+type SSAIR = L (Module Int)
 
 ssa :: ParsedIR -> SSAIR
-ssa modules = fmap ((mapStmt ssaStmt) . (mapExpr VExpr)) modules
-
-ssaStmt :: Stmt Expr a -> Stmt Expr a
-ssaStmt stmt = trace (show $ snd <$> stmt') undefined
+ssa = fmap $ (flip evalState initialSt) . ssaModule
   where
-    (stmt', _n') = runState (traverse act stmt) 0
+    initialSt = St 0 0 -- HM.empty
 
-    act :: a -> S (a, Int)
-    act a = do
-      n <- get
-      put (n+1)
-      return (a, n)
+ssaModule :: Module a -> S (Module Int)
+ssaModule Module{..} =
+  Module moduleName ports variables <$>
+  traverse ssaStmt gateStmts <*>
+  traverse ssaAB alwaysBlocks <*>
+  return 0
 
-instance Functor Expr where
-  fmap f (VExpr vexpr) = VExpr (f <$> vexpr)
-  fmap f (PhiNode es a) = PhiNode (fmap f <$> es) (f a)
+ssaAB :: AlwaysBlock a -> S (AlwaysBlock Int)
+ssaAB AlwaysBlock{..} =
+  AlwaysBlock (const 0 <$> abEvent) <$>
+  ssaStmt abStmt <*>
+  ((abId += 1) *> use abId)
 
-instance Foldable Expr where
-  foldMap f (VExpr vexpr) = foldMap f vexpr
-  foldMap f (PhiNode es a) = foldMap (foldMap f) es <> f a
+-- after this step, each new variable will have an unique id
+ssaStmt :: Stmt a -> S (Stmt Int)
+ssaStmt Skip{..} = Skip <$> freshStmtId
+ssaStmt _ = undefined
 
-instance Traversable Expr where
-  traverse m (VExpr vexpr) = VExpr <$> traverse m vexpr
-  traverse m (PhiNode es a) = PhiNode <$> traverse (traverse m) es <*> m a
+freshStmtId :: S Int
+freshStmtId = stmtId += 1 >> use stmtId
 
-type S = State Int
+-- ssaStmt stmt = trace (show $ snd <$> stmt') undefined
+--   where
+--     (stmt', _n') = runState (traverse act stmt) 0
 
+--     act :: a -> S (a, Int)
+--     act a = do
+--       n <- get
+--       put (n+1)
+--       return (a, n)
 
+-- other stuff
