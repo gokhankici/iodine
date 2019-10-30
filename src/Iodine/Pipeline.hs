@@ -6,6 +6,8 @@ where
 import Iodine.Language.IRParser
 import Iodine.Transform.SSA
 
+import Control.Monad
+
 import qualified Data.ByteString.Lazy as B
 
 type PipelineInput = ( FilePath -- IR file
@@ -19,6 +21,6 @@ pipeline (irFile, _annotationFile) = do
   _annotationFileContents <- B.readFile _annotationFile
 
   let ir = ssa $ parse (irFile, irFileContents)
-  print ir
+  forM_ ir print
 
   return True

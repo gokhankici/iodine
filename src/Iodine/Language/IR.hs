@@ -20,19 +20,21 @@ module Iodine.Language.IR
 where
 
 import           Iodine.Language.Types
-import qualified Data.HashMap.Strict as HM
 
-import           GHC.Generics hiding (moduleName)
+import           Data.List           (intercalate)
+import           Data.Foldable       (toList)
+import qualified Data.Text           as T
+import qualified Data.HashMap.Strict as HM
+import           GHC.Generics        hiding (moduleName)
+import           Text.Printf
 
 data Variable =
     Wire {variableName :: Id}
   | Register {variableName :: Id}
-  deriving (Show)
 
 data Port =
     Input  { portVariable :: Variable }
   | Output { portVariable :: Variable }
-  deriving (Show)
 
 data Expr a =
   Constant { constantValue :: Id
@@ -58,10 +60,10 @@ data Expr a =
            , selectIndices :: L (Expr a)
            , exprData      :: a
            }
-  deriving (Show, Generic, Functor, Foldable, Traversable)
+  deriving (Generic, Functor, Foldable, Traversable)
 
 data AssignmentType = Blocking | NonBlocking | Continuous
-                    deriving (Show, Generic)
+                    deriving (Generic)
 
 data Stmt a =
   Block { blockStmts :: L (Stmt a)
@@ -88,7 +90,7 @@ data Stmt a =
             , stmtData :: a
             }
   | Skip { stmtData :: a }
-  deriving (Show, Generic, Functor, Foldable, Traversable)
+  deriving (Generic, Functor, Foldable, Traversable)
 
 data Event a =
   PosEdge { eventExpr :: Expr a
@@ -98,14 +100,14 @@ data Event a =
             , eventData :: a
             }
   | Star { eventData :: a }
-  deriving (Show, Generic, Functor, Foldable, Traversable)
+  deriving (Generic, Functor, Foldable, Traversable)
 
 data AlwaysBlock a =
   AlwaysBlock { abEvent :: Event a
               , abStmt  :: Stmt a
               , abData  :: a
               }
-  deriving (Show, Generic, Functor, Foldable, Traversable)
+  deriving (Generic, Functor, Foldable, Traversable)
 
 data Module a =
   Module { moduleName   :: Id
@@ -115,66 +117,56 @@ data Module a =
          , alwaysBlocks :: L (AlwaysBlock a)
          , moduleData   :: a
          }
-  deriving (Show, Generic, Functor, Foldable, Traversable)
+  deriving (Generic, Functor, Foldable, Traversable)
 
 -- -----------------------------------------------------------------------------
 -- Typeclass Instances
 -- -----------------------------------------------------------------------------
 
--- -- MapExpr
+instance Show Variable where
+  show (Wire v) = printf "(Wire %s)" v
+  show (Register v) = printf "(Reg %s)" v
 
--- class MapExpr t where
---   mapExpr :: (Expr a -> Expr a) -> t a -> t a
+instance Show Port where
+  show (Input p) = printf "(Input %s)" (show p)
+  show (Output p) = printf "(Output %s)" (show p)
 
--- instance MapExpr Stmt where
---   mapExpr f Block{..} = Block { blockStmts = fmap (mapExpr f) blockStmts, .. }
---   mapExpr f Assignment{..} = Assignment { assignmentLhs = f assignmentLhs
---                                         , assignmentRhs = f assignmentRhs
---                                         , ..
---                                         }
---   mapExpr f IfStmt{..} = IfStmt { ifStmtCondition = f ifStmtCondition
---                                 , ifStmtThen = mapExpr f ifStmtThen
---                                 , ifStmtElse = mapExpr f ifStmtElse
---                                 , ..
---                                 }
---   mapExpr f ModuleInstance{..} = ModuleInstance{ moduleInstancePorts = HM.map f moduleInstancePorts
---                                                , ..
---                                                }
---   mapExpr _ Skip{..} = Skip{..}
---   mapExpr f PhiNode{..} = PhiNode { phiLhs = f phiLhs
---                                   , phiRhs = f <$> phiRhs
---                                   , ..
---                                   }
+instance Show a => Show (Expr a) where
+  show (Constant c _)   = T.unpack c
+  show (Variable v _ a) = printf "%s#%s" v (show a)
+  show (UF n es _)      = printf "(UF %s %s)" n (show $ toList es)
+  show (IfExpr c t e _) = printf "(%s ? %s : %s)" (show c) (show t) (show e)
+  show (Str s _)        = T.unpack s
+  show (Select v is _)  = printf "%s%s" (show v) (show $ toList is)
 
--- instance MapExpr Event where
---   mapExpr f PosEdge{..} = PosEdge { eventExpr = f eventExpr, .. }
---   mapExpr f NegEdge{..} = NegEdge { eventExpr = f eventExpr, .. }
---   mapExpr _ Star{..} = Star { .. }
+-- data AssignmentType = Blocking | NonBlocking | Continuous
+--                     deriving (Generic)
 
--- instance MapExpr AlwaysBlock where
---   mapExpr f AlwaysBlock{..} = AlwaysBlock { abEvent = mapExpr f abEvent
---                                           , abStmt  = mapExpr f abStmt
---                                           , ..
---                                           }
+instance Show a => Show (Stmt a) where
+  show (Block ss _) = printf "{ %s }" (intercalate "; " (toList $ show <$> ss))
+  show (Assignment t l r _) = printf "%s %s %s" (show l) op (show r)
+                              where op = case t of
+                                           Blocking -> "="
+                                           NonBlocking -> "<="
+                                           Continuous -> ":="
+  show (IfStmt c t e _) = printf "if( %s ){ %s }else{ %s }" (show c) (show t) (show e)
+  show (ModuleInstance t n ps _) = printf "%s %s(%s)" t n (intercalate ", " args)
+                                   where args = (\(k,e) -> printf "%s = %s" k (show e)) <$> HM.toList ps
+  show (PhiNode l rs _) = printf "%s = phi(%s)" (show l) (intercalate ", " (toList $ show <$> rs))
+  show (Skip _) = printf "skip"
 
--- instance MapExpr Module where
---   mapExpr f Module{..} = Module { gateStmts = fmap (mapExpr f) gateStmts
---                                 , alwaysBlocks = fmap (mapExpr f) alwaysBlocks
---                                 , ..
---                                 }
+instance Show a => Show (Event a) where
+  show (PosEdge e _) = printf "@(posedge %s)" (show e)
+  show (NegEdge e _) = printf "@(negedge %s)" (show e)
+  show (Star _)      = "*"
 
--- -- MapStmt
+instance Show a => Show (AlwaysBlock a) where
+  show (AlwaysBlock e s _) = printf "always %s %s" (show e) (show s)
 
--- class MapExpr t => MapStmt t where
---   mapStmt :: (Stmt a -> Stmt a) -> t a -> t a
-
--- instance MapStmt AlwaysBlock where
---   mapStmt f AlwaysBlock{..} = AlwaysBlock { abStmt  = f abStmt
---                                           , ..
---                                           }
-
--- instance MapStmt Module where
---   mapStmt f Module{..} = Module { gateStmts = fmap f gateStmts
---                                 , alwaysBlocks = fmap (mapStmt f) alwaysBlocks
---                                 , ..
---                                 }
+instance Show a => Show (Module a) where
+  show Module{..} = printf "module(%s, %s, %s, %s, %s)"
+                    moduleName
+                    (show $ toList ports)
+                    (show $ toList variables)
+                    (show $ toList gateStmts)
+                    (show $ toList alwaysBlocks)

@@ -116,7 +116,6 @@ enum class IRBinaryOp
 
 enum class IROtherOp
 {
-    CASE,
     CONCAT,
     WRITE_TO_INDEX
 };

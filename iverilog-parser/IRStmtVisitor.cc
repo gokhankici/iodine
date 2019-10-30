@@ -216,14 +216,23 @@ void IRStmtVisitor::visit(PCase *c)
         }
         else
         {
-            IRExpr_UF *uf = new IRExpr_UF(IROtherOp::CASE, switchExpr);
-            for (auto idx_expr : cur->expr)
+            if (cur->expr.size() == 1)
             {
-                uf->addOperand(toIRExpr(idx_expr));
+                IRExpr_UF *uf = new IRExpr_UF(IRBinaryOp::LOGIC_EQ, switchExpr, toIRExpr(cur->expr.front()));
+                CaseStruct cs = {uf, toIRStmt(cur->stat)};
+                items.push_back(cs);
             }
-
-            CaseStruct cs = {uf, toIRStmt(cur->stat)};
-            items.push_back(cs);
+            else
+            {
+                IRExpr_UF *bigUf = new IRExpr_UF(IRBinaryOp::OR);
+                for (auto idx_expr : cur->expr)
+                {
+                    IRExpr_UF *uf = new IRExpr_UF(IRBinaryOp::LOGIC_EQ, switchExpr, toIRExpr(idx_expr));
+                    bigUf->addOperand(uf);
+                }
+                CaseStruct cs = {bigUf, toIRStmt(cur->stat)};
+                items.push_back(cs);
+            }
         }
     }
 

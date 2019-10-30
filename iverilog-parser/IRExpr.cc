@@ -72,7 +72,6 @@ inline std::ostream &operator<<(std::ostream &out, const IRUFOp& op)
     {
         switch (*oop)
         {
-        case IROtherOp::CASE:           return out << "case";
         case IROtherOp::CONCAT:         return out << "concat";
         case IROtherOp::WRITE_TO_INDEX: return out << "write_to_index";
         default:                        cerr << "missing other op" << endl; exit(1);
