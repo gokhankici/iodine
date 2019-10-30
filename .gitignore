@@ -52,3 +52,5 @@ flycheck_*.el
 cplex.json
 
 .vscode/
+
+/stack.yaml.lock

@@ -19,11 +19,6 @@ import qualified Data.ByteString.Lazy       as B
 import           Data.Foldable
 import qualified Data.Sequence              as S
 
-data AnnotationFile a =
-  AnnotationFile { afAnnotations :: L (Annotation a)
-                 , afQualifiers  :: L (Qualifier a)
-                 }
-
 newtype AF = AF (AnnotationFile ())
 newtype A = A { getAnnotation :: L (Annotation ()) }
 newtype Q = Q { getQualifier  :: Qualifier () }

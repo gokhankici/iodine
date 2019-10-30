@@ -8,6 +8,7 @@
 module Iodine.Language.Annotation
   ( Annotation(..)
   , Qualifier(..)
+  , AnnotationFile(..)
   )
 where
 
@@ -42,4 +43,10 @@ data Qualifier a =
   | QAssume { qualifierAssume :: L Id
             , qualifierData   :: a
             }
+  deriving (Generic, Show, Functor, Foldable, Traversable)
+
+data AnnotationFile a =
+  AnnotationFile { afAnnotations :: L (Annotation a)
+                 , afQualifiers  :: L (Qualifier a)
+                 }
   deriving (Generic, Show, Functor, Foldable, Traversable)
