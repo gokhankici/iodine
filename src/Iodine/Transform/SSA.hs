@@ -2,6 +2,7 @@
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE NoMonadFailDesugaring #-}
 
 module Iodine.Transform.SSA
   ( ssa
@@ -20,6 +21,8 @@ import qualified Data.Sequence            as SQ
 import           GHC.Generics (Generic)
 
 -- import Debug.Trace
+
+
 
 data St = St { _abId          :: Int               -- id for always blocks
              , _stmtId        :: Int               -- id for statements
@@ -118,8 +121,11 @@ makePhiNodes m1 m2 = sequence $ HM.foldlWithKey' go SQ.empty m1
                  updateVariableId varName (exprData lhs)
                  PhiNode lhs rhs <$> freshStmtId
 
+
 ssaStmtSingle :: Stmt a -> S (Stmt Int)
 ssaStmtSingle s = ssaStmt s <* resetStmtState
+  where
+    resetStmtState = varMaxId .= HM.empty >> varIds .= HM.empty
 
 -- -----------------------------------------------------------------------------
 ssaExpr :: Expr a -> S (Expr Int)
@@ -148,7 +154,8 @@ freshStmtId = stmtId += 1 >> use stmtId
 
 getVariableId :: Id -> S (Expr Int)
 getVariableId varName = do
-  Just n <- varIds . at varName <%= Just . maybe 0 id
+  _x <- varIds . at varName <%= Just . maybe 0 id
+  let n = 0 -- FIXME
   varModuleName <- use currentModule
   return Variable{ exprData = n, .. }
 
@@ -164,6 +171,3 @@ freshVariable varName = do
 
 noId :: S Int
 noId = return 0
-
-resetStmtState :: S ()
-resetStmtState = varMaxId .= HM.empty >> varIds .= HM.empty

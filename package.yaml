@@ -15,32 +15,42 @@ category:            Hardware Verification
 
 description:         Please see the README on Github at <https://github.com/gokhankici/iodine#readme>
 
+ghc-options:
+- -fplugin=Polysemy.Plugin
+- -O2
+- -flate-specialise
+- -fspecialise-aggressively
+
+default-extensions:
+- DataKinds
+- FlexibleContexts
+- GADTs
+- LambdaCase
+- PolyKinds
+- RankNTypes
+- ScopedTypeVariables
+- TypeApplications
+- TypeOperators
+- TypeFamilies
+
 dependencies:
 - base >= 4.7 && < 5
-- array
+- aeson
+- bytestring
 - cmdargs
 - containers
 - directory
 - filepath
+- hashable
 - lens
+- liquid-fixpoint
 - megaparsec
 - mtl
-- pretty
+- polysemy
+- polysemy-plugin
 - process
-- semigroups
-- unordered-containers
-- ansi-terminal
-- liquid-fixpoint
-- deepseq
-- hashable
-- fgl
-- fgl-visualize
-- cmdargs
-- random
 - text
-- yaml
-- aeson
-- bytestring
+- unordered-containers
 
 library:
   source-dirs:           src

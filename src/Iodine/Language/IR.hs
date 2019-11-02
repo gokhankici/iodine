@@ -63,7 +63,7 @@ data Expr a =
   deriving (Generic, Functor, Foldable, Traversable)
 
 data AssignmentType = Blocking | NonBlocking | Continuous
-                    deriving (Generic)
+                    deriving (Generic, Eq)
 
 data Stmt a =
   Block { blockStmts :: L (Stmt a)
@@ -77,7 +77,7 @@ data Stmt a =
   | IfStmt   { ifStmtCondition :: Expr a
              , ifStmtThen      :: Stmt a
              , ifStmtElse      :: Stmt a
-             , stmtData       :: a
+             , stmtData        :: a
              }
   | ModuleInstance { moduleInstanceType  :: Id
                    , moduleInstanceName  :: Id
@@ -138,9 +138,6 @@ instance Show a => Show (Expr a) where
   show (IfExpr c t e _) = printf "(%s ? %s : %s)" (show c) (show t) (show e)
   show (Str s _)        = T.unpack s
   show (Select v is _)  = printf "%s%s" (show v) (show $ toList is)
-
--- data AssignmentType = Blocking | NonBlocking | Continuous
---                     deriving (Generic)
 
 instance Show a => Show (Stmt a) where
   show (Block ss _) = printf "{ %s }" (intercalate "; " (toList $ show <$> ss))
