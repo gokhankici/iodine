@@ -1,27 +1,38 @@
-module Iodine.Pipeline (pipeline) where
+{-# LANGUAGE ConstraintKinds #-}
 
-import Iodine.Language.IRParser
-import Iodine.Language.AnnotationParser
+module Iodine.Pipeline
+  ( pipeline
+  )
+where
+
+import Iodine.Language.IRParser (ParsedIR, IRParseError)
+import Iodine.Language.AnnotationParser (AnnotationFile)
 import Iodine.Transform.SSA
 import Iodine.Transform.SanityCheck
+import Iodine.Transform.VCGen
+import Iodine.Transform.Solve
 
-import Control.Arrow
-import Control.Monad
+import Data.Function
+import Data.Foldable
 
-import qualified Data.ByteString.Lazy as B
+import Polysemy
+import Polysemy.Error
+import Polysemy.Reader
+import Polysemy.Trace
 
-type PipelineInput = ( FilePath -- IR file
-                     , FilePath -- Annotation file
-                     )
-type PipelineOutput = IO Bool
+type G r = Members '[ Error SanityCheckError
+                    , Error IRParseError
+                    , Trace
+                    ] r
 
-pipeline :: PipelineInput -> PipelineOutput
-pipeline (irFile, annotationFile) = do
-  result <- transform <$> ((,) <$> (,) irFile <$> readFile irFile <*> B.readFile annotationFile)
-  forM_ result print
-  return True
-
-transform :: ((FilePath, String), B.ByteString) -> (SSAIR, AnnotationFile ())
-transform = (first parse >>> second parseAnnotations) >>>
-            sanityCheck >>>
-            first ssa
+pipeline :: G r
+         => Sem r ParsedIR
+         -> Sem r (AnnotationFile ())
+         -> Sem r Bool
+pipeline irReader afReader = do
+  ir <- irReader
+  af <- afReader
+  sanityCheck & runReader ir & runReader af
+  let ir' = ssa ir
+  traverse_ (trace . show) ir'
+  vcgen >>= solve

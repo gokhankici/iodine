@@ -1,8 +1,6 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE NoMonadFailDesugaring #-}
 
 module Iodine.Transform.SSA
   ( ssa
@@ -14,40 +12,38 @@ import Iodine.Language.IRParser (ParsedIR)
 import Iodine.Language.IR
 import Iodine.Language.Types
 
-import           Control.Lens
-import           Control.Monad.State.Lazy
+import           Data.Function
 import qualified Data.HashMap.Strict      as HM
 import qualified Data.Sequence            as SQ
-import           GHC.Generics (Generic)
 
--- import Debug.Trace
+import Polysemy
+import Polysemy.State
 
-
-
-data St = St { _abId          :: Int               -- id for always blocks
-             , _stmtId        :: Int               -- id for statements
-             , _varMaxId      :: HM.HashMap Id Int -- max id of the variable
-             , _varIds        :: HM.HashMap Id Int -- current id of the variable
-             , _currentModule :: Id                -- name of the current module
+data St = St { abId          :: Int               -- id for always blocks
+             , stmtId        :: Int               -- id for statements
+             , varMaxId      :: HM.HashMap Id Int -- max id of the variable
+             , varIds        :: HM.HashMap Id Int -- current id of the variable
+             , currentModule :: Id                -- name of the current module
              }
-        deriving (Generic)
 
-makeLenses ''St
-
-type S = State St
 type SSAIR = L (Module Int)
+
+type FD r = Member (State St) r
 
 -- -----------------------------------------------------------------------------
 -- after this step, each new variable, statement, and always block
 -- within a module will have an unique id
 ssa :: ParsedIR -> SSAIR
 -- -----------------------------------------------------------------------------
-ssa = fmap (\m@Module{..} -> evalState (ssaModule m) (initialSt moduleName))
+ssa = fmap $ \m@Module{..} ->
+  ssaModule m
+  & evalState (initialSt moduleName)
+  & run
   where
     initialSt name = St 0 0 HM.empty HM.empty name
 
 -- -----------------------------------------------------------------------------
-ssaModule :: Module a -> S (Module Int)
+ssaModule :: FD r => Module a -> Sem r (Module Int)
 -- -----------------------------------------------------------------------------
 ssaModule Module{..} =
   Module moduleName ports variables <$>
@@ -56,15 +52,17 @@ ssaModule Module{..} =
   return 0
 
 -- -----------------------------------------------------------------------------
-ssaAB :: AlwaysBlock a -> S (AlwaysBlock Int)
+ssaAB :: FD r => AlwaysBlock a -> Sem r (AlwaysBlock Int)
 -- -----------------------------------------------------------------------------
 ssaAB AlwaysBlock{..} =
   AlwaysBlock (const 0 <$> abEvent) <$>
   ssaStmtSingle abStmt <*>
-  ((abId += 1) *> use abId)
+  (modify (incrAbId 1) *> gets abId)
+  where 
+    incrAbId n St{..} = St { abId = abId + n, .. }
 
 -- -----------------------------------------------------------------------------
-ssaStmt :: Stmt a -> S (Stmt Int)
+ssaStmt :: FD r => Stmt a -> Sem r (Stmt Int)
 -- -----------------------------------------------------------------------------
 ssaStmt Block{..} = Block <$> traverse ssaStmt blockStmts <*> freshStmtId
 
@@ -80,16 +78,16 @@ ssaStmt Assignment{..} = do
   Assignment assignmentType lhs' rhs' <$> freshStmtId
 
 ssaStmt IfStmt{..} = do
-  initVarIdMap <- use varIds
+  initVarIdMap <- gets varIds
 
   cond' <- ssaExpr ifStmtCondition
 
   then' <- ssaStmt ifStmtThen
-  thenVarIdMap <- use varIds
-  varIds .= initVarIdMap
+  thenVarIdMap <- gets varIds
+  modify (\s -> s { varIds = initVarIdMap })
 
   else' <- ssaStmt ifStmtElse
-  elseVarIdMap <- use varIds
+  elseVarIdMap <- gets varIds
 
   ifStmt' <- IfStmt cond' then' else' <$> freshStmtId
   phiNodes <- makePhiNodes thenVarIdMap elseVarIdMap
@@ -104,17 +102,16 @@ ssaStmt Skip{..} = Skip <$> freshStmtId
 
 type M = HM.HashMap Id Int
 
-makePhiNodes :: M -> M -> S (L (Stmt Int))
+makePhiNodes :: FD r => M -> M -> Sem r (L (Stmt Int))
 makePhiNodes m1 m2 = sequence $ HM.foldlWithKey' go SQ.empty m1
   where
-    go :: L (S (Stmt Int)) -> Id -> Int -> L (S (Stmt Int))
     go actions varName varId1 =
       let varId2 = HM.lookupDefault 0 varName m2
       in if   varId1 == varId2
          then actions
          else actions SQ.|>
               do lhs <- freshVariable varName
-                 varModuleName <- use currentModule
+                 varModuleName <- gets currentModule
                  let rhs = Variable { exprData = varId1, .. } SQ.<|
                            Variable { exprData = varId2, .. } SQ.<|
                            SQ.empty
@@ -122,13 +119,15 @@ makePhiNodes m1 m2 = sequence $ HM.foldlWithKey' go SQ.empty m1
                  PhiNode lhs rhs <$> freshStmtId
 
 
-ssaStmtSingle :: Stmt a -> S (Stmt Int)
-ssaStmtSingle s = ssaStmt s <* resetStmtState
+ssaStmtSingle :: FD r => Stmt a -> Sem r (Stmt Int)
+ssaStmtSingle stmt = ssaStmt stmt <* resetStmtState
   where
-    resetStmtState = varMaxId .= HM.empty >> varIds .= HM.empty
+    resetStmtState = do
+      modify $ \s -> s { varMaxId = HM.empty }
+      modify $ \s -> s { varIds   = HM.empty }
 
 -- -----------------------------------------------------------------------------
-ssaExpr :: Expr a -> S (Expr Int)
+ssaExpr :: FD r => Expr a -> Sem r (Expr Int)
 -- -----------------------------------------------------------------------------
 ssaExpr e@Constant{..} = return $ const 0 <$> e
 ssaExpr Variable{..} = getVariableId varName
@@ -149,25 +148,28 @@ ssaExpr Select{..} = Select <$>
 
 -- helper functions
 
-freshStmtId :: S Int
-freshStmtId = stmtId += 1 >> use stmtId
+freshStmtId :: FD r => Sem r Int
+freshStmtId = do
+  modify $ \St{..} -> St {stmtId = stmtId + 1, .. }
+  gets stmtId
 
-getVariableId :: Id -> S (Expr Int)
+getVariableId :: FD r => Id -> Sem r (Expr Int)
 getVariableId varName = do
-  _x <- varIds . at varName <%= Just . maybe 0 id
-  let n = 0 -- FIXME
-  varModuleName <- use currentModule
+  n <- maybe 0 id . HM.lookup varName <$> gets varIds
+  varModuleName <- gets currentModule
   return Variable{ exprData = n, .. }
 
-updateVariableId :: Id -> Int -> S ()
+updateVariableId :: FD r => Id -> Int -> Sem r ()
 updateVariableId varName varId =
-  varIds . at varName %= const (Just varId)
+  modify $ \St{..} -> St { varIds = HM.alter (\case _ -> Just varId) varName varIds
+                         , .. }
 
-freshVariable :: Id -> S (Expr Int)
+freshVariable :: FD r => Id -> Sem r (Expr Int)
 freshVariable varName = do
-  Just n <- varMaxId . at varName <%= Just . maybe 0 (+1)
-  varModuleName <- use currentModule
-  return Variable{ exprData = n, .. }
+  freshId <- maybe 1 (+1) . HM.lookup varName <$> gets varMaxId
+  varModuleName <- gets currentModule
+  return Variable{ exprData = freshId, .. }
 
-noId :: S Int
+noId :: Sem r Int
 noId = return 0
+  

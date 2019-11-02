@@ -5,6 +5,7 @@
 
 module Iodine.Transform.SanityCheck
   ( sanityCheck
+  , SanityCheckError(..)
   )
 where
 
@@ -34,29 +35,23 @@ data UniqueUpdateCheck m a where
 
 makeSem ''UniqueUpdateCheck
 
-type I = (ParsedIR, AnnotationFile ())
-
-type FD r = Members '[ Error String                   -- sanity error
-                     , Reader ParsedIR                -- parsed IR
-                     , Reader (AnnotationFile ())     -- parsed annotation file
-                     , State (Maybe (Module ()))      -- current module
-                     , State (Maybe (AlwaysBlock ())) -- current always block
+type SC r = Members '[ Error SanityCheckError     -- sanity error
+                     , Reader ParsedIR            -- parsed IR
+                     , Reader (AnnotationFile ()) -- parsed annotation file
                      ] r
 
+type FD r = ( SC r
+            , Members '[ State (Maybe (Module ()))      -- current module
+                       , State (Maybe (AlwaysBlock ())) -- current always block
+                       ] r
+            )
 -- -----------------------------------------------------------------------------
-sanityCheck :: I -> I
+sanityCheck :: SC r => Sem r ()
 -- -----------------------------------------------------------------------------
-sanityCheck input@(modules, af) = 
-  case result of
-    Left err -> E.throw $ SanityCheckError err
-    Right _ -> input
-  where result = allChecks
-                 & runError @String
-                 & runReader modules
-                 & runReader af
-                 & evalState @(Maybe (Module ())) Nothing
-                 & evalState @(Maybe (AlwaysBlock ())) Nothing
-                 & run
+sanityCheck =
+  allChecks
+  & evalState @(Maybe (Module ())) Nothing
+  & evalState @(Maybe (AlwaysBlock ())) Nothing
 
 allChecks :: FD r => Sem r ()
 allChecks = sequence_ [ checkAssignmentsAreToLocalVariables
@@ -87,7 +82,7 @@ checkAssignmentsAreToLocalVariables =
     moduleName <- getModuleName
     when (varModuleName assignmentLhs /= moduleName) $
       let stmt = Assignment{ stmtData = (), .. }
-      in throw @String $ printf "%s :: lhs is not from the module %s" (show stmt) moduleName
+      in ssaThrow $ printf "%s :: lhs is not from the module %s" (show stmt) moduleName
 
 handleAssignment :: (AssignmentType -> Expr a -> Expr a -> Sem r ())
                  -> Stmt a
@@ -114,11 +109,11 @@ checkSameAssignmentType =
     case mAB of
       Nothing ->
         when (assignmentType /= Continuous) $
-        throw @String $ printf "%s :: Assignments outside always blocks should be continous" (show stmt)
+        ssaThrow $ printf "%s :: Assignments outside always blocks should be continous" (show stmt)
       Just ab@AlwaysBlock{..} ->
-        let err  = throw @String $ printf
+        let err  = ssaThrow $ printf
                    "%s does not match the event in %s" (show stmt) blockStr
-            err2 = throw @String $ printf
+            err2 = ssaThrow $ printf
                    "continuous assignment should not appear in an always block %s" blockStr
             blockStr = let maxLength = 200
                            str = show ab
@@ -156,7 +151,7 @@ runUniqueUpdateCheck = reinterpret $ \case
     modify (HS.union assignments)
     newAssignments <- get @S1
     when (HS.size oldAssignments + HS.size assignments /= HS.size newAssignments) $
-      throw "FOO"
+      ssaThrow $ printf "found multiple assignments to variables from %s" (show $ toList assignments)
 
 newtype SanityCheckError = SanityCheckError {eMsg :: String}
 
@@ -164,3 +159,6 @@ instance E.Exception SanityCheckError
 
 instance Show SanityCheckError where
   show SanityCheckError{..} = eMsg
+
+ssaThrow :: Member (Error SanityCheckError) r => String -> Sem r a
+ssaThrow = throw . SanityCheckError

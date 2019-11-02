@@ -12,6 +12,8 @@ module Iodine.Runner ( IodineArgs(..)
 -- import           Iodine.Utils (silence)
 -- import qualified Iodine.Abduction.Runner as VAR
 import           Iodine.Language.IRParser
+import           Iodine.Language.AnnotationParser
+import           Iodine.Transform.SanityCheck (SanityCheckError)
 -- import           Iodine.Language.Types
 import           Iodine.Pipeline
 -- import           Iodine.Solver.FP.FQ
@@ -21,9 +23,9 @@ import           Iodine.Pipeline
 -- import Language.Fixpoint.Types (saveQuery)
 -- import Language.Fixpoint.Types.Config as FC
 
-import           Control.Exception
 import           Control.Monad
--- import qualified Data.ByteString.Lazy            as B
+import qualified Data.ByteString.Lazy            as B
+import           Data.Function
 import           System.Console.CmdArgs.Implicit
 import           System.Directory
 import           System.Environment
@@ -37,6 +39,11 @@ import           Text.Printf
 
 -- import Debug.Trace
 -- import Control.DeepSeq
+
+import Polysemy hiding (run)
+import Polysemy.Error
+import Polysemy.Trace
+
 
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
@@ -155,7 +162,7 @@ main = do
 run :: IodineArgs -> IO Bool
 -- -----------------------------------------------------------------------------
 -- | Runs the verification process, and returns 'True' if the program is constant time.
-run a = (normalizePaths a >>= generateIR >>= checkIR) `catch` peHandle -- `catch` passHandle
+run a = normalizePaths a >>= generateIR >>= checkIR
 
 -- | Parses the command line arguments (e.g. from 'getArgs') into 'IodineArgs'.
 parseArgs :: [String] -> IO IodineArgs
@@ -227,11 +234,27 @@ checkIR :: IodineArgs -> IO Bool
 -- -----------------------------------------------------------------------------
 checkIR IodineArgs{..}
   | printIR = do
-      fileContents <- readFile fileName
-      putStrLn fileContents
-      print $ parse (fileName, fileContents)
-      return True
-  | otherwise = pipeline (fileName, annotFile)
+      irFileContents <- readFile fileName
+      putStrLn irFileContents
+      result <- parse (fileName, irFileContents)
+        & mapError PE
+        & errorToIOFinal @E
+        & runFinal
+      case result of
+        Right parsedIR -> forM_ parsedIR print >> return True
+        Left e -> errorHandle e
+  | otherwise = do
+      irFileContents <- readFile fileName
+      annotFileContents <- B.readFile annotFile
+      result <- pipeline (parse (fileName, irFileContents)) (return $ parseAnnotations annotFileContents)
+        & mapError PE & mapError SE
+        & errorToIOFinal @E
+        & traceToIO
+        & embedToFinal
+        & runFinal
+      case result of
+        Right b -> return b
+        Left e -> errorHandle e
 
   -- let pipelineInput = ((fileName, fileContents), annotContents)
       -- fpst          = pipeline pipelineInput
@@ -261,8 +284,12 @@ checkIR IodineArgs{..}
 -- Common Functions
 -- -----------------------------------------------------------------------------
 
-peHandle :: IRParseError -> IO Bool
-peHandle e = renderError e >>= hPutStrLn stderr >> return False
+data E = PE IRParseError
+       | SE SanityCheckError
+
+errorHandle :: E -> IO Bool
+errorHandle (PE e) = renderError e >>= hPutStrLn stderr >> return False
+errorHandle (SE e) = hPutStrLn stderr (show e) >> return False
 
 -- passHandle :: PassError -> IO Bool
 -- passHandle (PassError msg)  = hPutStrLn stderr msg >> return False

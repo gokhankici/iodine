@@ -17,7 +17,6 @@ where
 import           Iodine.Language.IR
 import           Iodine.Language.Types
 
-import           Control.Exception
 import           Control.Monad (void)
 import           Data.Char (isLetter, isDigit)
 import           Data.Foldable (toList)
@@ -30,16 +29,18 @@ import qualified Text.Megaparsec            as MP
 import qualified Text.Megaparsec.Char       as MPC
 import qualified Text.Megaparsec.Char.Lexer as MPL
 import qualified Data.Sequence              as SQ
+import           Polysemy
+import           Polysemy.Error
 
 type Parser = MP.Parsec MP.SourcePos String
 type ParsedIR = L (Module ())
 
-parse :: (FilePath, String) -> ParsedIR
+parse :: Member (Error IRParseError) r => (FilePath, String) -> Sem r ParsedIR
 parse (fp, s) = parseWith (many parseModule)
   where
     parseWith p =
       case MP.runParser (whole p) fp s of
-        Right e     -> e
+        Right e     -> return e
         Left bundle -> throw (IRParseError (myParseErrorPretty bundle))
 
 --------------------------------------------------------------------------------
@@ -224,8 +225,6 @@ renderError = return . eMsg
 
 newtype IRParseError = IRParseError {eMsg :: String}
                      deriving (Show, Typeable)
-
-instance Exception IRParseError
 
 newtype SP = SP MP.SourcePos
            deriving (Eq, Ord)
