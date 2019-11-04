@@ -144,7 +144,7 @@ checkUniqueUpdateLocationOfVariables =
     asgnVars PhiNode{..}        = error "phinode encountered in sanity check"
     asgnVars Skip{..}           = mempty
 
-runUniqueUpdateCheck :: FD r => Sem (UniqueUpdateCheck ': r) a -> Sem (State S1 ': r) a
+runUniqueUpdateCheck :: SC r => Sem (UniqueUpdateCheck ': r) a -> Sem (State S1 ': r) a
 runUniqueUpdateCheck = reinterpret $ \case
   CheckPrevious assignments -> do
     oldAssignments <- get @S1
