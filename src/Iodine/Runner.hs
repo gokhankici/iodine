@@ -13,6 +13,7 @@ module Iodine.Runner ( IodineArgs(..)
 -- import qualified Iodine.Abduction.Runner as VAR
 import           Iodine.Language.IRParser
 import           Iodine.Language.AnnotationParser
+import           Iodine.Transform.VCGen (VCGenError)
 import           Iodine.Transform.SanityCheck (SanityCheckError)
 -- import           Iodine.Language.Types
 import           Iodine.Pipeline
@@ -247,8 +248,7 @@ checkIR IodineArgs{..}
       irFileContents <- readFile fileName
       annotFileContents <- B.readFile annotFile
       result <- pipeline (parse (fileName, irFileContents)) (return $ parseAnnotations annotFileContents)
-        & mapError PE & mapError SE
-        & errorToIOFinal @E
+        & mapErrors
         & traceToIO
         & embedToFinal
         & runFinal
@@ -284,12 +284,26 @@ checkIR IodineArgs{..}
 -- Common Functions
 -- -----------------------------------------------------------------------------
 
+mapErrors :: Member (Final IO) r
+          => Sem (Error IRParseError ':
+                  Error SanityCheckError ':
+                  Error VCGenError ':
+                  Error E ':
+                  r) a
+          -> Sem r (Either E a)
+mapErrors act =
+  act
+  & mapError PE & mapError SE & mapError VE
+  & errorToIOFinal @E
+
 data E = PE IRParseError
        | SE SanityCheckError
+       | VE VCGenError
 
 errorHandle :: E -> IO Bool
 errorHandle (PE e) = renderError e >>= hPutStrLn stderr >> return False
 errorHandle (SE e) = hPutStrLn stderr (show e) >> return False
+errorHandle (VE e) = hPutStrLn stderr (show e) >> return False
 
 -- passHandle :: PassError -> IO Bool
 -- passHandle (PassError msg)  = hPutStrLn stderr msg >> return False

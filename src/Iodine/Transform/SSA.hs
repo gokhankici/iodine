@@ -7,6 +7,7 @@
 
 module Iodine.Transform.SSA
   ( ssa
+  , SSAOutput
   , SSAIR
   )
 where
@@ -27,16 +28,16 @@ import Polysemy.State
 
 type FD r = Member (State St) r
 type SSAIR = L (Module Int)
+type SSAOutput = (SSAIR, TRNextVars)
 
 -- -----------------------------------------------------------------------------
 -- after this step, each new variable, statement, and always block
 -- within a module will have an unique id
-ssa :: ParsedIR -> (SSAIR, TRNextVars)
+ssa :: ParsedIR -> Sem r SSAOutput
 -- -----------------------------------------------------------------------------
 ssa modules =
   traverse ssaModule modules
   & runSSA
-  & run
 
 -- -----------------------------------------------------------------------------
 ssaModule :: FD r => Module a -> Sem r (Module Int)

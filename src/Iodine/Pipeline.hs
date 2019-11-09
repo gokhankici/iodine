@@ -20,19 +20,21 @@ import Polysemy.Error
 import Polysemy.Reader
 import Polysemy.Trace
 
-type G r = Members '[ Error SanityCheckError
-                    , Error IRParseError
-                    , Trace
-                    ] r
+type GlobalState r = Members '[ Error SanityCheckError
+                              , Error IRParseError
+                              , Error VCGenError
+                              , Trace
+                              ] r
 
-pipeline :: G r
+pipeline :: GlobalState r
          => Sem r ParsedIR
          -> Sem r (AnnotationFile ())
          -> Sem r Bool
 pipeline irReader afReader = do
   ir <- irReader
   af <- afReader
-  sanityCheck & runReader ir & runReader af
-  let ir' = ssa ir
-  traverse_ (trace . show) ir'
-  vcgen >>= solve
+  (do sanityCheck & runReader ir
+      ssaOutput@(ssaIr, _) <- ssa ir
+      traverse_ (trace . show) ssaIr
+      vcgen ssaOutput >>= solve
+    ) & runReader af
