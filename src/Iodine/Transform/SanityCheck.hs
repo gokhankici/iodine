@@ -75,6 +75,8 @@ getModuleName = (moduleName . fromJust) <$> get @(Maybe (Module ()))
 
 -- -----------------------------------------------------------------------------
 checkAssignmentsAreToLocalVariables :: FD r => Sem r ()
+-- Check that all assignments in a single module are to the variables
+-- of that module
 -- -----------------------------------------------------------------------------
 checkAssignmentsAreToLocalVariables =
   checkHelper $ handleAssignment $
@@ -100,6 +102,8 @@ handleAssignment handler = go
 
 -- -----------------------------------------------------------------------------
 checkSameAssignmentType :: FD r => Sem r ()
+-- check that always blocks with * events only have blocking assignments, and
+-- the ones with @posedge or @negedge has non-blocking assignments
 -- -----------------------------------------------------------------------------
 checkSameAssignmentType =
   checkHelper $ handleAssignment $

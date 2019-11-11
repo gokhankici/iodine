@@ -24,8 +24,6 @@ data Annotation a =
                  , annotationData       :: a
                  }
   | SanitizeGlob Id a
-  | TaintEq      Id a
-  | AssertEq     Id a
   deriving (Show, Generic, Functor, Foldable, Traversable)
 
 data Qualifier a =
@@ -48,5 +46,6 @@ data Qualifier a =
 data AnnotationFile a =
   AnnotationFile { afAnnotations :: L (Annotation a)
                  , afQualifiers  :: L (Qualifier a)
+                 , afTopModule   :: Id
                  }
   deriving (Generic, Show, Functor, Foldable, Traversable)
