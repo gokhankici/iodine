@@ -6,11 +6,11 @@
 
 module Main (main) where
 
-import Iodine.Utils (silence)
 import qualified Iodine.Runner as R
 
 import Control.Lens hiding (simple, (<.>))
 import Control.Monad
+import Control.Exception
 import GHC.Generics hiding (to, moduleName)
 import System.Console.CmdArgs.Explicit
 import System.Environment
@@ -20,6 +20,8 @@ import Test.Hspec
 import Test.Hspec.Core.Runner
 import Test.Hspec.Core.Spec
 import Text.Printf
+import GHC.IO.Handle
+import System.IO
 
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
@@ -332,3 +334,25 @@ runUnitTest ta va UnitTest{..} =
              , R.noSave     = True
              , R.verbose    = ta ^. verbose
              }
+
+silence :: IO a -> IO a
+silence action = withFile "/dev/null" AppendMode prepareAndRun
+  where
+    handles = [stdout, stderr]
+    prepareAndRun tmpHandle = go handles
+      where
+        go [] = action
+        go hs = goBracket go tmpHandle hs
+
+    goBracket _ _ [] = undefined
+    goBracket go tmpHandle (h:hs) = do
+      buffering <- hGetBuffering h
+      let redirect = do
+            old <- hDuplicate h
+            hDuplicateTo tmpHandle h
+            return old
+          restore old = do
+            hDuplicateTo old h
+            hSetBuffering h buffering
+            hClose old
+      bracket redirect restore (\_ -> go hs)

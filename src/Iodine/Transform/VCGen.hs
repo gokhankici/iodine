@@ -1,6 +1,6 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE StrictData #-}
+{-# LANGUAGE StrictData      #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Iodine.Transform.VCGen
@@ -10,25 +10,28 @@ module Iodine.Transform.VCGen
   )
 where
 
-import Iodine.Language.Annotation
-import Iodine.Language.Types
-import Iodine.Language.IR
-import Iodine.Transform.SSA (SSAOutput, SSAIR)
-import Iodine.Transform.Horn
+import           Iodine.Language.Annotation
+import           Iodine.Language.IR
+import           Iodine.Language.Types
+import           Iodine.Transform.Horn
+import           Iodine.Transform.SSA       (SSAIR, SSAOutput)
 
-import           Control.Monad
 import           Control.Lens
+import           Control.Applicative
+import           Control.Monad
 import           Data.Foldable
-import qualified Data.HashMap.Strict      as HM
-import qualified Data.HashSet             as HS
-import qualified Data.IntMap              as IM
+import qualified Data.HashMap.Strict        as HM
+import qualified Data.HashSet               as HS
+import qualified Data.IntMap                as IM
 import           Data.Maybe
-import qualified Data.Sequence            as SQ
+import qualified Data.Sequence              as SQ
+import qualified Data.Text                  as T
 import           Polysemy
-import qualified Polysemy.Error           as PE
+import qualified Polysemy.Error             as PE
 import           Polysemy.Reader
 import           Polysemy.State
 import           Text.Printf
+import           Text.Read (readEither)
 
 -- -----------------------------------------------------------------------------
 -- vcgen state
@@ -36,14 +39,16 @@ import           Text.Printf
 
 type Ids = HS.HashSet Id
 
-data St = St { _currentModule    :: Maybe (Module Int)
-             , _isTopModule      :: Bool
+data St = St { _currentModule    :: Maybe (Module Int) -- current module
+             , _isTopModule      :: Bool -- is the current module the top module?
 
-             , _currentSources   :: Ids
-             , _currentSinks     :: Ids
-             , _currentInitEqs   :: Ids
-             , _currentAlwaysEqs :: Ids
-             , _currentVariables :: Ids
+             -- the following are block/stmt level state
+             , _currentVariables :: Ids -- all vars in this block
+             , _currentSources   :: Ids -- sources in this block
+             , _currentSinks     :: Ids -- sinks in this block
+             , _currentInitEqs   :: Ids -- init_eq vars in this block
+             , _currentAlwaysEqs :: Ids -- always_eq vars in this block
+             , _currentAssertEqs :: Ids -- assert_eq vars in this block
              }
 
 makeLenses ''St
@@ -72,9 +77,18 @@ vcgenMod Module{..} = withModule Module{..} $
   where
     allStmts = gateStmts SQ.>< (abStmt <$> alwaysBlocks)
 
+
 regularChecks :: FD r => S -> Sem r Horns
 regularChecks s = withStmt s $
-                  pure SQ.empty ||> initialize s ||> tagReset s ||> srcReset s ||> next s
+                  pure SQ.empty ||> initialize s ||> tagReset s ||> srcReset s ||> next s <||> assertEqCheck s
+
+
+-- -----------------------------------------------------------------------------
+-- 1. initialize
+-- -----------------------------------------------------------------------------
+-- Initially, all variables are untagged. We assume that init_eq or
+-- always_eq variables are equal to each other in two runs.
+-- -----------------------------------------------------------------------------
 
 initialize :: FD r => S -> Sem r (Horn ())
 initialize stmt = do
@@ -97,12 +111,18 @@ initialize stmt = do
       (HVar v 0 Value LeftRun, HVar v 0 Value RightRun)
 
 
+-- -----------------------------------------------------------------------------
+-- 2. tag reset
+-- -----------------------------------------------------------------------------
+-- We set the tags of the source variables, and unset the tags of everything else.
+-- -----------------------------------------------------------------------------
+
 tagReset :: FD r => S -> Sem r (Horn ())
 tagReset stmt = do
   srcs <- gets (^. currentSources)
   vars <- gets (^. currentVariables)
   let non_srcs = HS.difference vars srcs
-  let subs1 = foldl' (tags True) mempty srcs     -- sources are tagged
+  let subs1 = foldl' (tags True) mempty srcs    -- sources are tagged
   let subs = foldl' (tags False) subs1 non_srcs -- non sources are untagged
   return $ Horn { hornHead = KVar stmtId subs
                 , hornBody = KVar stmtId mempty
@@ -115,6 +135,13 @@ tagReset stmt = do
     tags value subs v = subs |>
                         (HVar v 0 Tag LeftRun, HBool value) |>
                         (HVar v 0 Tag RightRun, HBool value)
+
+
+-- -----------------------------------------------------------------------------
+-- 3. src reset
+-- -----------------------------------------------------------------------------
+-- We unset the tags of the source variables.
+-- -----------------------------------------------------------------------------
 
 srcReset :: FD r => S -> Sem r (Horn ())
 srcReset stmt = do
@@ -131,6 +158,14 @@ srcReset stmt = do
                         (HVar v 0 Tag LeftRun, HBool value) |>
                         (HVar v 0 Tag RightRun, HBool value)
 
+
+-- -----------------------------------------------------------------------------
+-- 4. transition relation
+-- -----------------------------------------------------------------------------
+-- Always block takes a single step. The variables are updated, obeying the
+-- always_eq annotations.
+-- -----------------------------------------------------------------------------
+
 next :: FD r => S -> Sem r (Horn ())
 next stmt = do
   nextVars <- (IM.! stmtId) <$> asks getNextVars
@@ -145,18 +180,11 @@ next stmt = do
     stmtId = stmtData stmt
     tr = transitionRelation stmt
     ae m exprs v =
-      let n = m HM.! v
-      in exprs |>
-         HBinary HEquals (HVar v 0 Value LeftRun) (HVar v 0 Value RightRun) |>
-         HBinary HEquals (HVar v n Value LeftRun) (HVar v n Value RightRun)
-
--- TODO
-interferenceChecks :: Ss -> Sem r Horns
-interferenceChecks _ = interferenceCheck undefined undefined >> return SQ.empty
-
--- TODO
-interferenceCheck :: S -> S -> Sem r (Horn ())
-interferenceCheck _rStmt _wStmt = undefined
+      case HM.lookup v m of
+        Just n -> exprs |>
+                  HBinary HEquals (HVar v 0 Value LeftRun) (HVar v 0 Value RightRun) |>
+                  HBinary HEquals (HVar v n Value LeftRun) (HVar v n Value RightRun)
+        Nothing -> exprs
 
 transitionRelation ::  S -> HornExpr
 transitionRelation s = HAnd $ transitionRelation' LeftRun s |:> transitionRelation' RightRun s
@@ -188,7 +216,7 @@ transitionRelation' r = \case
 
     valE :: Expr Int -> HornExpr
     valE = \case
-      Constant{..} -> undefined
+      Constant{..} -> parseVerilogInt constantValue
       Variable{..} -> HVar { hVarName  = varName
                            , hVarIndex = exprData
                            , hVarType  = Value
@@ -196,7 +224,7 @@ transitionRelation' r = \case
                            }
       UF{..}       -> ufVal ufArgs
       IfExpr{..}   -> ufVal (ifExprCondition |:> ifExprThen |> ifExprElse)
-      Str{..}      -> undefined
+      Str{..}      -> error "Strings are not handled (yet)"
       Select{..}   -> ufVal (selectVar <| selectIndices)
 
     tagE :: Expr Int -> HornExpr
@@ -211,6 +239,103 @@ transitionRelation' r = \case
       IfExpr{..}   -> ufTag (ifExprCondition |:> ifExprThen |> ifExprElse)
       Str{..}      -> HBool False
       Select{..}   -> ufTag (selectVar <| selectIndices)
+
+parseVerilogInt :: Id -> HornExpr
+parseVerilogInt value =
+  case readEither v' of
+    Left _   -> HConstant value
+    Right n  -> HInt n
+  where
+    v = T.unpack value
+    v' = case v of
+           '0' : 'b' : rst -> rst
+           _ -> v
+
+-- -----------------------------------------------------------------------------
+-- 6. interference checks
+-- -----------------------------------------------------------------------------
+-- Always block takes a single step. The variables are updated, obeying the
+-- always_eq annotations.
+-- -----------------------------------------------------------------------------
+
+assertEqCheck :: FD r => S -> Sem r Horns
+assertEqCheck stmt = do
+  aes <- gets (^. currentAssertEqs)
+  return $ foldl' (\hs v -> hs |> go v) mempty aes
+  where
+    stmtId = stmtData stmt
+    go v = Horn { hornHead = HBinary HEquals
+                             (HVar v 0 Value LeftRun)
+                             (HVar v 0 Value RightRun)
+                , hornBody = KVar stmtId mempty
+                , hornType = AssertEqCheck
+                , hornData = ()
+                }
+
+
+
+-- -----------------------------------------------------------------------------
+-- 6. interference checks
+-- -----------------------------------------------------------------------------
+-- Always block takes a single step. The variables are updated, obeying the
+-- always_eq annotations.
+-- -----------------------------------------------------------------------------
+
+data ICSt = ICSt { icStmt :: S,  writtenVars :: Ids, allVars :: Ids }
+type ICSts = IM.IntMap ICSt
+
+interferenceChecks :: FD' r => Ss -> Sem r Horns
+interferenceChecks stmts =
+  (traverse_ interferenceCheck stmts >> get @Horns)
+  & evalState @ICSts mempty
+  & evalState @Horns mempty
+
+-- TODO
+interferenceCheck :: (FD' r,
+                      Members '[ State ICSts
+                               , State Horns
+                               ] r)
+                  => S -> Sem r ()
+interferenceCheck stmt = do
+  -- get the statements we have looked at so far
+  icSts <- get @ICSts
+  traverse_ (\icSt@ICSt{..} -> do
+    when (currentWrittenVars `intersects` allVars) $ do
+      h <- interferenceCheckWR currentSt icSt
+      modify @Horns (|> h)
+    when (writtenVars `intersects` currentAllVars) $ do
+      h <- interferenceCheckWR icSt currentSt
+      modify @Horns (|> h)
+    ) icSts
+  modify $ IM.insert stmtId currentSt
+  where
+    stmtId             = stmtData stmt
+    currentSt          = ICSt{ icStmt = stmt
+                             , writtenVars = currentWrittenVars
+                             , allVars = currentAllVars }
+    currentAllVars     = getVariables stmt
+    currentWrittenVars = getUpdatedVariables stmt
+
+-- return the write/read interference check
+interferenceCheckWR :: FD' r => ICSt -> ICSt -> Sem r (Horn ())
+interferenceCheckWR wSt rSt = do
+  wNext <- (IM.! stmtData wStmt) <$> asks getNextVars
+  let subs = toSubs $ HM.filterWithKey (\var _ -> HS.member var rVars) wNext
+      rId  = stmtData rStmt
+      wId  = stmtData wStmt
+  return $ Horn { hornHead = KVar rId subs
+                , hornBody = HAnd $
+                             KVar rId mempty |:>
+                             KVar wId mempty |>
+                             transitionRelation wStmt
+                , hornType = Interference
+                , hornData = ()
+                }
+  where
+    rStmt = icStmt rSt
+    wStmt = icStmt wSt
+    rVars = allVars rSt
+
 
 -- -----------------------------------------------------------------------------
 -- helper functions
@@ -229,26 +354,28 @@ type G r = Members '[ Reader AF
                     , PE.Error VCGenError
                     ] r
 
-type FD r = ( G r
-            , Members '[ Reader NextVars
-                       , State St
-                       ] r
-            )
+type FD' r = (G r, Member (Reader NextVars) r)
+type FD r  = (FD' r, Member (State St) r)
 
 initialState :: St
 initialState = St { _currentModule    = Nothing
                   , _isTopModule      = False
 
+                  , _currentVariables = mempty
                   , _currentSources   = mempty
                   , _currentSinks     = mempty
                   , _currentInitEqs   = mempty
                   , _currentAlwaysEqs = mempty
-                  , _currentVariables = mempty
+                  , _currentAssertEqs = mempty
                   }
 
 infixl 9 ||>
 (||>) :: Applicative f => f (L a) -> f a -> f (L a)
 (||>) fas fa = (|>) <$> fas <*> fa
+
+infixl 9 <||>
+(<||>) :: Applicative f => f (L a) -> f (L a) -> f (L a)
+(<||>) = liftA2 (<>)
 
 (|:>) :: (Snoc s s a a, Monoid s) => a -> a -> s
 (|:>) a1 a2 = mempty |> a1 |> a2
@@ -280,6 +407,7 @@ setAnnotations stmt = do
     Sanitize ss _     -> when isTop $ traverse_ (\s -> addIf s (currentInitEqs %~ HS.insert s)) ss
     SanitizeMod m v _ -> when (moduleName == m) $ addIf v (currentInitEqs %~ HS.insert v)
     SanitizeGlob s _  -> when isTop $ addIf s (currentAlwaysEqs %~ HS.insert s)
+    AssertEq v _      -> when isTop $ addIf v (currentAssertEqs %~ HS.insert v)
   where
     vs = getVariables stmt
 
@@ -290,6 +418,7 @@ unsetAnnotations = do
   modify $ currentSinks     .~ mempty
   modify $ currentInitEqs   .~ mempty
   modify $ currentAlwaysEqs .~ mempty
+  modify $ currentAssertEqs .~ mempty
 
 getVariables :: Stmt a -> Ids
 getVariables = \case
@@ -307,6 +436,15 @@ getVariables = \case
     go IfExpr{..}   = mfold go [ifExprCondition, ifExprThen, ifExprElse]
     go Str{..}      = mempty
     go Select{..}   = go selectVar <> mfold go selectIndices
+
+getUpdatedVariables :: Stmt a -> Ids
+getUpdatedVariables = \case
+  Block{..}          -> mfold getUpdatedVariables blockStmts
+  Assignment{..}     -> HS.singleton $ varName assignmentLhs
+  IfStmt{..}         -> mfold getVariables [ifStmtThen, ifStmtElse]
+  ModuleInstance{..} -> mempty
+  PhiNode{..}        -> mempty
+  Skip{..}           -> mempty
 
 toSubs :: HM.HashMap Id Int -> L (HornExpr, HornExpr)
 toSubs = HM.foldlWithKey' go mempty
@@ -327,8 +465,15 @@ newtype VCGenError = VCGenError String
 throw :: G r => String -> Sem r a
 throw = PE.throw . VCGenError
 
-combine :: Traversable t => (a -> Sem r (L b)) -> t a -> Sem r (L b)
-combine act as = foldl' (SQ.><) SQ.empty <$> traverse act as
+combine :: (Monoid m, Traversable t) => (a -> Sem r m) -> t a -> Sem r m
+combine act as = foldl' (<>) mempty <$> traverse act as
 
 mfold :: (Foldable f, Monoid m) => (a -> m) -> f a -> m
 mfold f as = foldl' (\ms a -> f a <> ms) mempty as
+
+intersects :: HS.HashSet Id -> HS.HashSet Id -> Bool
+intersects s1 s2 = go (HS.toList s1)
+  where
+    go []     = False
+    go (a:as) = if HS.member a s2 then True else go as
+

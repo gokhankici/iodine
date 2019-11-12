@@ -1,4 +1,5 @@
 :set -fwarn-unused-binds -fwarn-unused-imports -fwarn-orphans
+:set -XTemplateHaskell
 :set -isrc:test:app-fp
 
 :def docs_ const $ return $ unlines [":!stack haddock"]

@@ -1,9 +1,9 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE StrictData #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFoldable    #-}
+{-# LANGUAGE DeriveFunctor     #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE StrictData        #-}
 
 module Iodine.Language.Annotation
   ( Annotation(..)
@@ -12,8 +12,8 @@ module Iodine.Language.Annotation
   )
 where
 
-import Iodine.Language.Types
-import GHC.Generics
+import           GHC.Generics
+import           Iodine.Language.Types
 
 data Annotation a =
     Source       Id a
@@ -24,6 +24,9 @@ data Annotation a =
                  , annotationData       :: a
                  }
   | SanitizeGlob Id a
+  | AssertEq { annotationVarName :: Id
+             , annotationData    :: a
+             }
   deriving (Show, Generic, Functor, Foldable, Traversable)
 
 data Qualifier a =

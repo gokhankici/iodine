@@ -1,10 +1,10 @@
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE StrictData #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFoldable    #-}
+{-# LANGUAGE DeriveFunctor     #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE KindSignatures    #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE StrictData        #-}
 
 module Iodine.Language.IR
   ( Expr (..)
@@ -21,11 +21,11 @@ where
 
 import           Iodine.Language.Types
 
-import           Data.List           (intercalate)
-import           Data.Foldable       (toList)
-import qualified Data.Text           as T
-import qualified Data.HashMap.Strict as HM
-import           GHC.Generics        hiding (moduleName)
+import           Data.Foldable         (toList)
+import qualified Data.HashMap.Strict   as HM
+import           Data.List             (intercalate)
+import qualified Data.Text             as T
+import           GHC.Generics          hiding (moduleName)
 import           Text.Printf
 
 data Variable =
@@ -38,7 +38,7 @@ data Port =
 
 data Expr a =
   Constant { constantValue :: Id
-           , exprData  :: a
+           , exprData      :: a
            }
   | Variable { varName       :: Id
              , varModuleName :: Id
@@ -54,7 +54,7 @@ data Expr a =
            , exprData        :: a
            }
   | Str { strValue :: Id
-        , exprData  :: a
+        , exprData :: a
         }
   | Select { selectVar     :: Expr a
            , selectIndices :: L (Expr a)
@@ -85,8 +85,8 @@ data Stmt a =
                    , stmtData            :: a
                    }
   -- this is added after the SSA step
-  | PhiNode { phiLhs :: Expr a
-            , phiRhs :: L (Expr a)
+  | PhiNode { phiLhs   :: Expr a
+            , phiRhs   :: L (Expr a)
             , stmtData :: a
             }
   | Skip { stmtData :: a }
@@ -124,11 +124,11 @@ data Module a =
 -- -----------------------------------------------------------------------------
 
 instance Show Variable where
-  show (Wire v) = printf "(Wire %s)" v
+  show (Wire v)     = printf "(Wire %s)" v
   show (Register v) = printf "(Reg %s)" v
 
 instance Show Port where
-  show (Input p) = printf "(Input %s)" (show p)
+  show (Input p)  = printf "(Input %s)" (show p)
   show (Output p) = printf "(Output %s)" (show p)
 
 instance Show a => Show (Expr a) where
@@ -143,9 +143,9 @@ instance Show a => Show (Stmt a) where
   show (Block ss _) = printf "{ %s }" (intercalate "; " (toList $ show <$> ss))
   show (Assignment t l r _) = printf "%s %s %s" (show l) op (show r)
                               where op = case t of
-                                           Blocking -> "="
+                                           Blocking    -> "="
                                            NonBlocking -> "<="
-                                           Continuous -> ":="
+                                           Continuous  -> ":="
   show (IfStmt c t e _) = printf "if( %s ){ %s }else{ %s }" (show c) (show t) (show e)
   show (ModuleInstance t n ps _) = printf "%s %s(%s)" t n (intercalate ", " args)
                                    where args = (\(k,e) -> printf "%s = %s" k (show e)) <$> HM.toList ps

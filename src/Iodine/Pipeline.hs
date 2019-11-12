@@ -1,4 +1,6 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Iodine.Pipeline
   ( pipeline
@@ -6,7 +8,8 @@ module Iodine.Pipeline
 where
 
 import Iodine.Language.IRParser (ParsedIR, IRParseError)
-import Iodine.Language.AnnotationParser (AnnotationFile)
+import Iodine.Language.AnnotationParser (AnnotationFile(..))
+import Iodine.Language.Types
 import Iodine.Transform.SSA
 import Iodine.Transform.SanityCheck
 import Iodine.Transform.VCGen
@@ -27,14 +30,21 @@ type GlobalState r = Members '[ Error SanityCheckError
                               ] r
 
 pipeline :: GlobalState r
-         => Sem r ParsedIR
+         => Id
+         -> Sem r ParsedIR
          -> Sem r (AnnotationFile ())
          -> Sem r Bool
-pipeline irReader afReader = do
+pipeline topmodule irReader afReader = do
   ir <- irReader
-  af <- afReader
+  af <- fixAF <$> afReader
   (do sanityCheck & runReader ir
       ssaOutput@(ssaIr, _) <- ssa ir
       traverse_ (trace . show) ssaIr
       vcgen ssaOutput >>= solve
     ) & runReader af
+
+  where
+    fixAF AnnotationFile{..} =
+      AnnotationFile{ afTopModule = if afTopModule == ""
+                                    then topmodule
+                                    else afTopModule, .. }

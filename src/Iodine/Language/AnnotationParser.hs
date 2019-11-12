@@ -15,6 +15,7 @@ import           Iodine.Language.Types
 
 import           Data.Aeson
 import           Data.Aeson.Types
+import qualified Data.Text                  as T
 import qualified Data.ByteString.Lazy       as B
 import           Data.Foldable
 import qualified Data.Sequence              as S
@@ -34,7 +35,7 @@ instance FromJSON AF where
     fmap AF $ AnnotationFile <$>
     (join  getAnnotation (o .:? "annotations" .!= S.empty)) <*>
     (fmap2 getQualifier  (o .:? "qualifiers"  .!= S.empty)) <*>
-    (o .: "topmodule")
+    (o .:? "topmodule" .!= "")
     where
       join f = fmap (concatSeq . fmap f)
       fmap2  = fmap . fmap
@@ -54,7 +55,10 @@ instance FromJSON A where
       "always_eq"  -> case mm of
                         Nothing -> r (SanitizeGlob <$> vs)
                         Just m  -> typeMismatch "always_eq does not support modules (yet)" (toJSON m)
-      _            -> typeMismatch "unknown annotation type" (toJSON t)
+      "assert_eq"  -> case mm of
+                        Nothing -> r (AssertEq <$> vs)
+                        Just m  -> typeMismatch "assert_eq does not support modules (yet)" (toJSON m)
+      _            -> typeMismatch (T.unpack $ "unknown qualifier type: " <> t) (toJSON t)
 
 instance FromJSON Q where
   parseJSON = withObject "Qualifier" $ \o -> do
@@ -65,7 +69,7 @@ instance FromJSON Q where
       "iff"     -> r (QIff <$> o .: "lhs" <*> o .: "rhs")
       "pairs"   -> r (QPairs <$> o .: "variables")
       "assume"  -> r (QAssume <$> o .: "variables")
-      _         -> typeMismatch "unknown qualifier type" (toJSON t)
+      _         -> typeMismatch (T.unpack $ "unknown qualifier type: " <> t) (toJSON t)
 
 concatSeq :: Foldable t => t (L a) -> L a
 concatSeq = foldl' (S.><) S.empty

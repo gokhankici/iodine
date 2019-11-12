@@ -8,3 +8,4 @@ extra-deps:
 - fgl-visualize-0.1.0.1
 - located-base-0.1.1.1
 - polysemy-1.2.3.0
+- tasty-rerun-1.1.14

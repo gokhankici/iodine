@@ -1,7 +1,7 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE MultiWayIf          #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE MultiWayIf #-}
 
 module Iodine.Runner ( IodineArgs(..)
                      , parseArgs
@@ -9,24 +9,18 @@ module Iodine.Runner ( IodineArgs(..)
                      , main
                      ) where
 
--- import           Iodine.Utils (silence)
--- import qualified Iodine.Abduction.Runner as VAR
-import           Iodine.Language.IRParser
-import           Iodine.Language.AnnotationParser
-import           Iodine.Transform.VCGen (VCGenError)
-import           Iodine.Transform.SanityCheck (SanityCheckError)
--- import           Iodine.Language.Types
-import           Iodine.Pipeline
--- import           Iodine.Solver.FP.FQ
--- import           Iodine.Solver.FP.Solve
--- import           Iodine.Transform.FP.VCGen
-
--- import Language.Fixpoint.Types (saveQuery)
--- import Language.Fixpoint.Types.Config as FC
-
 import           Control.Monad
-import qualified Data.ByteString.Lazy            as B
+import qualified Data.ByteString.Lazy             as B
 import           Data.Function
+import qualified Data.Text                        as T
+import           Iodine.Language.AnnotationParser
+import           Iodine.Language.IRParser
+import           Iodine.Pipeline
+import           Iodine.Transform.SanityCheck     (SanityCheckError)
+import           Iodine.Transform.VCGen           (VCGenError)
+import           Polysemy                         hiding (run)
+import           Polysemy.Error
+import           Polysemy.Trace
 import           System.Console.CmdArgs.Implicit
 import           System.Directory
 import           System.Environment
@@ -35,15 +29,6 @@ import           System.FilePath.Posix
 import           System.IO
 import           System.Process
 import           Text.Printf
-
--- import qualified Data.Sequence as SQ
-
--- import Debug.Trace
--- import Control.DeepSeq
-
-import Polysemy hiding (run)
-import Polysemy.Error
-import Polysemy.Trace
 
 
 -- -----------------------------------------------------------------------------
@@ -243,18 +228,18 @@ checkIR IodineArgs{..}
         & runFinal
       case result of
         Right parsedIR -> forM_ parsedIR print >> return True
-        Left e -> errorHandle e
+        Left e         -> errorHandle e
   | otherwise = do
       irFileContents <- readFile fileName
       annotFileContents <- B.readFile annotFile
-      result <- pipeline (parse (fileName, irFileContents)) (return $ parseAnnotations annotFileContents)
+      result <- pipeline (T.pack moduleName) (parse (fileName, irFileContents)) (return $ parseAnnotations annotFileContents)
         & mapErrors
         & traceToIO
         & embedToFinal
         & runFinal
       case result of
         Right b -> return b
-        Left e -> errorHandle e
+        Left e  -> errorHandle e
 
   -- let pipelineInput = ((fileName, fileContents), annotContents)
       -- fpst          = pipeline pipelineInput
