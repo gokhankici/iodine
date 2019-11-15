@@ -1,10 +1,6 @@
 {-# LANGUAGE ConstraintKinds   #-}
-{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE GADTs             #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE StrictData        #-}
-{-# LANGUAGE TemplateHaskell   #-}
 
 module Iodine.Language.Types where
 

@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE StrictData        #-}
 
 module Iodine.Language.Annotation

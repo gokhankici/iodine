@@ -16,8 +16,8 @@ import           Iodine.Language.Types
 import           Iodine.Transform.Horn
 import           Iodine.Transform.SSA       (SSAIR, SSAOutput)
 
-import           Control.Lens
 import           Control.Applicative
+import           Control.Lens
 import           Control.Monad
 import           Data.Foldable
 import qualified Data.HashMap.Strict        as HM
@@ -31,7 +31,7 @@ import qualified Polysemy.Error             as PE
 import           Polysemy.Reader
 import           Polysemy.State
 import           Text.Printf
-import           Text.Read (readEither)
+import           Text.Read                  (readEither)
 
 -- -----------------------------------------------------------------------------
 -- vcgen state
@@ -71,8 +71,7 @@ vcgenHelper ssaIR = do
 
 vcgenMod :: FD r => Module Int -> Sem r Horns
 vcgenMod Module{..} = withModule Module{..} $
-  (SQ.><) <$>
-  combine regularChecks allStmts <*>
+  combine regularChecks allStmts <||>
   interferenceChecks allStmts
   where
     allStmts = gateStmts SQ.>< (abStmt <$> alwaysBlocks)
@@ -92,9 +91,10 @@ regularChecks s = withStmt s $
 
 initialize :: FD r => S -> Sem r (Horn ())
 initialize stmt = do
-  subs1 <- foldl' zeroTags mempty <$> gets (^. currentVariables) -- untag everything
-  subs2 <- foldl' valEquals subs1 <$> gets (^. currentInitEqs)   -- init_eq vars are equal
-  subs  <- foldl' valEquals subs2 <$> gets (^. currentAlwaysEqs) -- always_eq vars are equal
+  Module{..} <- gets (^. currentModule . to fromJust)
+  subs1 <- foldl' (zeroTags moduleName) mempty <$> gets (^. currentVariables) -- untag everything
+  subs2 <- foldl' (valEquals moduleName) subs1 <$> gets (^. currentInitEqs)   -- init_eq vars are equal
+  subs  <- foldl' (valEquals moduleName) subs2 <$> gets (^. currentAlwaysEqs) -- always_eq vars are equal
   return $ Horn { hornHead = HAnd mempty
                 , hornBody = KVar stmtId subs
                 , hornType = Init
@@ -102,13 +102,13 @@ initialize stmt = do
                 }
   where
     stmtId = stmtData stmt
-    zeroTags subs v =
+    zeroTags m subs v =
       subs |>
-      (HVar v 0 Tag LeftRun, HBool False) |>
-      (HVar v 0 Tag RightRun, HBool False)
-    valEquals subs v =
+      (HVar v m 0 Tag LeftRun, HBool False) |>
+      (HVar v m 0 Tag RightRun, HBool False)
+    valEquals m subs v =
       subs |>
-      (HVar v 0 Value LeftRun, HVar v 0 Value RightRun)
+      (HVar v m 0 Value LeftRun, HVar v m 0 Value RightRun)
 
 
 -- -----------------------------------------------------------------------------
@@ -119,11 +119,12 @@ initialize stmt = do
 
 tagReset :: FD r => S -> Sem r (Horn ())
 tagReset stmt = do
+  Module{..} <- gets (^. currentModule . to fromJust)
   srcs <- gets (^. currentSources)
   vars <- gets (^. currentVariables)
   let non_srcs = HS.difference vars srcs
-  let subs1 = foldl' (tags True) mempty srcs    -- sources are tagged
-  let subs = foldl' (tags False) subs1 non_srcs -- non sources are untagged
+  let subs1 = foldl' (tags moduleName True) mempty srcs    -- sources are tagged
+  let subs = foldl' (tags moduleName False) subs1 non_srcs -- non sources are untagged
   return $ Horn { hornHead = KVar stmtId subs
                 , hornBody = KVar stmtId mempty
                 , hornType = TagReset
@@ -132,9 +133,9 @@ tagReset stmt = do
 
   where
     stmtId = stmtData stmt
-    tags value subs v = subs |>
-                        (HVar v 0 Tag LeftRun, HBool value) |>
-                        (HVar v 0 Tag RightRun, HBool value)
+    tags m value subs v = subs |>
+                        (HVar v m 0 Tag LeftRun, HBool value) |>
+                        (HVar v m 0 Tag RightRun, HBool value)
 
 
 -- -----------------------------------------------------------------------------
@@ -145,7 +146,8 @@ tagReset stmt = do
 
 srcReset :: FD r => S -> Sem r (Horn ())
 srcReset stmt = do
-  subs <- foldl' (tags False) mempty <$> gets (^. currentSources) -- sources are untagged
+  Module{..} <- gets (^. currentModule . to fromJust)
+  subs <- foldl' (tags moduleName False) mempty <$> gets (^. currentSources) -- sources are untagged
   return $ Horn { hornHead = KVar stmtId subs
                 , hornBody = KVar stmtId mempty
                 , hornType = SourceReset
@@ -154,9 +156,9 @@ srcReset stmt = do
 
   where
     stmtId = stmtData stmt
-    tags value subs v = subs |>
-                        (HVar v 0 Tag LeftRun, HBool value) |>
-                        (HVar v 0 Tag RightRun, HBool value)
+    tags m value subs v = subs |>
+                        (HVar v m 0 Tag LeftRun, HBool value) |>
+                        (HVar v m 0 Tag RightRun, HBool value)
 
 
 -- -----------------------------------------------------------------------------
@@ -168,9 +170,10 @@ srcReset stmt = do
 
 next :: FD r => S -> Sem r (Horn ())
 next stmt = do
+  Module{..} <- gets (^. currentModule . to fromJust)
   nextVars <- (IM.! stmtId) <$> asks getNextVars
-  equalities <- foldl' (ae nextVars) mempty <$> gets (^. currentAlwaysEqs)
-  let subs = toSubs nextVars
+  equalities <- foldl' (ae moduleName nextVars) mempty <$> gets (^. currentAlwaysEqs)
+  let subs = toSubs moduleName nextVars
   return $ Horn { hornBody = HAnd $ (KVar stmtId mempty |:> tr) <> equalities
                 , hornHead = KVar stmtId subs
                 , hornType = Next
@@ -179,11 +182,11 @@ next stmt = do
   where
     stmtId = stmtData stmt
     tr = transitionRelation stmt
-    ae m exprs v =
-      case HM.lookup v m of
+    ae m nvs exprs v =
+      case HM.lookup v nvs of
         Just n -> exprs |>
-                  HBinary HEquals (HVar v 0 Value LeftRun) (HVar v 0 Value RightRun) |>
-                  HBinary HEquals (HVar v n Value LeftRun) (HVar v n Value RightRun)
+                  HBinary HEquals (HVar v m 0 Value LeftRun) (HVar v m 0 Value RightRun) |>
+                  HBinary HEquals (HVar v m n Value LeftRun) (HVar v m n Value RightRun)
         Nothing -> exprs
 
 transitionRelation ::  S -> HornExpr
@@ -217,10 +220,11 @@ transitionRelation' r = \case
     valE :: Expr Int -> HornExpr
     valE = \case
       Constant{..} -> parseVerilogInt constantValue
-      Variable{..} -> HVar { hVarName  = varName
-                           , hVarIndex = exprData
-                           , hVarType  = Value
-                           , hVarRun   = r
+      Variable{..} -> HVar { hVarName   = varName
+                           , hVarModule = varModuleName
+                           , hVarIndex  = exprData
+                           , hVarType   = Value
+                           , hVarRun    = r
                            }
       UF{..}       -> ufVal ufArgs
       IfExpr{..}   -> ufVal (ifExprCondition |:> ifExprThen |> ifExprElse)
@@ -230,10 +234,11 @@ transitionRelation' r = \case
     tagE :: Expr Int -> HornExpr
     tagE = \case
       Constant{..} -> HBool False
-      Variable{..} -> HVar { hVarName  = varName
-                           , hVarIndex = exprData
-                           , hVarType  = Tag
-                           , hVarRun   = r
+      Variable{..} -> HVar { hVarName   = varName
+                           , hVarModule = varModuleName
+                           , hVarIndex  = exprData
+                           , hVarType   = Tag
+                           , hVarRun    = r
                            }
       UF{..}       -> ufTag ufArgs
       IfExpr{..}   -> ufTag (ifExprCondition |:> ifExprThen |> ifExprElse)
@@ -243,13 +248,13 @@ transitionRelation' r = \case
 parseVerilogInt :: Id -> HornExpr
 parseVerilogInt value =
   case readEither v' of
-    Left _   -> HConstant value
-    Right n  -> HInt n
+    Left _  -> HConstant value
+    Right n -> HInt n
   where
     v = T.unpack value
     v' = case v of
            '0' : 'b' : rst -> rst
-           _ -> v
+           _               -> v
 
 -- -----------------------------------------------------------------------------
 -- 6. interference checks
@@ -260,17 +265,19 @@ parseVerilogInt value =
 
 assertEqCheck :: FD r => S -> Sem r Horns
 assertEqCheck stmt = do
+  Module{..} <- gets (^. currentModule . to fromJust)
   aes <- gets (^. currentAssertEqs)
-  return $ foldl' (\hs v -> hs |> go v) mempty aes
+  return $ foldl' (\hs v -> hs |> go moduleName v) mempty aes
   where
     stmtId = stmtData stmt
-    go v = Horn { hornHead = HBinary HEquals
-                             (HVar v 0 Value LeftRun)
-                             (HVar v 0 Value RightRun)
-                , hornBody = KVar stmtId mempty
-                , hornType = AssertEqCheck
-                , hornData = ()
-                }
+    go m v =
+      Horn { hornHead = HBinary HEquals
+                        (HVar v m 0 Value LeftRun)
+                        (HVar v m 0 Value RightRun)
+           , hornBody = KVar stmtId mempty
+           , hornType = AssertEqCheck
+           , hornData = ()
+           }
 
 
 
@@ -284,14 +291,14 @@ assertEqCheck stmt = do
 data ICSt = ICSt { icStmt :: S,  writtenVars :: Ids, allVars :: Ids }
 type ICSts = IM.IntMap ICSt
 
-interferenceChecks :: FD' r => Ss -> Sem r Horns
+interferenceChecks :: FD r => Ss -> Sem r Horns
 interferenceChecks stmts =
   (traverse_ interferenceCheck stmts >> get @Horns)
   & evalState @ICSts mempty
   & evalState @Horns mempty
 
 -- TODO
-interferenceCheck :: (FD' r,
+interferenceCheck :: (FD r,
                       Members '[ State ICSts
                                , State Horns
                                ] r)
@@ -317,10 +324,11 @@ interferenceCheck stmt = do
     currentWrittenVars = getUpdatedVariables stmt
 
 -- return the write/read interference check
-interferenceCheckWR :: FD' r => ICSt -> ICSt -> Sem r (Horn ())
+interferenceCheckWR :: FD r => ICSt -> ICSt -> Sem r (Horn ())
 interferenceCheckWR wSt rSt = do
+  Module{..} <- gets (^. currentModule . to fromJust)
   wNext <- (IM.! stmtData wStmt) <$> asks getNextVars
-  let subs = toSubs $ HM.filterWithKey (\var _ -> HS.member var rVars) wNext
+  let subs = toSubs moduleName $ HM.filterWithKey (\var _ -> HS.member var rVars) wNext
       rId  = stmtData rStmt
       wId  = stmtData wStmt
   return $ Horn { hornHead = KVar rId subs
@@ -335,6 +343,7 @@ interferenceCheckWR wSt rSt = do
     rStmt = icStmt rSt
     wStmt = icStmt wSt
     rVars = allVars rSt
+
 
 
 -- -----------------------------------------------------------------------------
@@ -354,8 +363,11 @@ type G r = Members '[ Reader AF
                     , PE.Error VCGenError
                     ] r
 
-type FD' r = (G r, Member (Reader NextVars) r)
-type FD r  = (FD' r, Member (State St) r)
+type FD r  = ( G r
+             , Members '[ State St
+                        , Reader NextVars
+                        ] r
+             )
 
 initialState :: St
 initialState = St { _currentModule    = Nothing
@@ -382,7 +394,7 @@ infixl 9 <||>
 
 withModule :: FD r => Module Int -> Sem r a -> Sem r a
 withModule m act =
-  modify (currentModule .~ Just m) *>
+  modify (currentModule ?~ m) *>
   act <*
   modify (currentModule .~ Nothing)
 
@@ -401,7 +413,7 @@ setAnnotations stmt = do
   modify $ currentVariables .~ vs
 
   let addIf v setter = when (HS.member v vs) $ modify setter
-  (flip traverse_) as $ \case
+  for_ as $ \case
     Source s _        -> when isTop $ addIf s (currentSources %~ HS.insert s)
     Sink s _          -> when isTop $ addIf s (currentSinks   %~ HS.insert s)
     Sanitize ss _     -> when isTop $ traverse_ (\s -> addIf s (currentInitEqs %~ HS.insert s)) ss
@@ -446,14 +458,14 @@ getUpdatedVariables = \case
   PhiNode{..}        -> mempty
   Skip{..}           -> mempty
 
-toSubs :: HM.HashMap Id Int -> L (HornExpr, HornExpr)
-toSubs = HM.foldlWithKey' go mempty
+toSubs :: Id -> HM.HashMap Id Int -> L (HornExpr, HornExpr)
+toSubs m = HM.foldlWithKey' go mempty
   where
     go subs v n = subs |>
-                  (HVar v 0 Tag   LeftRun,  HVar v n Tag   LeftRun) |>
-                  (HVar v 0 Value LeftRun,  HVar v n Value LeftRun) |>
-                  (HVar v 0 Tag   RightRun, HVar v n Tag   RightRun) |>
-                  (HVar v 0 Value RightRun, HVar v n Value RightRun)
+                  (HVar v m 0 Tag   LeftRun,  HVar v m n Tag   LeftRun) |>
+                  (HVar v m 0 Value LeftRun,  HVar v m n Value LeftRun) |>
+                  (HVar v m 0 Tag   RightRun, HVar v m n Tag   RightRun) |>
+                  (HVar v m 0 Value RightRun, HVar v m n Value RightRun)
 
 -- -----------------------------------------------------------------------------
 -- other stuff
@@ -469,11 +481,11 @@ combine :: (Monoid m, Traversable t) => (a -> Sem r m) -> t a -> Sem r m
 combine act as = foldl' (<>) mempty <$> traverse act as
 
 mfold :: (Foldable f, Monoid m) => (a -> m) -> f a -> m
-mfold f as = foldl' (\ms a -> f a <> ms) mempty as
+mfold f = foldl' (\ms a -> f a <> ms) mempty
 
 intersects :: HS.HashSet Id -> HS.HashSet Id -> Bool
 intersects s1 s2 = go (HS.toList s1)
   where
     go []     = False
-    go (a:as) = if HS.member a s2 then True else go as
+    go (a:as) = HS.member a s2 || go as
 

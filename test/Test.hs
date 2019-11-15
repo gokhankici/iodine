@@ -1,27 +1,27 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TemplateHaskell     #-}
 
 module Main (main) where
 
-import qualified Iodine.Runner as R
-
-import Control.Lens hiding (simple, (<.>))
-import Control.Monad
-import Control.Exception
-import GHC.Generics hiding (to, moduleName)
-import System.Console.CmdArgs.Explicit
-import System.Environment
-import System.Exit
-import System.FilePath.Posix
-import Test.Hspec
-import Test.Hspec.Core.Runner
-import Test.Hspec.Core.Spec
-import Text.Printf
-import GHC.IO.Handle
-import System.IO
+import           Control.Exception
+import           Control.Lens                    hiding (simple, (<.>))
+import           Control.Monad
+import           GHC.Generics                    hiding (moduleName, to)
+import           GHC.IO.Handle
+import qualified Iodine.IodineArgs               as IA
+import qualified Iodine.Runner                   as R
+import           System.Console.CmdArgs.Explicit
+import           System.Environment
+import           System.Exit
+import           System.FilePath.Posix
+import           System.IO
+import           Test.Hspec
+import           Test.Hspec.Core.Runner
+import           Test.Hspec.Core.Spec
+import           Text.Printf
 
 -- -----------------------------------------------------------------------------
 -- Argument Parsing
@@ -269,26 +269,26 @@ main = do
   -- if no Iodine argument is given, use the following default ones
   let updateDef va =
         if null $  opts ^. iodineArgs
-        then va { R.noSave     = True
-                , R.noFPOutput = view (verbose . to not) opts
+        then va { IA.noSave     = True
+                , IA.noFPOutput = view (verbose . to not) opts
                 }
         else va
 
   -- hack: set the required first two positional arguments to empty list
-  va <- updateDef . invalidate <$> R.parseArgs ("" : "" : "" : opts ^. iodineArgs)
+  va <- updateDef . invalidate <$> IA.parseArgs ("" : "" : "" : opts ^. iodineArgs)
 
   readConfig defaultConfig (opts^.hspecArgs)
     >>= withArgs [] . runSpec (spec opts va)
     >>= evaluateSummary
   where
-    invalidate va = va { R.fileName   = undefined
-                       , R.moduleName = undefined
-                       , R.annotFile  = undefined
+    invalidate va = va { IA.fileName   = undefined
+                       , IA.moduleName = undefined
+                       , IA.annotFile  = undefined
                        }
 
 type Runner = UnitTest -> Spec
 
-spec :: TestArgs -> R.IodineArgs -> Spec
+spec :: TestArgs -> IA.IodineArgs -> Spec
 spec ta va = sequential $ do
   simple r testDir
   negative r testDir
@@ -298,7 +298,7 @@ spec ta va = sequential $ do
   where
     testDir   = "test"
     r         = runUnitTest ta va
-    parserDir = R.iverilogDir va
+    parserDir = IA.iverilogDir va
 
 -- default unit test
 t :: UnitTest
@@ -316,7 +316,7 @@ benchmarkDir = "benchmarks"
 mipsDir :: FilePath
 mipsDir = benchmarkDir </> "472-mips-pipelined"
 
-runUnitTest :: TestArgs -> R.IodineArgs -> Runner
+runUnitTest :: TestArgs -> IA.IodineArgs -> Runner
 runUnitTest ta va UnitTest{..} =
   if   ta ^. dryRun
   then it testName (printf "iodine %s %s %s\n" verilogFile moduleName af :: IO ())
@@ -328,11 +328,11 @@ runUnitTest ta va UnitTest{..} =
                            name = dropExtension $ takeBaseName verilogFile
                        in  dir </> "annot-" ++ name <.> "json"
             Just f  -> f
-    va' = va { R.fileName   = verilogFile
-             , R.moduleName = moduleName
-             , R.annotFile  = af
-             , R.noSave     = True
-             , R.verbose    = ta ^. verbose
+    va' = va { IA.fileName   = verilogFile
+             , IA.moduleName = moduleName
+             , IA.annotFile  = af
+             , IA.noSave     = True
+             , IA.verbose    = ta ^. verbose
              }
 
 silence :: IO a -> IO a

@@ -39,6 +39,7 @@ dependencies:
 - bytestring
 - cmdargs
 - containers
+- deepseq
 - directory
 - filepath
 - hashable
@@ -48,6 +49,7 @@ dependencies:
 - mtl
 - polysemy
 - polysemy-plugin
+- pretty
 - process
 - text
 - unordered-containers
@@ -56,7 +58,7 @@ library:
   source-dirs:           src
   exposed-modules:
   - Iodine.Runner
-  - Iodine.Utils
+  - Iodine.IodineArgs
   ghc-options:
   - -Werror
   - -O2

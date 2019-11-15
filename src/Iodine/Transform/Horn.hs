@@ -1,10 +1,15 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Iodine.Transform.Horn where
 
-import Iodine.Language.Types
+import GHC.Generics
+import           Control.DeepSeq
+import           Iodine.Language.Types
+import qualified Language.Fixpoint.Types       as FT
+import qualified Text.PrettyPrint.HughesPJ     as PP
 
 data Horn a =
        Horn { hornHead :: HornExpr
@@ -12,7 +17,7 @@ data Horn a =
             , hornType :: HornType
             , hornData :: a
             }
-       deriving (Show)
+       deriving (Show, Functor)
 
 
 data HornBinaryOp = HEquals | HImplies
@@ -26,7 +31,7 @@ data HornType = Init
               | Interference
               | AssertEqCheck
               | WellFormed
-              deriving (Show)
+              deriving (Show, Generic)
 
 data HornVarType = Tag | Value
                    deriving (Show)
@@ -38,10 +43,11 @@ data HornExpr =
   HConstant Id
   | HBool Bool
   | HInt  Int
-  | HVar { hVarName  :: Id
-         , hVarIndex :: Int
-         , hVarType  :: HornVarType
-         , hVarRun   :: HornVarRun
+  | HVar { hVarName   :: Id
+         , hVarModule :: Id
+         , hVarIndex  :: Int
+         , hVarType   :: HornVarType
+         , hVarRun    :: HornVarRun
          }
   | HAnd { hAppArgs :: L HornExpr }
   | HOr  { hAppArgs :: L HornExpr }
@@ -55,3 +61,16 @@ data HornExpr =
          , hKVarSubs :: L (HornExpr, HornExpr)
          }
   deriving (Show)
+
+
+instance FT.Fixpoint HornType where
+       toFix Init          = PP.text "init"
+       toFix TagReset      = PP.text "tag-reset"
+       toFix SourceReset   = PP.text "source-reset"
+       toFix Next          = PP.text "next"
+       toFix TagEqual      = PP.text "tag-equal"
+       toFix Interference  = PP.text "interference"
+       toFix AssertEqCheck = PP.text "assert-eq"
+       toFix WellFormed    = PP.text "wellformed"
+
+instance NFData HornType

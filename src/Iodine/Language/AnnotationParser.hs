@@ -1,6 +1,4 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -25,7 +23,7 @@ newtype A = A { getAnnotation :: L (Annotation ()) }
 newtype Q = Q { getQualifier  :: Qualifier () }
 
 parseAnnotations :: B.ByteString -> AnnotationFile ()
-parseAnnotations bs = do
+parseAnnotations bs =
   case eitherDecode bs of
     Right (AF af) -> af
     Left msg -> error $ "Parsing annotation file failed:\n" ++ msg
