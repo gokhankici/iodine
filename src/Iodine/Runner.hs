@@ -16,6 +16,7 @@ import           Iodine.Language.IRParser
 import           Iodine.Pipeline
 import           Iodine.Transform.SanityCheck     (SanityCheckError)
 import           Iodine.Transform.VCGen           (VCGenError)
+import           Iodine.Transform.Query           (QueryError)
 import qualified Language.Fixpoint.Solver         as F
 import qualified Language.Fixpoint.Types          as FT
 import qualified Language.Fixpoint.Types.Config as FC
@@ -148,19 +149,22 @@ mapErrors :: Member (Final IO) r
           => Sem (Error IRParseError ':
                   Error SanityCheckError ':
                   Error VCGenError ':
+                  Error QueryError ':
                   Error E ':
                   r) a
           -> Sem r (Either E a)
 mapErrors act =
   act
-  & mapError PE & mapError SE & mapError VE
+  & mapError PE & mapError SE & mapError VE & mapError QE
   & errorToIOFinal @E
 
 data E = PE IRParseError
        | SE SanityCheckError
        | VE VCGenError
+       | QE QueryError
 
 errorHandle :: E -> IO Bool
 errorHandle (PE e) = renderError e >>= hPutStrLn stderr >> return False
 errorHandle (SE e) = hPrint stderr e >> return False
 errorHandle (VE e) = hPrint stderr e >> return False
+errorHandle (QE e) = hPrint stderr e >> return False

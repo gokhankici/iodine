@@ -12,10 +12,11 @@ import qualified Language.Fixpoint.Types       as FT
 import qualified Text.PrettyPrint.HughesPJ     as PP
 
 data Horn a =
-       Horn { hornHead :: HornExpr
-            , hornBody :: HornExpr
-            , hornType :: HornType
-            , hornData :: a
+       Horn { hornHead   :: HornExpr
+            , hornBody   :: HornExpr
+            , hornType   :: HornType
+            , hornStmtId :: Int
+            , hornData   :: a
             }
        deriving (Show, Functor)
 
@@ -31,7 +32,7 @@ data HornType = Init
               | Interference
               | AssertEqCheck
               | WellFormed
-              deriving (Show, Generic)
+              deriving (Eq, Show, Generic)
 
 data HornVarType = Tag | Value
                    deriving (Show)

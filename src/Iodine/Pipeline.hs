@@ -27,7 +27,7 @@ import           Polysemy.Trace
 
 type GlobalState r
   = Members
-      '[Error SanityCheckError, Error IRParseError, Error VCGenError, Trace]
+      '[Error SanityCheckError, Error IRParseError, Error VCGenError, Error QueryError, Trace]
       r
 
 pipeline
@@ -43,7 +43,7 @@ pipeline topmodule irReader afReader = do
       sanityCheck & runReader ir
       ssaOutput@(ssaIr, _) <- ssa ir
       traverse_ (trace . show) ssaIr
-      vcgen ssaOutput >>= constructQuery ssaIr
+      vcgen ssaOutput >>= constructQuery
     )
     & runReader af
 
