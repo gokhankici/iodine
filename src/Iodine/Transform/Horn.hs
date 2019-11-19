@@ -5,7 +5,7 @@
 
 module Iodine.Transform.Horn where
 
-import GHC.Generics
+import           GHC.Generics
 import           Control.DeepSeq
 import           Iodine.Language.Types
 import qualified Language.Fixpoint.Types       as FT
@@ -56,7 +56,9 @@ data HornExpr =
             , hBinaryLhs :: HornExpr
             , hBinaryRhs :: HornExpr
             }
-  | HApp { hAppArgs :: L HornExpr }
+  | HApp { hAppMFun :: Maybe Id -- a unique function name or Nothing
+         , hAppArgs :: L HornExpr
+         }
   | HNot { hNotArg :: HornExpr }
   | KVar { hKVarId   :: Int
          , hKVarSubs :: L (HornExpr, HornExpr)

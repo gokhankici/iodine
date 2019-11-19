@@ -2,6 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData      #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Iodine.Transform.VCGen
   ( vcgen
@@ -25,13 +26,13 @@ import           Data.Foldable
 import qualified Data.HashMap.Strict           as HM
 import qualified Data.HashSet                  as HS
 import qualified Data.IntMap                   as IM
-import           Data.Maybe
 import qualified Data.Sequence                 as SQ
 import qualified Data.Text                     as T
 import           Polysemy
 import qualified Polysemy.Error                as PE
 import           Polysemy.Reader
 import           Polysemy.State
+import           Polysemy.Trace
 import           Text.Printf
 import           Text.Read                      ( readEither )
 
@@ -41,19 +42,22 @@ import           Text.Read                      ( readEither )
 
 type Ids = HS.HashSet Id
 
-data St = St { _currentModule    :: Maybe (Module Int) -- current module
-             , _isTopModule      :: Bool -- is the current module the top module?
+data ModuleSt = ModuleSt { _currentModule    :: Module Int -- current module
+                         , _isTopModule      :: Bool -- is the current module the top module?
+                         }
+                deriving (Show)
 
-             -- the following are block/stmt level state
-             , _currentVariables :: Ids -- all vars in this block
-             , _currentSources   :: Ids -- sources in this block
-             , _currentSinks     :: Ids -- sinks in this block
-             , _currentInitEqs   :: Ids -- init_eq vars in this block
-             , _currentAlwaysEqs :: Ids -- always_eq vars in this block
-             , _currentAssertEqs :: Ids -- assert_eq vars in this block
-             }
+data StmtSt = StmtSt { _currentVariables :: Ids -- all vars in this block
+                     , _currentSources   :: Ids -- sources in this block
+                     , _currentSinks     :: Ids -- sinks in this block
+                     , _currentInitEqs   :: Ids -- init_eq vars in this block
+                     , _currentAlwaysEqs :: Ids -- always_eq vars in this block
+                     , _currentAssertEqs :: Ids -- assert_eq vars in this block
+                     }
+              deriving (Show)
 
-makeLenses ''St
+makeLenses ''ModuleSt
+makeLenses ''StmtSt
 
 -- -----------------------------------------------------------------------------
 -- vcgen implementation
@@ -61,9 +65,7 @@ makeLenses ''St
 
 vcgen :: G r => SSAOutput -> Sem r VCGenOutput
 vcgen (ssaIR, trNextVariables) =
-  vcgenHelper ssaIR
-    & runReader (NextVars trNextVariables)
-    & evalState initialState
+  vcgenHelper ssaIR & runReader (NextVars trNextVariables)
 
 vcgenHelper :: FD r => SSAIR -> Sem r VCGenOutput
 vcgenHelper ssaIR = do
@@ -71,14 +73,15 @@ vcgenHelper ssaIR = do
   combine vcgenMod ssaIR
 
 vcgenMod :: FD r => Module Int -> Sem r Horns
-vcgenMod Module {..} =
-  withModule Module { .. }
-    $    combine regularChecks allStmts
+vcgenMod Module {..} = do
+  isTop <- (moduleName ==) <$> asks afTopModule
+  let moduleSt = ModuleSt Module { .. } isTop
+  combine regularChecks allStmts
     <||> interferenceChecks allStmts
+    &    runReader moduleSt
   where allStmts = gateStmts SQ.>< (abStmt <$> alwaysBlocks)
 
-
-regularChecks :: FD r => S -> Sem r Horns
+regularChecks :: FDM r => S -> Sem r Horns
 regularChecks s =
   withStmt s
     $    pure SQ.empty
@@ -86,6 +89,7 @@ regularChecks s =
     ||>  tagReset s
     ||>  srcReset s
     ||>  next s
+    <||> sinkCheck s
     <||> assertEqCheck s
 
 
@@ -96,14 +100,14 @@ regularChecks s =
 -- always_eq variables are equal to each other in two runs.
 -- -----------------------------------------------------------------------------
 
-initialize :: FD r => S -> Sem r (Horn ())
+initialize :: FDS r => S -> Sem r (Horn ())
 initialize stmt = do
-  Module {..} <- gets (^. currentModule . to fromJust)
-  subs1 <- foldl' (zeroTags moduleName) mempty <$> gets (^. currentVariables) -- untag everything
-  subs2 <- foldl' (valEquals moduleName) subs1 <$> gets (^. currentInitEqs)   -- init_eq vars are equal
-  subs <- foldl' (valEquals moduleName) subs2 <$> gets (^. currentAlwaysEqs) -- always_eq vars are equal
-  return $ Horn { hornHead   = HAnd mempty
-                , hornBody   = KVar stmtId subs
+  Module {..} <- asks (^. currentModule)
+  subs1 <- foldl' (zeroTags moduleName) mempty <$> asks (^. currentVariables) -- untag everything
+  subs2 <- foldl' (valEquals moduleName) subs1 <$> asks (^. currentInitEqs)   -- init_eq vars are equal
+  subs <- foldl' (valEquals moduleName) subs2 <$> asks (^. currentAlwaysEqs) -- always_eq vars are equal
+  return $ Horn { hornHead   = KVar stmtId subs
+                , hornBody   = HBool True
                 , hornType   = Init
                 , hornStmtId = stmtId
                 , hornData   = ()
@@ -124,11 +128,11 @@ initialize stmt = do
 -- We set the tags of the source variables, and unset the tags of everything else.
 -- -----------------------------------------------------------------------------
 
-tagReset :: FD r => S -> Sem r (Horn ())
+tagReset :: FDS r => S -> Sem r (Horn ())
 tagReset stmt = do
-  Module {..} <- gets (^. currentModule . to fromJust)
-  srcs        <- gets (^. currentSources)
-  vars        <- gets (^. currentVariables)
+  Module {..} <- asks (^. currentModule)
+  srcs        <- asks (^. currentSources)
+  vars        <- asks (^. currentVariables)
   let non_srcs = HS.difference vars srcs
   let subs1    = foldl' (tags moduleName True) mempty srcs    -- sources are tagged
   let subs     = foldl' (tags moduleName False) subs1 non_srcs -- non sources are untagged
@@ -153,10 +157,10 @@ tagReset stmt = do
 -- We unset the tags of the source variables.
 -- -----------------------------------------------------------------------------
 
-srcReset :: FD r => S -> Sem r (Horn ())
+srcReset :: FDS r => S -> Sem r (Horn ())
 srcReset stmt = do
-  Module {..} <- gets (^. currentModule . to fromJust)
-  subs <- foldl' (tags moduleName False) mempty <$> gets (^. currentSources) -- sources are untagged
+  Module {..} <- asks (^. currentModule)
+  subs <- foldl' (tags moduleName False) mempty <$> asks (^. currentSources) -- sources are untagged
   return $ Horn { hornHead   = KVar stmtId subs
                 , hornBody   = KVar stmtId mempty
                 , hornType   = SourceReset
@@ -179,12 +183,13 @@ srcReset stmt = do
 -- always_eq annotations.
 -- -----------------------------------------------------------------------------
 
-next :: FD r => S -> Sem r (Horn ())
+next :: FDS r => S -> Sem r (Horn ())
 next stmt = do
-  Module {..} <- gets (^. currentModule . to fromJust)
+  Module {..} <- asks (^. currentModule)
   nextVars    <- (IM.! stmtId) <$> asks getNextVars
   equalities  <- foldl' (ae moduleName nextVars) mempty
-    <$> gets (^. currentAlwaysEqs)
+    <$> asks (^. currentAlwaysEqs)
+  trace $ show ("equalities", equalities)
   let subs = toSubs moduleName nextVars
   return $ Horn { hornBody   = HAnd $ (KVar stmtId mempty |:> tr) <> equalities
                 , hornHead   = KVar stmtId subs
@@ -195,29 +200,28 @@ next stmt = do
  where
   stmtId = stmtData stmt
   tr     = transitionRelation stmt
-  ae m nvs exprs v = case HM.lookup v nvs of
-    Just n ->
-      exprs
-        |> HBinary HEquals
-                   (HVar v m 0 Value LeftRun)
-                   (HVar v m 0 Value RightRun)
-        |> HBinary HEquals
-                   (HVar v m n Value LeftRun)
-                   (HVar v m n Value RightRun)
-    Nothing -> exprs
+  ae m nvs exprs v =
+    let exprs' = exprs |> HBinary HEquals
+                                  (HVar v m 0 Value LeftRun)
+                                  (HVar v m 0 Value RightRun)
+    in  case HM.lookup v nvs of
+          Just n -> exprs' |> HBinary HEquals
+                                      (HVar v m n Value LeftRun)
+                                      (HVar v m n Value RightRun)
+          Nothing -> exprs'
 
 transitionRelation :: S -> HornExpr
 transitionRelation s =
   HAnd $ transitionRelation' LeftRun s |:> transitionRelation' RightRun s
 
--- TODO
 transitionRelation' :: HornVarRun -> S -> HornExpr
 transitionRelation' r = \case
   Block {..} -> HAnd $ transitionRelation' r <$> blockStmts
   Assignment {..} ->
-    HAnd $ 
-      HBinary HEquals (valE assignmentLhs) (valE assignmentRhs) |:> 
-      HBinary HEquals (tagE assignmentLhs) (tagE assignmentRhs)
+    HAnd $ HBinary HEquals (valE assignmentLhs) (valE assignmentRhs) |:> HBinary
+      HEquals
+      (tagE assignmentLhs)
+      (tagE assignmentRhs)
   IfStmt {..} ->
     let c = valE ifStmtCondition
         t = transitionRelation' r ifStmtThen
@@ -227,13 +231,12 @@ transitionRelation' r = \case
   PhiNode {..} ->
     let lhsValue = valE phiLhs
         lhsTag   = tagE phiLhs
-    in  HAnd $ 
-          HOr (HBinary HEquals lhsValue . valE <$> phiRhs) |:> 
-          HOr (HBinary HEquals lhsTag . tagE <$> phiRhs)
+    in  HAnd $ HOr (HBinary HEquals lhsValue . valE <$> phiRhs) |:> HOr
+          (HBinary HEquals lhsTag . tagE <$> phiRhs)
   Skip {..} -> HAnd mempty
  where
-  ufVal :: L (Expr Int) -> HornExpr
-  ufVal = HApp . fmap valE
+  ufVal :: Maybe Id -> L (Expr Int) -> HornExpr
+  ufVal fname = HApp fname . fmap valE
 
   ufTag :: L (Expr Int) -> HornExpr
   ufTag = HOr . fmap tagE
@@ -247,10 +250,10 @@ transitionRelation' r = \case
                           , hVarType   = Value
                           , hVarRun    = r
                           }
-    UF {..}     -> ufVal ufArgs
-    IfExpr {..} -> ufVal (ifExprCondition |:> ifExprThen |> ifExprElse)
+    UF {..}     -> ufVal (Just ufName) ufArgs
+    IfExpr {..} -> ufVal Nothing (ifExprCondition |:> ifExprThen |> ifExprElse)
     Str {..}    -> error "Strings are not handled (yet)"
-    Select {..} -> ufVal (selectVar <| selectIndices)
+    Select {..} -> ufVal Nothing (selectVar <| selectIndices)
 
   tagE :: Expr Int -> HornExpr
   tagE = \case
@@ -276,17 +279,42 @@ parseVerilogInt value = case readEither v' of
     '0' : 'b' : rst -> rst
     _               -> v
 
+
 -- -----------------------------------------------------------------------------
--- 6. interference checks
+-- 5. sink check
+-- -----------------------------------------------------------------------------
+-- Checks that variables defined as sinks are tainted equally.
+-- -----------------------------------------------------------------------------
+
+sinkCheck :: FDS r => S -> Sem r Horns
+sinkCheck stmt = do
+  Module {..} <- asks (^. currentModule)
+  sinks       <- asks (^. currentSinks)
+  return $ foldl' (\hs v -> hs |> go moduleName v) mempty sinks
+ where
+  stmtId = stmtData stmt
+  go m v = Horn
+    { hornHead   = HBinary HEquals
+                           (HVar v m 0 Tag LeftRun)
+                           (HVar v m 0 Tag RightRun)
+    , hornBody   = KVar stmtId mempty
+    , hornType   = TagEqual
+    , hornStmtId = stmtId
+    , hornData   = ()
+    }
+
+
+-- -----------------------------------------------------------------------------
+-- 6. assert eq check
 -- -----------------------------------------------------------------------------
 -- Always block takes a single step. The variables are updated, obeying the
 -- always_eq annotations.
 -- -----------------------------------------------------------------------------
 
-assertEqCheck :: FD r => S -> Sem r Horns
+assertEqCheck :: FDS r => S -> Sem r Horns
 assertEqCheck stmt = do
-  Module {..} <- gets (^. currentModule . to fromJust)
-  aes         <- gets (^. currentAssertEqs)
+  Module {..} <- asks (^. currentModule)
+  aes         <- asks (^. currentAssertEqs)
   return $ foldl' (\hs v -> hs |> go moduleName v) mempty aes
  where
   stmtId = stmtData stmt
@@ -301,9 +329,8 @@ assertEqCheck stmt = do
     }
 
 
-
 -- -----------------------------------------------------------------------------
--- 6. interference checks
+-- 7. interference checks
 -- -----------------------------------------------------------------------------
 -- Always block takes a single step. The variables are updated, obeying the
 -- always_eq annotations.
@@ -312,15 +339,14 @@ assertEqCheck stmt = do
 data ICSt = ICSt { icStmt :: S,  writtenVars :: Ids, allVars :: Ids }
 type ICSts = IM.IntMap ICSt
 
-interferenceChecks :: FD r => Ss -> Sem r Horns
+interferenceChecks :: FDM r => Ss -> Sem r Horns
 interferenceChecks stmts =
   (traverse_ interferenceCheck stmts >> get @Horns)
     & evalState @ICSts mempty
     & evalState @Horns mempty
 
--- TODO
 interferenceCheck
-  :: (FD r, Members '[State ICSts, State Horns] r) => S -> Sem r ()
+  :: (FDM r, Members '[State ICSts, State Horns] r) => S -> Sem r ()
 interferenceCheck stmt = do
   -- get the statements we have looked at so far
   icSts <- get @ICSts
@@ -345,9 +371,9 @@ interferenceCheck stmt = do
   currentWrittenVars = getUpdatedVariables stmt
 
 -- return the write/read interference check
-interferenceCheckWR :: FD r => ICSt -> ICSt -> Sem r (Horn ())
+interferenceCheckWR :: FDM r => ICSt -> ICSt -> Sem r (Horn ())
 interferenceCheckWR wSt rSt = do
-  Module {..} <- gets (^. currentModule . to fromJust)
+  Module {..} <- asks (^. currentModule)
   wNext       <- (IM.! stmtData wStmt) <$> asks getNextVars
   let subs = toSubs moduleName
         $ HM.filterWithKey (\var _ -> HS.member var rVars) wNext
@@ -383,20 +409,11 @@ type VCGenOutput = Horns
 newtype NextVars = NextVars { getNextVars :: IM.IntMap (HM.HashMap Id Int) }
 type AF = AnnotationFile ()
 
-type G r = Members '[Reader AF, PE.Error VCGenError] r
+type G r = Members '[Reader AF, PE.Error VCGenError, Trace] r
 
-type FD r = (G r, Members '[State St, Reader NextVars] r)
-
-initialState :: St
-initialState = St { _currentModule    = Nothing
-                  , _isTopModule      = False
-                  , _currentVariables = mempty
-                  , _currentSources   = mempty
-                  , _currentSinks     = mempty
-                  , _currentInitEqs   = mempty
-                  , _currentAlwaysEqs = mempty
-                  , _currentAssertEqs = mempty
-                  }
+type FD r = (G r, Members '[Reader NextVars] r)
+type FDM r = (G r, Members '[Reader ModuleSt, Reader NextVars] r)
+type FDS r = (G r, Members '[Reader ModuleSt, Reader StmtSt, Reader NextVars] r)
 
 infixl 9 ||>
 (||>) :: Applicative f => f (L a) -> f a -> f (L a)
@@ -409,44 +426,45 @@ infixl 9 <||>
 (|:>) :: (Snoc s s a a, Monoid s) => a -> a -> s
 (|:>) a1 a2 = mempty |> a1 |> a2
 
-withModule :: FD r => Module Int -> Sem r a -> Sem r a
-withModule m act =
-  modify (currentModule ?~ m) *> act <* modify (currentModule .~ Nothing)
+withStmt :: FDM r => S -> Sem (Reader StmtSt ': r) a -> Sem r a
+withStmt s act = do
+  stmtSt <- computeStmtSt s
+  act & runReader stmtSt
 
-withStmt :: FD r => S -> Sem r a -> Sem r a
-withStmt s act = setAnnotations s *> act <* unsetAnnotations
-
-setAnnotations :: FD r => S -> Sem r ()
-setAnnotations stmt = do
-  as            <- asks afAnnotations
-  topModuleName <- asks afTopModule
-
-  Module {..}   <- gets (^. currentModule . to fromJust)
-  let isTop = moduleName == topModuleName
-  modify $ isTopModule .~ isTop
-
-  modify $ currentVariables .~ vs
-
-  let addIf v setter = when (HS.member v vs) $ modify setter
-  for_ as $ \case
-    Source s _ -> when isTop $ addIf s (currentSources %~ HS.insert s)
-    Sink   s _ -> when isTop $ addIf s (currentSinks %~ HS.insert s)
-    Sanitize ss _ ->
-      when isTop $ traverse_ (\s -> addIf s (currentInitEqs %~ HS.insert s)) ss
-    SanitizeMod m v _ ->
-      when (moduleName == m) $ addIf v (currentInitEqs %~ HS.insert v)
-    SanitizeGlob s _ -> when isTop $ addIf s (currentAlwaysEqs %~ HS.insert s)
-    AssertEq     v _ -> when isTop $ addIf v (currentAssertEqs %~ HS.insert v)
+computeStmtSt :: FDM r => S -> Sem r StmtSt
+computeStmtSt stmt = do
+  as          <- asks afAnnotations
+  Module {..} <- asks (^. currentModule)
+  isTop       <- asks (^. isTopModule)
+  (do
+      modify $ currentVariables .~ vs
+      let addIf v setter = when (HS.member v vs) $ modify setter
+      trace $ show ("isTop", isTop)
+      trace $ show ("as", as)
+      trace $ show ("vs", vs)
+      for_ as $ \case
+        Source   s  _ -> when isTop $ addIf s (currentSources %~ HS.insert s)
+        Sink     s  _ -> when isTop $ addIf s (currentSinks %~ HS.insert s)
+        Sanitize ss _ -> when isTop
+          $ traverse_ (\s -> addIf s (currentInitEqs %~ HS.insert s)) ss
+        SanitizeMod m v _ ->
+          when (moduleName == m) $ addIf v (currentInitEqs %~ HS.insert v)
+        SanitizeGlob s _ ->
+          when isTop $ addIf s (currentAlwaysEqs %~ HS.insert s)
+        AssertEq v _ -> when isTop $ addIf v (currentAssertEqs %~ HS.insert v)
+    )
+    & runState (StmtSt mempty mempty mempty mempty mempty mempty)
+    & fmap fst
   where vs = getVariables stmt
 
-unsetAnnotations :: FD r => Sem r ()
-unsetAnnotations = do
-  modify $ currentVariables .~ mempty
-  modify $ currentSources .~ mempty
-  modify $ currentSinks .~ mempty
-  modify $ currentInitEqs .~ mempty
-  modify $ currentAlwaysEqs .~ mempty
-  modify $ currentAssertEqs .~ mempty
+-- unsetAnnotations :: FD r => Sem r ()
+-- unsetAnnotations = do
+--   modify $ currentVariables .~ mempty
+--   modify $ currentSources .~ mempty
+--   modify $ currentSinks .~ mempty
+--   modify $ currentInitEqs .~ mempty
+--   modify $ currentAlwaysEqs .~ mempty
+--   modify $ currentAssertEqs .~ mempty
 
 getVariables :: Stmt a -> Ids
 getVariables = \case

@@ -47,8 +47,8 @@ data St = St { _hornConstraints           :: HM.HashMap Integer (FT.SubC HornCla
              , _qualifiers                :: SQ.Seq FT.Qualifier
 
              , _constraintCounter         :: Integer
-             , _uninterpretedFuncCounter  :: Int
              , _qualifierCounter          :: Int
+             , _ufCounter                 :: Int
              , _invBindMap                :: HM.HashMap Id FT.BindId
              }
 
@@ -100,7 +100,7 @@ generateWFConstraint Horn {..}
       wfcs -> throw $ "did not get only 1 wfc: " ++ show wfcs
   | otherwise = return ()
  where
-  kvar = FT.intKvar $ toInteger hornStmtId
+  kvar = mkKVar hornStmtId
   e    = FT.PKVar kvar mempty
   md   = HornClauseId hornStmtId WellFormed
 
@@ -131,8 +131,11 @@ convertExpr HBinary {..} = case hBinaryOp of
   HImplies -> FT.PImp <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
 convertExpr HNot {..} = FT.PNot <$> convertExpr hNotArg
 convertExpr HApp {..} = do
-  functionName <- freshUF
-  let fsym = symbol functionName
+  fsym <- case hAppMFun of
+    Just f  -> return $ symbol f
+    Nothing -> do
+      n <- gets (^. ufCounter) <* modify (& ufCounter +~ 1)
+      return . symbol $ "uf_noname_" <> T.pack (show n)
   modify (globalConstantLiterals %~ FT.insertSEnv fsym sort)
   FT.mkEApp (FT.dummyLoc fsym) . toList <$> traverse convertExpr hAppArgs
  where
@@ -141,7 +144,7 @@ convertExpr HApp {..} = do
     then FT.mkFFunc 0 (replicate (arity + 1) FT.intSort)
     else FT.intSort
 convertExpr KVar {..} =
-  FT.PKVar (FT.intKvar $ toInteger hKVarId)
+  FT.PKVar (mkKVar hKVarId)
     .   FT.mkSubst
     .   toList
     <$> traverse
@@ -168,6 +171,7 @@ getVariableId v = do
       be <- gets (^. bindEnvironment)
       let (n, be') = FT.insertBindEnv (symbol name) sr be
       modify (bindEnvironment .~ be')
+      modify (invBindMap . at name ?~ n)
       return n
  where
   name = getFixpointName v
@@ -337,12 +341,6 @@ freshConstraintId :: FD r => Sem r Integer
 freshConstraintId =
   gets (^. constraintCounter) <* modify (& constraintCounter +~ 1)
 
-freshUF :: FD r => Sem r Id
-freshUF = do
-  n <- gets (^. uninterpretedFuncCounter)
-  modify (& uninterpretedFuncCounter +~ 1)
-  return $ "uf_" <> T.pack (show n)
-
 freshQualifierId :: FD r => Sem r Int
 freshQualifierId =
   gets (^. qualifierCounter) <* modify (& qualifierCounter +~ 1)
@@ -360,10 +358,10 @@ symbol :: Id -> FT.Symbol
 symbol = FT.symbol
 
 mkInt :: FT.Expr -> FT.SortedReft
-mkInt e = FT.RR FT.intSort (FT.reft (FT.vv Nothing) e)
+mkInt e = FT.RR FT.intSort (FT.reft (symbol "v") e)
 
 mkBool :: FT.Expr -> FT.SortedReft
-mkBool e = FT.RR FT.boolSort (FT.reft (FT.vv Nothing) e)
+mkBool e = FT.RR FT.boolSort (FT.reft (symbol "v") e)
 
 newtype QueryError = QueryError String
                      deriving (Show)
@@ -373,5 +371,8 @@ throw = PE.throw . QueryError
 
 -- return combinations of the elements
 twoPairs :: L a -> L (a, a)
-twoPairs SQ.Empty = mempty
-twoPairs (a SQ.:<| as) = ((a,) <$> as) <> twoPairs as
+twoPairs SQ.Empty      = mempty
+twoPairs (a SQ.:<| as) = ((a, ) <$> as) <> twoPairs as
+
+mkKVar :: Int -> FT.KVar
+mkKVar n = FT.KV . FT.symbol $ "inv" <> show n

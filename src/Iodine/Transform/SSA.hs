@@ -2,6 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Iodine.Transform.SSA
   ( ssa
@@ -15,7 +16,7 @@ import           Iodine.Language.IR
 import           Iodine.Language.Types
 
 import           Control.Lens
-import           Debug.Trace
+import qualified Data.Text                     as T
 import qualified Data.HashMap.Strict           as HM
 import qualified Data.IntSet                   as IS
 import qualified Data.IntMap                   as IM
@@ -91,7 +92,11 @@ ssaExpr :: FD r => Expr a -> Sem r (Expr Int)
 -- -----------------------------------------------------------------------------
 ssaExpr Constant {..} = Constant constantValue <$> freshId NoId
 ssaExpr Variable {..} = ssaVariable Variable { .. }
-ssaExpr UF {..}       = UF ufName <$> traverse ssaExpr ufArgs <*> freshId FunId
+ssaExpr UF {..}       = do
+  args <- traverse ssaExpr ufArgs
+  n    <- freshId FunId
+  return $ UF (name n) args n
+  where name n = "uf_" <> ufName <> "_" <> T.pack (show n)
 ssaExpr IfExpr {..} =
   IfExpr
     <$> ssaExpr ifExprCondition
@@ -297,5 +302,5 @@ updateNonBlocking var = modify
 
 phiNode :: Expr a -> L (Expr a) -> a -> Stmt a
 phiNode lhs rhs a = if SQ.length rhs < 2
-  then let msg = "phinode rhs count must be > 1" in error $ traceStack "" msg
+  then error "phinode rhs count must be > 1"
   else PhiNode lhs rhs a
