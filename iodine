@@ -1,14 +1,31 @@
 #!/usr/bin/env python3
 
-import os.path as p
+import argparse
+from pathlib import Path
 import subprocess
 import sys
 
-THIS_DIR = p.realpath(p.dirname(__file__))
-IVERILOG_DIR = p.join(THIS_DIR, "iverilog-parser")
+def get_args():
+    argparser = argparse.ArgumentParser(prog="iodine", add_help=False)
+    argparser.add_argument("-b", "--build", action="store_true")
+    argparser.add_argument("--profile", action="store_true")
+    return argparser.parse_known_args()
 
-r = subprocess.run(["stack", "exec", "iodine", "--",
-                    "--iverilog-dir", IVERILOG_DIR] +
-                   sys.argv[1:],
-                   cwd=THIS_DIR)
+args, unknown_args = get_args()
+
+THIS_DIR = Path(__file__).resolve().parent
+IVERILOG_DIR = THIS_DIR / "iverilog-parser"
+STACK_BUILD_CMD = ["stack", "build"]
+STACK_RUN_CMD = ["stack", "exec", "iodine"]
+STACK_PROFILE_ARGS = ["--profile", "--work-dir", ".stack-work-profile"] if args.profile else []
+
+if args.build:
+    cmd = STACK_BUILD_CMD + STACK_PROFILE_ARGS
+else:
+    cmd = STACK_RUN_CMD + STACK_PROFILE_ARGS
+    cmd += ["--", "--iverilog-dir", IVERILOG_DIR]
+    cmd += unknown_args
+
+print(f"Running {cmd}")
+r = subprocess.run(cmd, cwd=THIS_DIR)
 sys.exit(r.returncode)

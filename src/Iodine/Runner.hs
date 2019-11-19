@@ -17,6 +17,7 @@ import           Iodine.Pipeline
 import           Iodine.Transform.SanityCheck     (SanityCheckError)
 import           Iodine.Transform.VCGen           (VCGenError)
 import           Iodine.Transform.Query           (QueryError)
+import           Iodine.Transform.Fixpoint           (printSolution)
 import qualified Language.Fixpoint.Solver         as F
 import qualified Language.Fixpoint.Types          as FT
 import qualified Language.Fixpoint.Types.Config as FC
@@ -124,17 +125,21 @@ checkIR IodineArgs{..}
   | otherwise = do
       irFileContents <- readFile fileName
       annotFileContents <- B.readFile annotFile
-      result <- pipeline (T.pack moduleName) (parse (fileName, irFileContents)) (return $ parseAnnotations annotFileContents)
+      mFInfo <- pipeline (T.pack moduleName) (parse (fileName, irFileContents)) (return $ parseAnnotations annotFileContents)
         & mapErrors
         & traceToIO
         & embedToFinal
         & runFinal
-      case result of
-        Right finfo -> FT.isSafe <$> F.solve config finfo
+      case mFInfo of
+        Right finfo -> do
+          result <- F.solve config finfo
+          let safe = FT.isSafe result 
+          unless safe $ printSolution $ FT.resSolution result
+          return safe
         Left e      -> errorHandle e
   where
     config = FC.defConfig { FC.eliminate = FC.Some
-                          , FC.save      = False
+                          , FC.save      = True
                           , FC.srcFile   = fileName
                           , FC.metadata  = True
                           , FC.minimize  = False

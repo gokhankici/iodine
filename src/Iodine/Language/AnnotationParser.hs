@@ -31,9 +31,9 @@ parseAnnotations bs =
 instance FromJSON AF where
   parseJSON = withObject "AnnotFile" $ \o ->
     fmap AF $ AnnotationFile <$>
-    (join  getAnnotation (o .:? "annotations" .!= S.empty)) <*>
-    (fmap2 getQualifier  (o .:? "qualifiers"  .!= S.empty)) <*>
-    (o .:? "topmodule" .!= "")
+    join  getAnnotation (o .:? "annotations" .!= S.empty) <*>
+    fmap2 getQualifier  (o .:? "qualifiers"  .!= S.empty) <*>
+    o .:? "topmodule" .!= ""
     where
       join f = fmap (concatSeq . fmap f)
       fmap2  = fmap . fmap
@@ -66,7 +66,7 @@ instance FromJSON Q where
       "implies" -> r (QImplies <$> o .: "lhs" <*> o .: "rhs")
       "iff"     -> r (QIff <$> o .: "lhs" <*> o .: "rhs")
       "pairs"   -> r (QPairs <$> o .: "variables")
-      "assume"  -> r (QAssume <$> o .: "variables")
+      -- "assume"  -> r (QAssume <$> o .: "variables")
       _         -> typeMismatch (T.unpack $ "unknown qualifier type: " <> t) (toJSON t)
 
 concatSeq :: Foldable t => t (L a) -> L a

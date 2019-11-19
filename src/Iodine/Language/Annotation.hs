@@ -40,9 +40,6 @@ data Qualifier a =
   | QPairs { qualifierEqs  :: L Id
            , qualifierData :: a
            }
-  | QAssume { qualifierAssume :: L Id
-            , qualifierData   :: a
-            }
   deriving (Generic, Show, Functor, Foldable, Traversable)
 
 data AnnotationFile a =
