@@ -43,7 +43,7 @@ pipeline topmodule irReader afReader = do
       sanityCheck & runReader ir
       ssaOutput@(ssaIr, _) <- ssa ir
       traverse_ (trace . show) ssaIr
-      vcgen ssaOutput >>= constructQuery
+      vcgen ssaOutput >>= constructQuery ssaIr
     )
     & runReader af
 

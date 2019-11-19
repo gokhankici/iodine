@@ -6,6 +6,7 @@
 
 module Iodine.Transform.VCGen
   ( vcgen
+  , getVariables
   , VCGenOutput
   , VCGenError(..)
   )
@@ -223,10 +224,10 @@ transitionRelation' r = \case
       (tagE assignmentLhs)
       (tagE assignmentRhs)
   IfStmt {..} ->
-    let c = valE ifStmtCondition
+    let not_c = HBinary HEquals (valE ifStmtCondition) (HInt 0)
         t = transitionRelation' r ifStmtThen
         e = transitionRelation' r ifStmtElse
-    in  HOr $ HBinary HImplies c t |:> HBinary HImplies (HNot c) e
+    in  HOr $ HBinary HImplies (HNot not_c) t |:> HBinary HImplies not_c e
   ModuleInstance {..} -> error "submodules are not supported"
   PhiNode {..} ->
     let lhsValue = valE phiLhs

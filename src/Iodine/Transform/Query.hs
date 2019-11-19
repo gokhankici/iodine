@@ -32,7 +32,9 @@ import           Text.Printf
 
 import           Iodine.Language.Annotation
 import           Iodine.Language.Types
+import           Iodine.Language.IR
 import           Iodine.Transform.Horn
+import           Iodine.Transform.VCGen         ( getVariables )
 
 -- -----------------------------------------------------------------------------
 -- solver state
@@ -59,17 +61,24 @@ makeLenses ''St
 -- generate a query for the liquid-fixpoint solver
 -- -----------------------------------------------------------------------------
 
-constructQuery :: G r => Horns -> Sem r FInfo
-constructQuery horns = generateFInfo & evalState initialState & runReader horns
+constructQuery :: G r => L (Module Int) -> Horns -> Sem r FInfo
+constructQuery modules horns =
+  generateFInfo & evalState initialState & runReader horns & runReader modules
 
 
 generateFInfo :: FD r => Sem r FInfo
 generateFInfo = do
+  setConstants
   ask >>= traverse_ generateConstraint
-  ask >>= traverse_ generateWFConstraint
+  ask >>= traverse_ generateWFConstraints
   asks afQualifiers >>= traverse_ generateQualifiers
   toFInfo
 
+setConstants :: FD r => Sem r ()
+setConstants = forM_ constants $ uncurry addBinding
+ where
+  b val = mkBool (FT.PIff (FT.eVar $ vSymbol) val)
+  constants = [("tru", b FT.PTrue), ("fals", b FT.PFalse)]
 
 -- -----------------------------------------------------------------------------
 -- generate constraints
@@ -91,19 +100,33 @@ generateConstraint Horn {..} = do
   modify ((hornConstraints . at n) ?~ hc)
 
 
-generateWFConstraint :: FD r => Horn () -> Sem r ()
-generateWFConstraint Horn {..}
-  | hornType == Next = do
-    (ienv, _) <- convertExpr hornBody & runState mempty
-    case FT.wfC ienv (mkInt e) md of
-      [wf] -> modify ((wellFormednessConstraints . at kvar) ?~ wf)
-      wfcs -> throw $ "did not get only 1 wfc: " ++ show wfcs
-  | otherwise = return ()
- where
-  kvar = mkKVar hornStmtId
-  e    = FT.PKVar kvar mempty
-  md   = HornClauseId hornStmtId WellFormed
+generateWFConstraints :: FD r => Module Int -> Sem r ()
+generateWFConstraints Module {..} =
+  traverse_ (generateWFConstraint moduleName) gateStmts
+    >> traverse_ (generateWFConstraint moduleName . abStmt) alwaysBlocks
 
+generateWFConstraint :: FD r => Id -> Stmt Int -> Sem r ()
+generateWFConstraint hVarModule stmt = do
+  (ienv, _) <- traverse_ convertExpr hvars & runState mempty
+  case FT.wfC ienv (mkInt e) md of
+    [wf] -> modify ((wellFormednessConstraints . at kvar) ?~ wf)
+    wfcs -> throw $ "did not get only 1 wfc: " ++ show wfcs
+ where
+  vars  = getVariables stmt
+  hvars = foldl'
+    (\acc hVarName ->
+      acc
+        |> HVar { hVarIndex = 0, hVarType = Value, hVarRun = LeftRun, .. }
+        |> HVar { hVarIndex = 0, hVarType = Value, hVarRun = RightRun, .. }
+        |> HVar { hVarIndex = 0, hVarType = Tag, hVarRun = LeftRun, .. }
+        |> HVar { hVarIndex = 0, hVarType = Tag, hVarRun = RightRun, .. }
+    )
+    SQ.empty
+    vars
+  stmtId = stmtData stmt
+  kvar   = mkKVar stmtId
+  e      = FT.PKVar kvar mempty
+  md     = HornClauseId stmtId WellFormed
 
 convertExpr :: FDC r => HornExpr -> Sem r FT.Expr
 convertExpr (HConstant c) = do
@@ -114,22 +137,35 @@ convertExpr (HConstant c) = do
  where
   constName = "const_" <> c
   sym       = symbol constName
-convertExpr (HBool b)     = return $ FT.prop b
-convertExpr (HInt  i)     = return $ FT.expr i
+
+convertExpr (HBool b) = do
+  be <- gets (^. invBindMap)
+  let n = be HM.! name
+  modify (FT.insertsIBindEnv [n])
+  return $ FT.eVar name
+  where name = if b then "tru" else "fals"
+
+convertExpr (HInt i) = getIntSymbol i
+
 convertExpr var@HVar {..} = do
   n <- getVariableId var
   modify (FT.insertsIBindEnv [n])
   return $ FT.eVar (getFixpointName var)
+
 convertExpr (HAnd es) = case es of
-  SQ.Empty -> return FT.PTrue
+  SQ.Empty -> convertExpr (HBool True)
   _        -> FT.PAnd . toList <$> traverse convertExpr es
+
 convertExpr (HOr es) = case es of
-  SQ.Empty -> return FT.PFalse
+  SQ.Empty -> convertExpr (HBool False)
   _        -> FT.POr . toList <$> traverse convertExpr es
+
 convertExpr HBinary {..} = case hBinaryOp of
   HEquals  -> FT.EEq <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
   HImplies -> FT.PImp <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
+
 convertExpr HNot {..} = FT.PNot <$> convertExpr hNotArg
+
 convertExpr HApp {..} = do
   fsym <- case hAppMFun of
     Just f  -> return $ symbol f
@@ -143,6 +179,7 @@ convertExpr HApp {..} = do
   sort  = if arity > 0
     then FT.mkFFunc 0 (replicate (arity + 1) FT.intSort)
     else FT.intSort
+
 convertExpr KVar {..} =
   FT.PKVar (mkKVar hKVarId)
     .   FT.mkSubst
@@ -161,24 +198,37 @@ convertExpr KVar {..} =
           )
           hKVarSubs
 
-
 getVariableId :: FD r => HornExpr -> Sem r FT.BindId
 getVariableId v = do
   mid <- HM.lookup name <$> gets (^. invBindMap)
   case mid of
     Just n  -> return n
-    Nothing -> do
-      be <- gets (^. bindEnvironment)
-      let (n, be') = FT.insertBindEnv (symbol name) sr be
-      modify (bindEnvironment .~ be')
-      modify (invBindMap . at name ?~ n)
-      return n
+    Nothing -> addBinding name sr
  where
   name = getFixpointName v
   sr   = case hVarType v of
     Value -> mkInt FT.PTrue
     Tag   -> mkBool FT.PTrue
 
+addBinding :: FD r => Id -> FT.SortedReft -> Sem r FT.BindId
+addBinding name sr = do
+  be <- gets (^. bindEnvironment)
+  let (n, be') = FT.insertBindEnv (symbol name) sr be
+  modify (bindEnvironment .~ be')
+  modify (invBindMap . at name ?~ n)
+  return n
+
+getIntSymbol :: FDC r => Int -> Sem r FT.Expr
+getIntSymbol i = do
+  be <- gets (^. invBindMap)
+  n  <- case HM.lookup name be of
+    Just n -> return n
+    Nothing ->
+      let sr = mkInt (FT.EEq (FT.eVar vSymbol) (FT.ECon $ FT.I $ toInteger i))
+      in  addBinding name sr
+  modify (FT.insertsIBindEnv [n])
+  return $ FT.eVar name
+  where name = "number_" <> T.pack (show i)
 
 -- -----------------------------------------------------------------------------
 -- generate qualifiers
@@ -200,7 +250,7 @@ generateQualifiers QImplies {..} = do
         rs = mkRs hVarModule runType
     in  FT.mkQual
           (FT.symbol $ "Custom1_" ++ show n)
-          (  [ FT.QP (symbol "v") FT.PatNone FT.FInt
+          (  [ FT.QP vSymbol FT.PatNone FT.FInt
              , FT.QP (symbol l) (FT.PatExact (symbol l)) FT.boolSort
              ]
           ++ [ FT.QP (symbol r) (FT.PatExact (symbol r)) FT.boolSort
@@ -219,7 +269,7 @@ generateQualifiers QPairs {..} = varPairs <$> asks afTopModule >>= traverse_
   varPairs m = twoPairs $ getFixpointName <$> vars m
   q (x1, x2) n = FT.mkQual
     (FT.symbol $ "Custom2_" ++ show n)
-    [ FT.QP (symbol "v") FT.PatNone FT.FInt
+    [ FT.QP vSymbol FT.PatNone FT.FInt
     , FT.QP (symbol x1) (FT.PatExact (symbol x1)) FT.boolSort
     , FT.QP (symbol x2) (FT.PatExact (symbol x2)) FT.boolSort
     ]
@@ -241,7 +291,7 @@ generateQualifiers QIff {..} = do
         rs = mkRs hVarModule runType
     in  FT.mkQual
           (FT.symbol $ "Custom1_" ++ show n)
-          (  [ FT.QP (symbol "v") FT.PatNone FT.FInt
+          (  [ FT.QP vSymbol FT.PatNone FT.FInt
              , FT.QP (symbol l) (FT.PatExact (symbol l)) FT.boolSort
              ]
           ++ [ FT.QP (symbol r) (FT.PatExact (symbol r)) FT.boolSort
@@ -262,7 +312,7 @@ defaultQualifiers =
  where
   mkEq name t s = FT.mkQual
     (FT.symbol @String name)
-    [ FT.QP (symbol "v") FT.PatNone FT.FInt
+    [ FT.QP vSymbol FT.PatNone FT.FInt
     , FT.QP (symbol "x") (FT.PatPrefix (symbol $ getVarPrefix t LeftRun) 1) s
     , FT.QP (symbol "y") (FT.PatPrefix (symbol $ getVarPrefix t RightRun) 1) s
     ]
@@ -271,7 +321,7 @@ defaultQualifiers =
 
   mkTagZero n r = FT.mkQual
     (FT.symbol @String (printf "TagZero%d" (n :: Int)))
-    [ FT.QP (symbol "v") FT.PatNone FT.FInt
+    [ FT.QP vSymbol FT.PatNone FT.FInt
     , FT.QP (symbol "x")
             (FT.PatPrefix (symbol $ getVarPrefix Tag r) 1)
             (FT.FTC FT.boolFTyCon)
@@ -328,7 +378,7 @@ type FInfo = FT.FInfo HornClauseId
 type Horns = L (Horn ())
 
 type G r = Members '[Trace, Reader (AnnotationFile ()), PE.Error QueryError] r
-type FD r = (G r, Members '[State St, Reader Horns] r)
+type FD r = (G r, Members '[State St, Reader Horns, Reader (L (Module Int))] r)
 type FDC r = (FD r, Member (State FT.IBindEnv) r)
 
 addQualifier :: FD r => FT.Qualifier -> Sem r ()
@@ -358,10 +408,10 @@ symbol :: Id -> FT.Symbol
 symbol = FT.symbol
 
 mkInt :: FT.Expr -> FT.SortedReft
-mkInt e = FT.RR FT.intSort (FT.reft (symbol "v") e)
+mkInt e = FT.RR FT.intSort (FT.reft vSymbol e)
 
 mkBool :: FT.Expr -> FT.SortedReft
-mkBool e = FT.RR FT.boolSort (FT.reft (symbol "v") e)
+mkBool e = FT.RR FT.boolSort (FT.reft vSymbol e)
 
 newtype QueryError = QueryError String
                      deriving (Show)
@@ -376,3 +426,6 @@ twoPairs (a SQ.:<| as) = ((a, ) <$> as) <> twoPairs as
 
 mkKVar :: Int -> FT.KVar
 mkKVar n = FT.KV . FT.symbol $ "inv" <> show n
+
+vSymbol :: FT.Symbol
+vSymbol = symbol "v"
