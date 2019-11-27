@@ -72,6 +72,7 @@ generateFInfo = do
   ask >>= traverse_ generateConstraint
   ask >>= traverse_ generateWFConstraints
   asks afQualifiers >>= traverse_ generateQualifiers
+  ask >>= generateAutoQualifiers
   toFInfo
 
 setConstants :: FD r => Sem r ()
@@ -163,6 +164,7 @@ convertExpr (HOr es) = case es of
 convertExpr HBinary {..} = case hBinaryOp of
   HEquals  -> FT.EEq <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
   HImplies -> FT.PImp <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
+  HIff     -> FT.PIff <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
 
 convertExpr HNot {..} = FT.PNot <$> convertExpr hNotArg
 
@@ -316,7 +318,10 @@ defaultQualifiers =
     , FT.QP (symbol "x") (FT.PatPrefix (symbol $ getVarPrefix t LeftRun) 1) s
     , FT.QP (symbol "y") (FT.PatPrefix (symbol $ getVarPrefix t RightRun) 1) s
     ]
-    (FT.PAtom FT.Eq (FT.eVar @Id "x") (FT.eVar @Id "y"))
+    ( case t of
+        Value -> FT.PAtom FT.Eq (FT.eVar @Id "x") (FT.eVar @Id "y")
+        Tag   -> FT.PIff (FT.eVar @Id "x") (FT.eVar @Id "y")
+    )
     (FT.dummyPos "")
 
   mkTagZero n r = FT.mkQual
@@ -328,6 +333,33 @@ defaultQualifiers =
     ]
     (FT.PIff (FT.eVar @Id "x") FT.PFalse)
     (FT.dummyPos "")
+
+generateAutoQualifiers :: FD r => AnnotationFile () -> Sem r ()
+generateAutoQualifiers AnnotationFile {..} = forM_ sourcePairs $ \(s1, s2) ->
+  mkQ (mkHVar s1 LeftRun) (mkHVar s2 LeftRun) <$> freshQualifierId >>= addQualifier
+  where
+    sources =
+      foldl' (\acc -> \case
+                 Source v _ -> acc |> v
+                 _ -> acc) SQ.empty afAnnotations
+    sourcePairs = twoPairs sources
+    mkQ s1 s2 n =
+      FT.mkQual
+      (FT.symbol $ "SrcTagEq_" ++ show n)
+      [ FT.QP vSymbol FT.PatNone FT.FInt
+      , FT.QP (symbol s1) (FT.PatExact (symbol s1)) FT.boolSort
+      , FT.QP (symbol s2) (FT.PatExact (symbol s2)) FT.boolSort
+      ]
+      (FT.PIff (FT.eVar s1) (FT.eVar s2))
+      (FT.dummyPos "")
+    mkHVar v r =
+      getFixpointName $
+      HVar { hVarName   = v
+           , hVarModule = afTopModule
+           , hVarIndex  = 0
+           , hVarType   = Tag
+           , hVarRun    = r
+           }
 
 
 -- -----------------------------------------------------------------------------
@@ -360,11 +392,13 @@ toFInfo =
         return mempty
 
 getFixpointName :: HornExpr -> Id
-getFixpointName HVar {..} = prefix <> name <> suffix
+getFixpointName HVar {..} = varno <> prefix <> name
  where
+  varno  = if hVarIndex > 0
+           then "N" <> T.pack (show hVarIndex) <> "_"
+           else ""
   prefix = getVarPrefix hVarType hVarRun
   name   = "M_" <> hVarModule <> "_V_" <> hVarName
-  suffix = if hVarIndex > 0 then "_" <> T.pack (show hVarIndex) else ""
 getFixpointName _ = error "getFixpointName must be called with a variable"
 
 getVarPrefix :: HornVarType -> HornVarRun -> Id

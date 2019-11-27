@@ -97,7 +97,7 @@ handleAssignment handler = go
     go IfStmt{..}         = gos (ifStmtThen SQ.<| ifStmtElse SQ.<| SQ.empty)
     go Assignment{..}     = handler assignmentType assignmentLhs assignmentRhs
     go ModuleInstance{..} = pure ()
-    go PhiNode{..}        = error "phinode encountered in sanity check"
+    -- go PhiNode{..}        = error "phinode encountered in sanity check"
     go Skip{..}           = pure ()
 
 -- -----------------------------------------------------------------------------
@@ -145,7 +145,7 @@ checkUniqueUpdateLocationOfVariables =
     asgnVars IfStmt{..}         = asgnVars ifStmtThen <> asgnVars ifStmtElse
     asgnVars Assignment{..}     = HS.singleton (varName assignmentLhs, varModuleName assignmentLhs)
     asgnVars ModuleInstance{..} = mempty
-    asgnVars PhiNode{..}        = error "phinode encountered in sanity check"
+    -- asgnVars PhiNode{..}        = error "phinode encountered in sanity check"
     asgnVars Skip{..}           = mempty
 
 runUniqueUpdateCheck :: SC r => Sem (UniqueUpdateCheck ': r) a -> Sem (State S1 ': r) a

@@ -4,26 +4,21 @@ import sys
 import os
 import subprocess
 
-def run_tests(test_args, stack_args=[], build_args=[]):
-    PACKAGE_NAME = "iodine"
-    EXE_NAME     = "iodine"
-    TEST_NAME    = "iodine-test"
+PACKAGE_NAME = "iodine"
 
-    exe_comp  = "{}:{}".format(PACKAGE_NAME, EXE_NAME)
-    test_comp = "{}:test:{}".format(PACKAGE_NAME, TEST_NAME)
+def add_quotes(s):
+    i = s.find(" ")
+    if i < 0:
+        return s
+    else:
+        return '"{}"'.format(s)
 
-    def add_quotes(s):
-        i = s.find(" ")
-        if i < 0:
-            return s
-        else:
-            return '"{}"'.format(s)
+def run_tests(test_args, stack_args=[]):
+    cmd = ["stack"] + stack_args + ["test", PACKAGE_NAME]
 
-    args = " ".join([add_quotes(a) for a in test_args])
-
-    cmd = [ "stack" ] + stack_args + \
-          [ "build" ] + build_args + \
-          [ exe_comp, test_comp, "--test-arguments", args ]
+    if test_args:
+        args = " ".join([add_quotes(a) for a in test_args])
+        cmd += ["--test-arguments", args]
 
     try:
         return subprocess.run(cmd).returncode

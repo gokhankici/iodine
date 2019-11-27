@@ -85,10 +85,10 @@ data Stmt a =
                    , stmtData            :: a
                    }
   -- this is added after the SSA step
-  | PhiNode { phiLhs   :: Expr a
-            , phiRhs   :: L (Expr a)
-            , stmtData :: a
-            }
+  -- | PhiNode { phiLhs   :: Expr a
+  --           , phiRhs   :: L (Expr a)
+  --           , stmtData :: a
+  --           }
   | Skip { stmtData :: a }
   deriving (Generic, Functor, Foldable, Traversable)
 
@@ -134,7 +134,7 @@ instance Show Port where
 instance Show a => Show (Expr a) where
   show (Constant c _)   = T.unpack c
   show (Variable v _ a) = printf "%s#%s" v (show a)
-  show (UF n es _)      = printf "(UF %s %s)" n (show $ toList es)
+  show (UF n es _)      = printf "%s(%s)" n (intercalate ", " $ show <$> toList es)
   show (IfExpr c t e _) = printf "(%s ? %s : %s)" (show c) (show t) (show e)
   show (Str s _)        = T.unpack s
   show (Select v is _)  = printf "%s%s" (show v) (show $ toList is)
@@ -149,7 +149,7 @@ instance Show a => Show (Stmt a) where
   show (IfStmt c t e _) = printf "if( %s ){ %s }else{ %s }" (show c) (show t) (show e)
   show (ModuleInstance t n ps _) = printf "%s %s(%s)" t n (intercalate ", " args)
                                    where args = (\(k,e) -> printf "%s = %s" k (show e)) <$> HM.toList ps
-  show (PhiNode l rs _) = printf "%s = phi(%s)" (show l) (intercalate ", " (toList $ show <$> rs))
+  -- show (PhiNode l rs _) = printf "%s = phi(%s)" (show l) (intercalate ", " (toList $ show <$> rs))
   show (Skip _) = printf "skip"
 
 instance Show a => Show (Event a) where

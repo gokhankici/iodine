@@ -21,7 +21,7 @@ data Horn a =
        deriving (Show, Functor)
 
 
-data HornBinaryOp = HEquals | HImplies
+data HornBinaryOp = HEquals | HImplies | HIff
                   deriving (Show)
 
 data HornType = Init

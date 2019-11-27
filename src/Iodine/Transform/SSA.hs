@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
@@ -18,37 +19,44 @@ import           Iodine.Language.Types
 import           Control.Lens
 import qualified Data.Text                     as T
 import qualified Data.HashMap.Strict           as HM
-import qualified Data.IntSet                   as IS
+import qualified Data.HashSet                  as HS
 import qualified Data.IntMap                   as IM
-import           Data.Maybe
 import qualified Data.Sequence                 as SQ
 
 import           Polysemy
 import           Polysemy.State
+import           Polysemy.Reader
+import           Polysemy.Trace
 
-type FD r = Member (State St) r
-type SSAIR = L (Module Int)
+type FD r      = Members '[State St, Trace] r
+type FDM r     = (FD r, Members '[Reader ModuleName] r)
+type FDM2 r    = (FDM r, Members '[State Vars] r)
+type SSAIR     = L (Module Int)
 type SSAOutput = (SSAIR, TRNextVars)
+
+newtype ModuleName = ModuleName { getModuleName :: Id }
 
 -- -----------------------------------------------------------------------------
 -- after this step, each new variable, statement, and always block
 -- within a module will have an unique id
-ssa :: ParsedIR -> Sem r SSAOutput
+ssa :: Member Trace r => ParsedIR -> Sem r SSAOutput
 -- -----------------------------------------------------------------------------
-ssa modules = traverse ssaModule modules & runSSA
+ssa modules = traverse ssaModule modules <* trace "SSA DONE!" & runSSA
 
 -- -----------------------------------------------------------------------------
+-- run ssa on all the statements inside the given module
 ssaModule :: FD r => Module a -> Sem r (Module Int)
 -- -----------------------------------------------------------------------------
-ssaModule m@Module {..} =
-  withModule m
-    $   Module moduleName ports variables
-    <$> traverse ssaStmtSingle gateStmts
-    <*> traverse ssaAB         alwaysBlocks
-    <*> freshId ModId
+ssaModule Module {..} =
+  Module moduleName ports variables
+  <$> traverse ssaStmtSingle gateStmts
+  <*> traverse ssaAB         alwaysBlocks
+  <*> freshId ModId
+  & runReader (ModuleName moduleName)
 
 -- -----------------------------------------------------------------------------
-ssaAB :: FD r => AlwaysBlock a -> Sem r (AlwaysBlock Int)
+-- run ssa on all the statements inside the given always block
+ssaAB :: FDM r => AlwaysBlock a -> Sem r (AlwaysBlock Int)
 -- -----------------------------------------------------------------------------
 ssaAB ab@AlwaysBlock {..} =
   withAB ab
@@ -63,29 +71,28 @@ ssaEvent NegEdge {..} = NegEdge <$> ssaExpr eventExpr <*> freshId NoId
 ssaEvent Star {..}    = Star <$> freshId NoId
 
 -- -----------------------------------------------------------------------------
-ssaStmtSingle :: FD r => Stmt a -> Sem r (Stmt Int)
+ssaStmtSingle :: FDM r => Stmt a -> Sem r (Stmt Int)
 -- -----------------------------------------------------------------------------
-ssaStmtSingle s = withStmt $ ssaStmt s
+ssaStmtSingle s = ssaStmt s & evalState @Vars mempty & withStmt
 
-ssaStmt :: FD r => Stmt a -> Sem r (Stmt Int)
+ssaStmt :: FDM2 r => Stmt a -> Sem r (Stmt Int)
 ssaStmt Block {..} = Block <$> traverse ssaStmt blockStmts <*> freshId StmtId
 ssaStmt Assignment {..} = case assignmentType of
   Continuous  -> ssaContinousAssignment assignmentLhs assignmentRhs
   Blocking    -> ssaBlockingAssignment assignmentLhs assignmentRhs
-  NonBlocking -> ssaNonBlockingAssignment assignmentLhs assignmentRhs
+  NonBlocking -> do
+    modify (HS.insert $ varName assignmentLhs)
+    ssaNonBlockingAssignment assignmentLhs assignmentRhs
 ssaStmt IfStmt {..} = do
-  cond'                     <- ssaExpr ifStmtCondition
-  (then', else', phiNodes') <- ssaBranches ifStmtThen ifStmtElse
-  ifStmt'                   <- IfStmt cond' then' else' <$> freshId StmtId
-  case phiNodes' of
-    SQ.Empty -> return ifStmt'
-    _        -> Block (ifStmt' SQ.<| phiNodes') <$> freshId StmtId
+  cond' <- ssaExpr ifStmtCondition
+  (then', else') <- ssaBranches ifStmtThen ifStmtElse
+  IfStmt cond' then' else' <$> freshId StmtId
 ssaStmt ModuleInstance {..} = do
   ports' <- traverse ssaExpr moduleInstancePorts
   n      <- freshId StmtId
   return ModuleInstance { moduleInstancePorts = ports', stmtData = n, .. }
-ssaStmt PhiNode {..} = error "ssa should not run on phi nodes"
 ssaStmt Skip {..}    = Skip <$> freshId StmtId
+
 
 -- -----------------------------------------------------------------------------
 ssaExpr :: FD r => Expr a -> Sem r (Expr Int)
@@ -111,48 +118,45 @@ ssaExpr Select {..} =
     <*> freshId NoId
 
 
-
 -- -----------------------------------------------------------------------------
 -- Implementation details
 -- -----------------------------------------------------------------------------
 
 data IdType = ModId | ABId | StmtId | FunId | NoId
 
+type Vars = HS.HashSet Id
 type VarId = HM.HashMap Id Int
-type VarIds = HM.HashMap Id IS.IntSet
+-- type VarIds = HM.HashMap Id IS.IntSet
 
 type TRNextVars = IM.IntMap VarId
 
-data St = St { modId         :: Int -- id for modules
-             , abId          :: Int -- id for always blocks
-             , stmtId        :: Int -- id for statements
-             , funId         :: Int -- id for functions
-
-             , currentModule :: Maybe Id -- name of the current module
+data St = St { modId           :: Int -- id for modules
+             , abId            :: Int -- id for always blocks
+             , stmtId          :: Int -- id for statements
+             , funId           :: Int -- id for functions
 
              -- these are local to the statements
-             , varMaxIds     :: VarId  -- id for the vars
-             , lastBlocking  :: VarId  -- last blocking assignment of the vars
-             , nonBlockings  :: VarIds -- non blocking assignments of the vars
+             , varMaxIds       :: VarId  -- id for the vars
+             , lastBlocking    :: VarId  -- last blocking assignment of the vars
+             , lastNonBlocking :: VarId -- non blocking assignments of the vars
 
-             , trNextVars    :: TRNextVars -- stmt id -> var id -> last variable
+             , trNextVars      :: TRNextVars -- stmt id -> var id -> last variable
              }
 
 initialSt :: St
-initialSt = St { modId         = 0
-               , abId          = 0
-               , stmtId        = 0
-               , funId         = 0
-               , currentModule = mempty
-               , varMaxIds     = mempty
-               , lastBlocking  = mempty
-               , nonBlockings  = mempty
-               , trNextVars    = mempty
+initialSt = St { modId           = 0
+               , abId            = 0
+               , stmtId          = 0
+               , funId           = 0
+               , varMaxIds       = mempty
+               , lastBlocking    = mempty
+               , lastNonBlocking = mempty
+               , trNextVars      = mempty
                }
 
 runSSA :: Sem (State St ': r) a -> Sem r (a, TRNextVars)
 runSSA act = do
-  (st, res) <- runState initialSt act
+  (st, res) <- act & runState initialSt
   return (res, trNextVars st)
 
 ssaContinousAssignment :: FD r => Expr a -> Expr a -> Sem r (Stmt Int)
@@ -173,14 +177,14 @@ ssaNonBlockingAssignment :: FD r => Expr a -> Expr a -> Sem r (Stmt Int)
 ssaNonBlockingAssignment lhs rhs = do
   lhs' <- freshVariable lhs
   rhs' <- ssaExpr rhs
-  updateNonBlocking lhs'
+  updateLastNonBlocking lhs'
   Assignment NonBlocking lhs' rhs' <$> freshId StmtId
 
 ssaVariable :: FD r => Expr a -> Sem r (Expr Int)
 ssaVariable var =
   let name = varName var
   in  Variable name (varModuleName var)
-        <$> gets (HM.lookupDefault 0 name . lastBlocking)
+      <$> gets (HM.lookupDefault 0 name . lastBlocking)
 
 freshId :: FD r => IdType -> Sem r Int
 freshId = \case
@@ -190,93 +194,78 @@ freshId = \case
   FunId  -> gets funId <* modify (\St {..} -> St { funId = funId + 1, .. })
   NoId   -> return 0
 
-ssaBranches
-  :: FD r => Stmt a -> Stmt a -> Sem r (Stmt Int, Stmt Int, L (Stmt Int))
+-- creates phi nodes only for the blocking assignments
+ssaBranches :: FDM2 r => Stmt a -> Stmt a -> Sem r (Stmt Int, Stmt Int)
 ssaBranches br1 br2 = do
-  lastBlocking_init <- gets lastBlocking
+  st_init <- getState
 
-  br1'              <- ssaStmt br1
-  lastBlocking1     <- gets lastBlocking
+  br1' <- ssaStmt br1
+  (m1,lb1,lnb1) <- getState
 
-  modify (\s -> s { lastBlocking = lastBlocking_init })
+  setState st_init
 
-  br2'          <- ssaStmt br2
-  lastBlocking2 <- gets lastBlocking
+  br2' <- ssaStmt br2
+  (m2,lb2,lnb2) <- getState
 
-  phiNodes      <- makePhiNodes lastBlocking1 lastBlocking2
+  (lb', b1, b2)    <- balanceBranches Blocking (lb1, lb2)
+  (lnb', nb1, nb2) <- balanceBranches NonBlocking (lnb1, lnb2)
 
-  return (br1', br2', phiNodes)
+  let m' = HM.unionWith max m1 m2
+  setState (m', lb', lnb')
 
-makePhiNodes :: FD r => VarId -> VarId -> Sem r (L (Stmt Int))
-makePhiNodes m1 m2 = sequence $ HM.foldlWithKey' go SQ.empty m1
- where
-  go actions varName varId1 =
-    let varId2 = HM.lookupDefault 0 varName m2
-    in  if varId1 == varId2
-          then actions
-          else actions SQ.|> do
-            varModuleName <- gets (fromJust . currentModule)
-            lhs           <- freshVariable $ Variable { exprData = (), .. }
-            let rhs =
-                  Variable { exprData = varId1, .. }
-                    SQ.<| Variable { exprData = varId2, .. }
-                    SQ.<| SQ.empty
-            updateLastBlocking lhs
-            phiNode lhs rhs <$> freshId StmtId
+  (,) <$>
+    ext br1' (b1 <> nb1) <*>
+    ext br2' (b2 <> nb2)
 
-withModule :: FD r => Module a -> Sem r b -> Sem r b
-withModule Module {..} act =
-  modify (\St {..} -> St { currentModule = Just moduleName, .. })
-    *> act
-    <* modify (\St {..} -> St { currentModule = Nothing, .. })
+  where
+    getState =
+      (,,) <$> gets varMaxIds <*> gets lastBlocking <*> gets lastNonBlocking
+    setState (m, lb, lnb) =
+      modify $ \st -> st {varMaxIds = m, lastBlocking = lb, lastNonBlocking = lnb}
+    ext s1 s2 =
+      case s2 of
+        SQ.Empty -> return s1
+        _        -> Block (s1 <| s2) <$> freshId StmtId
+
+balanceBranches :: FDM r => AssignmentType -> (VarId, VarId) -> Sem r (VarId, L (Stmt Int), L (Stmt Int))
+balanceBranches t (m1, m2) = do
+  modName <- asks getModuleName
+  let mkStmt (v,oldN,newN) =
+        Assignment t
+        (Variable v modName newN)
+        (Variable v modName oldN) <$>
+        freshId StmtId
+  s1 <- traverse mkStmt diff1
+  s2 <- traverse mkStmt diff2
+  return (m, s1, s2)
+  where
+    m = HM.unionWith max m1 m2
+    diffF mInit acc v n =
+      case HM.lookup v mInit of
+        Nothing -> acc |> (v, 0, n)
+        Just ni -> if | n > ni    -> acc |> (v, ni, n)
+                      | n == ni   -> acc
+                      | otherwise -> error "expected (n >= ni)"
+    diff1 = HM.foldlWithKey' (diffF m1) SQ.empty m
+    diff2 = HM.foldlWithKey' (diffF m2) SQ.empty m
 
 withAB :: AlwaysBlock a -> Sem r b -> Sem r b
 withAB _ = id
 
-type WithStmtSt = (VarId, L (Stmt Int))
+-- type WithStmtSt = (VarId, L (Stmt Int))
 
 withStmt :: FD r => Sem r (Stmt Int) -> Sem r (Stmt Int)
 withStmt act = do
-  oldSt <- get
-  modify $ \st ->
-    st { varMaxIds = mempty, lastBlocking = mempty, nonBlockings = mempty }
-  stmt'                            <- act
-  nbs                              <- gets nonBlockings
+  modify $ \st -> st { varMaxIds       = mempty
+                     , lastBlocking    = mempty
+                     , lastNonBlocking = mempty }
+  stmt' <- act
+  modify $ \st -> st { trNextVars = IM.insert (stmtData stmt')
+                                    (HM.union (lastBlocking st) (lastNonBlocking st))
+                                    (trNextVars st)
+                     }
+  return stmt'
 
-  ((lastNonBlocking, phiNodes), _) <-
-    HM.traverseWithKey
-        (\varName varIds -> do
-          varModuleName <- gets (fromJust . currentModule)
-          let phiRhs = IS.foldl'
-                (\s varId -> s SQ.|> Variable { exprData = varId, .. })
-                SQ.empty
-                varIds
-          case phiRhs of
-            SQ.Empty -> undefined
-            r SQ.:<| SQ.Empty ->
-              modify @WithStmtSt (_1 . at varName ?~ exprData r)
-            _ -> do
-              phiLhs <- freshVariable Variable { exprData = (), .. }
-              phi    <- phiNode phiLhs phiRhs <$> freshId StmtId
-              modify @WithStmtSt (_1 . at varName ?~ exprData phiLhs)
-              modify @WithStmtSt (_2 %~ (|> phi))
-        )
-        nbs
-      & runState (mempty, mempty)
-
-  stmt'' <- if SQ.null phiNodes
-    then return stmt'
-    else Block (stmt' SQ.<| phiNodes) <$> freshId StmtId
-
-  modify $ \st -> st
-    { varMaxIds    = varMaxIds oldSt
-    , lastBlocking = lastBlocking oldSt
-    , nonBlockings = nonBlockings oldSt
-    , trNextVars   = IM.insert (stmtData stmt'')
-                               (HM.union (lastBlocking st) lastNonBlocking)
-                               (trNextVars st)
-    }
-  return stmt''
 
 freshVariable :: FD r => Expr a -> Sem r (Expr Int)
 freshVariable var = do
@@ -292,15 +281,9 @@ updateLastBlocking var = modify
   name  = varName var
   varId = exprData var
 
-updateNonBlocking :: FD r => Expr Int -> Sem r ()
-updateNonBlocking var = modify
-  $ \st@St {..} -> st { nonBlockings = HM.alter helper name nonBlockings }
+updateLastNonBlocking :: FD r => Expr Int -> Sem r ()
+updateLastNonBlocking var = modify
+  $ \st@St {..} -> st { lastNonBlocking = HM.insert name varId lastNonBlocking }
  where
-  name   = varName var
-  varId  = exprData var
-  helper = Just . maybe (IS.singleton varId) (IS.insert varId)
-
-phiNode :: Expr a -> L (Expr a) -> a -> Stmt a
-phiNode lhs rhs a = if SQ.length rhs < 2
-  then error "phinode rhs count must be > 1"
-  else PhiNode lhs rhs a
+  name  = varName var
+  varId = exprData var

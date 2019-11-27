@@ -190,7 +190,7 @@ next stmt = do
   nextVars    <- (IM.! stmtId) <$> asks getNextVars
   equalities  <- foldl' (ae moduleName nextVars) mempty
     <$> asks (^. currentAlwaysEqs)
-  trace $ show ("equalities", equalities)
+  trace $ show ("equalities" :: String, equalities)
   let subs = toSubs moduleName nextVars
   return $ Horn { hornBody   = HAnd $ (KVar stmtId mempty |:> tr) <> equalities
                 , hornHead   = KVar stmtId subs
@@ -227,13 +227,15 @@ transitionRelation' r = \case
     let not_c = HBinary HEquals (valE ifStmtCondition) (HInt 0)
         t = transitionRelation' r ifStmtThen
         e = transitionRelation' r ifStmtElse
-    in  HOr $ HBinary HImplies (HNot not_c) t |:> HBinary HImplies not_c e
+    in  HOr $
+        HAnd (HNot not_c |:> t) |:>
+        HAnd (not_c |:> e)
   ModuleInstance {..} -> error "submodules are not supported"
-  PhiNode {..} ->
-    let lhsValue = valE phiLhs
-        lhsTag   = tagE phiLhs
-    in  HAnd $ HOr (HBinary HEquals lhsValue . valE <$> phiRhs) |:> HOr
-          (HBinary HEquals lhsTag . tagE <$> phiRhs)
+  -- PhiNode {..} ->
+  --   let lhsValue = valE phiLhs
+  --       lhsTag   = tagE phiLhs
+  --   in  HAnd $ HOr (HBinary HEquals lhsValue . valE <$> phiRhs) |:> HOr
+  --         (HBinary HEquals lhsTag . tagE <$> phiRhs)
   Skip {..} -> HAnd mempty
  where
   ufVal :: Maybe Id -> L (Expr Int) -> HornExpr
@@ -295,7 +297,7 @@ sinkCheck stmt = do
  where
   stmtId = stmtData stmt
   go m v = Horn
-    { hornHead   = HBinary HEquals
+    { hornHead   = HBinary HIff
                            (HVar v m 0 Tag LeftRun)
                            (HVar v m 0 Tag RightRun)
     , hornBody   = KVar stmtId mempty
@@ -440,9 +442,9 @@ computeStmtSt stmt = do
   (do
       modify $ currentVariables .~ vs
       let addIf v setter = when (HS.member v vs) $ modify setter
-      trace $ show ("isTop", isTop)
-      trace $ show ("as", as)
-      trace $ show ("vs", vs)
+      trace $ show ("isTop" :: String, isTop)
+      trace $ show ("as" :: String, as)
+      trace $ show ("vs" :: String, vs)
       for_ as $ \case
         Source   s  _ -> when isTop $ addIf s (currentSources %~ HS.insert s)
         Sink     s  _ -> when isTop $ addIf s (currentSinks %~ HS.insert s)
@@ -474,7 +476,7 @@ getVariables = \case
   IfStmt {..} ->
     go ifStmtCondition <> mfold getVariables [ifStmtThen, ifStmtElse]
   ModuleInstance {..} -> mempty
-  PhiNode {..}        -> mempty
+  -- PhiNode {..}        -> mempty
   Skip {..}           -> mempty
  where
   go :: Expr a -> Ids
@@ -491,7 +493,7 @@ getUpdatedVariables = \case
   Assignment {..}     -> HS.singleton $ varName assignmentLhs
   IfStmt {..}         -> mfold getVariables [ifStmtThen, ifStmtElse]
   ModuleInstance {..} -> mempty
-  PhiNode {..}        -> mempty
+  -- PhiNode {..}        -> mempty
   Skip {..}           -> mempty
 
 toSubs :: Id -> HM.HashMap Id Int -> L (HornExpr, HornExpr)
