@@ -6,7 +6,7 @@
 
 module Iodine.Transform.Merge (merge) where
 
-import Iodine.Language.Types
+import Iodine.Types
 import Iodine.Language.IR
 import Iodine.Language.IRParser
 import Iodine.Utils
@@ -44,7 +44,7 @@ merge :: ParsedIR -> ParsedIR
 merge = fmap mergeModule
 
 
--- make gate statements a always* block, and merge with the rest
+-- | make gate statements a always* block, and merge with the rest
 mergeModule :: Module () -> Module ()
 mergeModule Module {..} =
   Module { alwaysBlocks = mergeAlwaysBlocks $ alwaysBlocks <> gateBlocks
@@ -55,10 +55,11 @@ mergeModule Module {..} =
     gateBlocks = makeStarBlock <$> gateStmts
 
 
--- All blocks with the same non-star event are merged into a single block (with
--- random ordering). For the always* blocks, a dependency graph is created first
--- and then they are merged according to their order in the directed-acyclic
--- graph.
+{- |
+All blocks with the same non-star event are merged into a single block (with
+random ordering). For the always* blocks, a dependency graph is created first
+and then they are merged according to their order in the directed-acyclic graph.
+-}
 mergeAlwaysBlocks :: L (AlwaysBlock ()) -> L (AlwaysBlock ())
 mergeAlwaysBlocks as = HM.foldlWithKey' (\acc e ss-> acc SQ.>< mkBlocks e ss) mempty eventMap
   where
@@ -72,9 +73,11 @@ mergeAlwaysBlocks as = HM.foldlWithKey' (\acc e ss-> acc SQ.>< mkBlocks e ss) me
     updateM m AlwaysBlock{..} = HM.alter (append (SQ.<|) abStmt) abEvent m
 
 
--- Merge every always* block into a single one. The statements that belong to
--- the same connected components are ordered according to their topological
--- sort. However, the order between connected components are random.
+{- |
+Merge every always* block into a single one. The statements that belong to the
+same connected components are ordered according to their topological sort.
+However, the order between connected components are random.
+-}
 mergeAlwaysStarBlocks :: L (Stmt ()) -> AlwaysBlock ()
 mergeAlwaysStarBlocks stmts =
   if   G.noNodes depGraph == SQ.length stmts
@@ -101,8 +104,10 @@ mergeAlwaysStarBlocks stmts =
       mempty
       graphs
 
--- merge the always blocks with the same non-star event after makign sure that
--- their dependecy graph form a DAG
+{- |
+merge the always blocks with the same non-star event after makign sure that
+their dependecy graph form a DAG
+-}
 mergeAlwaysEventBlocks :: Event () -> L (Stmt ()) -> AlwaysBlock ()
 mergeAlwaysEventBlocks e stmts = AlwaysBlock e stmt' ()
   where
@@ -113,8 +118,10 @@ mergeAlwaysEventBlocks e stmts = AlwaysBlock e stmt' ()
         _                 -> Block stmts ()
 
 
--- builds a dependency graph where (s1, s2) \in G iff there exists a variable v
--- such that s1 updates v and s2 reads v
+{- |
+builds a dependency graph where (s1, s2) \in G iff there exists a variable v
+such that s1 updates v and s2 reads v
+-}
 buildDependencyGraph :: L (Stmt ()) -> (DepGraph, StmtMap)
 buildDependencyGraph stmts =
   traverse_ update stmts
@@ -178,14 +185,18 @@ initialState = St mempty mempty 0 mempty
 makeStarBlock :: Stmt () -> AlwaysBlock ()
 makeStarBlock s = AlwaysBlock (Star ()) s ()
 
--- given a updater function and an element, create a helper function to be used
--- with `alter`
+{- |
+given a updater function and an element, create a helper function to be used
+with `alter`
+-}
 append :: Monoid m => (a -> m -> m) -> a -> Maybe m -> Maybe m
 append f a = \case
   Nothing -> Just $ f a mempty
   Just m  -> Just $ f a m
 
--- if a graph does not have a cycle, each strongly connected component of the
--- graph should consist of a single element
+{- |
+if a graph does not have a cycle, each strongly connected component of the graph
+should consist of a single element
+-}
 hasCycle :: DepGraph -> Bool
 hasCycle g = length (GQ.scc g) /= G.noNodes g

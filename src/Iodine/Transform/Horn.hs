@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -5,11 +7,14 @@
 
 module Iodine.Transform.Horn where
 
+import           Iodine.Types
+
 import           GHC.Generics
 import           Control.DeepSeq
-import           Iodine.Language.Types
+import qualified Data.Text                     as T
+import           Data.Foldable
 import qualified Language.Fixpoint.Types       as FT
-import qualified Text.PrettyPrint.HughesPJ     as PP
+import qualified Text.PrettyPrint              as PP
 
 data Horn a =
        Horn { hornHead   :: HornExpr
@@ -22,7 +27,6 @@ data Horn a =
 
 
 data HornBinaryOp = HEquals | HImplies | HIff
-                  deriving (Show)
 
 data HornType = Init
               | TagReset
@@ -63,7 +67,50 @@ data HornExpr =
   | KVar { hKVarId   :: Int
          , hKVarSubs :: L (HornExpr, HornExpr)
          }
-  deriving (Show)
+
+
+instance Show HornBinaryOp where
+  show HEquals  = "="
+  show HImplies = "=>"
+  show HIff     = "<=>"
+
+instance Show HornExpr where
+  show = PP.render . go
+    where
+      text = PP.text . T.unpack
+      goArgs = PP.cat . PP.punctuate (PP.comma PP.<+> PP.empty) . toList . fmap go
+      goL = PP.brackets . goArgs
+      go = \case
+        HConstant c -> text c
+        HBool b     -> PP.text $ show b
+        HInt n      -> PP.int n
+        HVar{..}    ->
+          let prefix = case (hVarType, hVarRun) of
+                         (Tag, LeftRun)    -> "TL"
+                         (Tag, RightRun)   -> "TR"
+                         (Value, LeftRun)  -> "VL"
+                         (Value, RightRun) -> "VR"
+          in PP.hcat $ PP.punctuate (PP.char '.')
+             [PP.text prefix , text hVarModule , text hVarName , PP.int hVarIndex]
+        HAnd es -> PP.text "&&" PP.<+> goL es
+        HOr es -> PP.text "||" PP.<+> goL es
+        HBinary{..} -> PP.hsep [go hBinaryLhs, PP.text (show hBinaryOp), go hBinaryRhs]
+        HApp{..} ->
+          let name = case hAppMFun of
+                       Nothing -> PP.text "unnamed"
+                       Just n  -> text n
+          in name PP.<> PP.parens (goArgs hAppArgs)
+        HNot e -> PP.char '!' PP.<+> go e
+        KVar{..} ->
+          let args =
+                toList $
+                (\(v,e) -> PP.brackets $ PP.hsep [ go v , PP.text ":=" , go e]) <$>
+                hKVarSubs
+          in PP.hcat [ PP.char '$'
+                     , PP.text "inv"
+                     , PP.int hKVarId
+                     , PP.hcat args
+                     ]
 
 
 instance FT.Fixpoint HornType where
@@ -77,3 +124,27 @@ instance FT.Fixpoint HornType where
        toFix WellFormed    = PP.text "wellformed"
 
 instance NFData HornType
+
+pattern HVar0 :: Id -> Id -> HornVarType -> HornVarRun -> HornExpr
+pattern HVar0 v m t r =
+  HVar { hVarName   = v
+       , hVarModule = m
+       , hVarIndex  = 0
+       , hVarType   = t
+       , hVarRun    = r
+       }
+
+pattern HVarVL0 :: Id -> Id -> HornExpr
+pattern HVarVL0 v m = HVar0 v m Value LeftRun
+
+pattern HVarVR0 :: Id -> Id -> HornExpr
+pattern HVarVR0 v m = HVar0 v m Value RightRun
+
+pattern HVarTL0 :: Id -> Id -> HornExpr
+pattern HVarTL0 v m = HVar0 v m Tag LeftRun
+
+pattern HVarTR0 :: Id -> Id -> HornExpr
+pattern HVarTR0 v m = HVar0 v m Tag RightRun
+
+pattern HVarT0 :: Id -> Id -> HornVarRun -> HornExpr
+pattern HVarT0 v m r = HVar0 v m Tag r

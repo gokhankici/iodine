@@ -9,7 +9,7 @@ module Iodine.Language.AnnotationParser
 where
 
 import           Iodine.Language.Annotation
-import           Iodine.Language.Types
+import           Iodine.Types
 
 import           Data.Aeson
 import           Data.Aeson.Types

@@ -14,7 +14,7 @@ where
 
 import           Iodine.Language.IRParser       ( ParsedIR )
 import           Iodine.Language.IR
-import           Iodine.Language.Types
+import           Iodine.Types
 import           Iodine.Utils
 
 import           Control.Lens

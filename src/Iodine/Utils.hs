@@ -1,6 +1,8 @@
 module Iodine.Utils where
 
-import           Iodine.Language.Types
+import           Control.Applicative
+import           Control.Lens
+import           Iodine.Types
 import           Data.Foldable
 import qualified Data.HashSet as HS
 
@@ -18,3 +20,26 @@ intersects s1 s2 = go (HS.toList s1)
 
 not_supported :: a
 not_supported = error "not supported"
+
+infixl 9 ||>
+(||>) :: Applicative f => f (L a) -> f a -> f (L a)
+(||>) fas fa = (|>) <$> fas <*> fa
+
+infixl 9 <||>
+(<||>) :: Applicative f => f (L a) -> f (L a) -> f (L a)
+(<||>) = liftA2 (<>)
+
+(|:>) :: (Snoc s s a a, Monoid s) => a -> a -> s
+(|:>) a1 a2 = mempty |> a1 |> a2
+
+uncurry2 :: (a -> b -> c) -> (a, b) -> c
+uncurry2 f (a, b) = f a b
+
+uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
+uncurry3 f (a, b, c) = f a b c
+
+curry2 :: ((a, b) -> c) -> (a -> b -> c)
+curry2 f a b = f (a, b)
+
+curry3 ::((a, b, c) -> d) -> (a -> b -> c -> d)
+curry3 f a b c = f (a, b, c)

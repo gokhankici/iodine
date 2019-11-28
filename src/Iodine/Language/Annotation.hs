@@ -1,22 +1,22 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DeriveFoldable    #-}
 {-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE StrictData        #-}
 
-module Iodine.Language.Annotation
-  ( Annotation(..)
-  , Qualifier(..)
-  , AnnotationFile(..)
-  )
-where
+module Iodine.Language.Annotation where
 
 import           GHC.Generics
-import           Iodine.Language.Types
+import           Iodine.Types
 
 data Annotation a =
-    Source       Id a
-  | Sink         Id a
+    Source       { getSourceVar   :: Id
+                 , annotationData :: a
+                 }
+  | Sink         { getSourceVar   :: Id
+                 , annotationData :: a
+                 }
   | Sanitize     (L Id) a
   | SanitizeMod  { annotationModuleName :: Id
                  , annotationVarName    :: Id
@@ -48,3 +48,6 @@ data AnnotationFile a =
                  , afTopModule   :: Id
                  }
   deriving (Generic, Show, Functor, Foldable, Traversable)
+
+isSource :: Annotation a -> Bool
+isSource = \case Source{..} -> True; _ -> False

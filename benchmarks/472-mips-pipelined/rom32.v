@@ -7,7 +7,7 @@
 module rom32(address, data_out);
 
   // @annot{sanitize_glob(address)}
-  // @annot{taint_source(data_out)}
+  // @annot{taint_source(address)}
   // @annot{taint_sink(data_out)}
 
    input  [31:0] address;

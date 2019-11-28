@@ -8,20 +8,16 @@ module Iodine.Transform.VCGen
   ( vcgen
   , getVariables
   , VCGenOutput
-  , VCGenError(..)
   )
 where
 
 import           Iodine.Language.Annotation
 import           Iodine.Language.IR
-import           Iodine.Language.Types
 import           Iodine.Transform.Horn
-import           Iodine.Transform.SSA           ( SSAIR
-                                                , SSAOutput
-                                                )
+import           Iodine.Transform.SSA (SSAIR , SSAOutput)
+import           Iodine.Types
 import           Iodine.Utils
 
-import           Control.Applicative
 import           Control.Lens
 import           Control.Monad
 import           Data.Foldable
@@ -36,8 +32,9 @@ import           Polysemy.Reader
 import           Polysemy.State
 import           Polysemy.Trace
 import           Text.Printf
-import           Text.Read                      ( readEither )
+import           Text.Read (readEither)
 
+import qualified Debug.Trace as DT
 -- -----------------------------------------------------------------------------
 -- vcgen state
 -- -----------------------------------------------------------------------------
@@ -189,8 +186,8 @@ next :: FDS r => S -> Sem r (Horn ())
 next stmt = do
   Module {..} <- asks (^. currentModule)
   nextVars    <- (IM.! stmtId) <$> asks getNextVars
-  equalities  <- foldl' (ae moduleName nextVars) mempty
-    <$> asks (^. currentAlwaysEqs)
+  equalities  <- foldl' (alwaysEqualEqualities moduleName nextVars) mempty <$>
+                 asks (^. currentAlwaysEqs)
   trace $ show ("equalities" :: String, equalities)
   let subs = toSubs moduleName nextVars
   return $ Horn { hornBody   = HAnd $ (KVar stmtId mempty |:> tr) <> equalities
@@ -202,15 +199,15 @@ next stmt = do
  where
   stmtId = stmtData stmt
   tr     = transitionRelation stmt
-  ae m nvs exprs v =
-    let exprs' = exprs |> HBinary HEquals
-                                  (HVar v m 0 Value LeftRun)
-                                  (HVar v m 0 Value RightRun)
-    in  case HM.lookup v nvs of
-          Just n -> exprs' |> HBinary HEquals
-                                      (HVar v m n Value LeftRun)
-                                      (HVar v m n Value RightRun)
-          Nothing -> exprs'
+  alwaysEqualEqualities m nvs exprs v =
+    let exprs' =
+          exprs |>
+          HBinary HEquals (HVar v m 0 Value LeftRun) (HVar v m 0 Value RightRun) |>
+          HBinary HIff (HVar v m 0 Tag LeftRun) (HVar v m 0 Tag RightRun)
+    in case HM.lookup v nvs of
+         Just n -> exprs' |>
+                   HBinary HEquals (HVar v m n Value LeftRun) (HVar v m n Value RightRun)
+         Nothing -> exprs'
 
 transitionRelation :: S -> HornExpr
 transitionRelation s =
@@ -224,7 +221,13 @@ transitionRelation' conds r = \case
   Assignment {..} ->
     HAnd $
     HBinary HEquals (val assignmentLhs) (val assignmentRhs) |:>
-    HBinary HIff (tag assignmentLhs) (tagWithCond conds assignmentRhs)
+    let result = HBinary HIff (tag assignmentLhs) (tagWithCond conds assignmentRhs)
+    in case r of
+         LeftRun ->
+           dt_trace
+           (printf "%s <- %s" (show $ tag assignmentLhs) (show $ tagWithCond conds assignmentRhs))
+           result
+         RightRun -> result
   IfStmt {..} ->
     let not_c = HBinary HEquals (val ifStmtCondition) (HInt 0)
         conds' = ifStmtCondition <| conds
@@ -416,22 +419,11 @@ type VCGenOutput = Horns
 newtype NextVars = NextVars { getNextVars :: IM.IntMap (HM.HashMap Id Int) }
 type AF = AnnotationFile ()
 
-type G r = Members '[Reader AF, PE.Error VCGenError, Trace] r
+type G r = Members '[Reader AF, PE.Error IodineException, Trace] r
 
 type FD r = (G r, Members '[Reader NextVars] r)
 type FDM r = (G r, Members '[Reader ModuleSt, Reader NextVars] r)
 type FDS r = (G r, Members '[Reader ModuleSt, Reader StmtSt, Reader NextVars] r)
-
-infixl 9 ||>
-(||>) :: Applicative f => f (L a) -> f a -> f (L a)
-(||>) fas fa = (|>) <$> fas <*> fa
-
-infixl 9 <||>
-(<||>) :: Applicative f => f (L a) -> f (L a) -> f (L a)
-(<||>) = liftA2 (<>)
-
-(|:>) :: (Snoc s s a a, Monoid s) => a -> a -> s
-(|:>) a1 a2 = mempty |> a1 |> a2
 
 withStmt :: FDM r => S -> Sem (Reader StmtSt ': r) a -> Sem r a
 withStmt s act = do
@@ -464,15 +456,6 @@ computeStmtSt stmt = do
     & fmap fst
   where vs = getVariables stmt
 
--- unsetAnnotations :: FD r => Sem r ()
--- unsetAnnotations = do
---   modify $ currentVariables .~ mempty
---   modify $ currentSources .~ mempty
---   modify $ currentSinks .~ mempty
---   modify $ currentInitEqs .~ mempty
---   modify $ currentAlwaysEqs .~ mempty
---   modify $ currentAssertEqs .~ mempty
-
 getUpdatedVariables :: Stmt a -> Ids
 getUpdatedVariables = \case
   Block {..}          -> mfold getUpdatedVariables blockStmts
@@ -496,10 +479,8 @@ toSubs m = HM.foldlWithKey' go mempty
 -- other stuff
 -- -----------------------------------------------------------------------------
 
-newtype VCGenError = VCGenError String
-                     deriving (Show)
-
 throw :: G r => String -> Sem r a
-throw = PE.throw . VCGenError
+throw = PE.throw . IE VCGen
 
-
+dt_trace :: String -> a -> a
+dt_trace = DT.trace

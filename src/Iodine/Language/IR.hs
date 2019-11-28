@@ -19,7 +19,7 @@ module Iodine.Language.IR
   )
 where
 
-import           Iodine.Language.Types
+import           Iodine.Types
 import           Iodine.Utils
 
 import           Data.Foldable

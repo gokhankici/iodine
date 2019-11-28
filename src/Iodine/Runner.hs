@@ -6,18 +6,17 @@ module Iodine.Runner ( run
                      , main
                      ) where
 
-import           Control.Monad
-import qualified Data.ByteString.Lazy             as B
-import           Data.Function
-import qualified Data.Text                        as T
 import           Iodine.IodineArgs
 import           Iodine.Language.AnnotationParser
 import           Iodine.Language.IRParser
 import           Iodine.Pipeline
-import           Iodine.Transform.SanityCheck     (SanityCheckError)
-import           Iodine.Transform.VCGen           (VCGenError)
-import           Iodine.Transform.Query           (QueryError)
 import           Iodine.Transform.Fixpoint           (printSolution)
+import           Iodine.Types
+
+import           Control.Monad
+import qualified Data.ByteString.Lazy             as B
+import           Data.Function
+import qualified Data.Text                        as T
 import qualified Language.Fixpoint.Solver         as F
 import qualified Language.Fixpoint.Types          as FT
 import qualified Language.Fixpoint.Types.Config as FC
@@ -116,9 +115,8 @@ checkIR IodineArgs{..}
       irFileContents <- readFile fileName
       putStrLn irFileContents
       result <- parse (fileName, irFileContents)
-        & mapError PE
-        & errorToIOFinal @E
-        & runFinal
+                & errorToIOFinal
+                & runFinal
       case result of
         Right parsedIR -> forM_ parsedIR print >> return True
         Left e         -> errorHandle e
@@ -126,14 +124,14 @@ checkIR IodineArgs{..}
       irFileContents <- readFile fileName
       annotFileContents <- B.readFile annotFile
       mFInfo <- pipeline (T.pack moduleName) (parse (fileName, irFileContents)) (return $ parseAnnotations annotFileContents)
-        & mapErrors
         & traceToIO
+        & errorToIOFinal
         & embedToFinal
         & runFinal
       case mFInfo of
         Right finfo -> do
           result <- F.solve config finfo
-          let safe = FT.isSafe result 
+          let safe = FT.isSafe result
           unless safe $ printSolution $ FT.resSolution result
           return safe
         Left e      -> errorHandle e
@@ -150,26 +148,6 @@ checkIR IodineArgs{..}
 -- Common Functions
 -- -----------------------------------------------------------------------------
 
-mapErrors :: Member (Final IO) r
-          => Sem (Error IRParseError ':
-                  Error SanityCheckError ':
-                  Error VCGenError ':
-                  Error QueryError ':
-                  Error E ':
-                  r) a
-          -> Sem r (Either E a)
-mapErrors act =
-  act
-  & mapError PE & mapError SE & mapError VE & mapError QE
-  & errorToIOFinal @E
+errorHandle :: IodineException -> IO Bool
+errorHandle e = hPutStrLn stderr (show e) >> return False
 
-data E = PE IRParseError
-       | SE SanityCheckError
-       | VE VCGenError
-       | QE QueryError
-
-errorHandle :: E -> IO Bool
-errorHandle (PE e) = renderError e >>= hPutStrLn stderr >> return False
-errorHandle (SE e) = hPrint stderr e >> return False
-errorHandle (VE e) = hPrint stderr e >> return False
-errorHandle (QE e) = hPrint stderr e >> return False

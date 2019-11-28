@@ -3,19 +3,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Iodine.Transform.SanityCheck
-  ( sanityCheck
-  , SanityCheckError(..)
-  )
-where
+module Iodine.Transform.SanityCheck (sanityCheck) where
 
-import Iodine.Language.Types
 import Iodine.Language.IR
 import Iodine.Language.IRParser (ParsedIR)
 import Iodine.Language.Annotation
+import Iodine.Types
 import Iodine.Utils
 
-import qualified Control.Exception as E
 import           Control.Monad
 import           Data.Foldable
 import           Data.Function
@@ -23,7 +18,7 @@ import qualified Data.HashSet as HS
 import           Data.Maybe
 import qualified Data.Sequence as SQ
 import           Polysemy
-import           Polysemy.Error
+import qualified Polysemy.Error as PE
 import           Polysemy.Reader
 import           Polysemy.State
 import           Text.Printf
@@ -36,7 +31,7 @@ data UniqueUpdateCheck m a where
 
 makeSem ''UniqueUpdateCheck
 
-type SC r = Members '[ Error SanityCheckError     -- sanity error
+type SC r = Members '[ PE.Error IodineException   -- sanity error
                      , Reader ParsedIR            -- parsed IR
                      , Reader (AnnotationFile ()) -- parsed annotation file
                      ] r
@@ -85,7 +80,7 @@ checkAssignmentsAreToLocalVariables =
     moduleName <- getModuleName
     when (varModuleName assignmentLhs /= moduleName) $
       let stmt = Assignment{ stmtData = (), .. }
-      in ssaThrow $ printf "%s :: lhs is not from the module %s" (show stmt) moduleName
+      in throw $ printf "%s :: lhs is not from the module %s" (show stmt) moduleName
 
 handleAssignment :: (AssignmentType -> Expr a -> Expr a -> Sem r ())
                  -> Stmt a
@@ -114,11 +109,11 @@ checkSameAssignmentType =
     case mAB of
       Nothing ->
         when (assignmentType /= Continuous) $
-        ssaThrow $ printf "%s :: Assignments outside always blocks should be continous" (show stmt)
+        throw $ printf "%s :: Assignments outside always blocks should be continous" (show stmt)
       Just ab@AlwaysBlock{..} ->
-        let err  = ssaThrow $ printf
+        let err  = throw $ printf
                    "%s does not match the event in %s" (show stmt) blockStr
-            err2 = ssaThrow $ printf
+            err2 = throw $ printf
                    "continuous assignment should not appear in an always block %s" blockStr
             blockStr = let maxLength = 200
                            str = show ab
@@ -147,7 +142,6 @@ checkUniqueUpdateLocationOfVariables =
     asgnVars IfStmt{..}         = asgnVars ifStmtThen <> asgnVars ifStmtElse
     asgnVars Assignment{..}     = HS.singleton (varName assignmentLhs, varModuleName assignmentLhs)
     asgnVars ModuleInstance{..} = not_supported
-    -- asgnVars PhiNode{..}        = error "phinode encountered in sanity check"
     asgnVars Skip{..}           = mempty
 
 runUniqueUpdateCheck :: SC r => Sem (UniqueUpdateCheck ': r) a -> Sem (State S1 ': r) a
@@ -157,14 +151,7 @@ runUniqueUpdateCheck = reinterpret $ \case
     modify (HS.union assignments)
     newAssignments <- get @S1
     when (HS.size oldAssignments + HS.size assignments /= HS.size newAssignments) $
-      ssaThrow $ printf "found multiple assignments to variables from %s" (show $ toList assignments)
+      throw $ printf "found multiple assignments to variables from %s" (show $ toList assignments)
 
-newtype SanityCheckError = SanityCheckError {eMsg :: String}
-
-instance E.Exception SanityCheckError
-
-instance Show SanityCheckError where
-  show SanityCheckError{..} = eMsg
-
-ssaThrow :: Member (Error SanityCheckError) r => String -> Sem r a
-ssaThrow = throw . SanityCheckError
+throw :: Member (PE.Error IodineException) r => String -> Sem r a
+throw = PE.throw . IE SanityCheck

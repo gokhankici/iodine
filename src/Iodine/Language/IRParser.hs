@@ -1,17 +1,10 @@
-{-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Iodine.Language.IRParser
-  ( parse
-  , renderError
-  , IRParseError (..)
-  , ParsedIR
-  )
-where
+module Iodine.Language.IRParser (parse , ParsedIR) where
 
 import           Iodine.Language.IR
-import           Iodine.Language.Types
+import           Iodine.Types
 
 import           Control.Monad (void)
 import           Data.Char (isLetter, isDigit)
@@ -19,7 +12,6 @@ import           Data.Foldable (toList)
 import           Data.Hashable
 import qualified Data.HashMap.Strict        as HM
 import qualified Data.Text                  as T
-import           Data.Typeable
 import           Text.Megaparsec            ((<|>))
 import qualified Text.Megaparsec            as MP
 import qualified Text.Megaparsec.Char       as MPC
@@ -31,13 +23,13 @@ import           Polysemy.Error
 type Parser = MP.Parsec MP.SourcePos String
 type ParsedIR = L (Module ())
 
-parse :: Member (Error IRParseError) r => (FilePath, String) -> Sem r ParsedIR
+parse :: Member (Error IodineException) r => (FilePath, String) -> Sem r ParsedIR
 parse (fp, s) = parseWith (many parseModule)
   where
     parseWith p =
       case MP.runParser (whole p) fp s of
         Right e     -> return e
-        Left bundle -> throw (IRParseError (myParseErrorPretty bundle))
+        Left bundle -> throw (IE IRParser (myParseErrorPretty bundle))
 
 --------------------------------------------------------------------------------
 -- | IR Parser
@@ -215,12 +207,6 @@ identifier = lexeme (p >>= check)
 --------------------------------------------------------------------------------
 -- | Error handling
 --------------------------------------------------------------------------------
-
-renderError :: IRParseError -> IO String
-renderError = return . eMsg
-
-newtype IRParseError = IRParseError {eMsg :: String}
-                     deriving (Show, Typeable)
 
 newtype SP = SP MP.SourcePos
            deriving (Eq, Ord)
