@@ -224,7 +224,7 @@ transitionRelation' conds r = \case
   Assignment {..} ->
     HAnd $
     HBinary HEquals (val assignmentLhs) (val assignmentRhs) |:>
-    HBinary HEquals (tag assignmentLhs) (tagWithCond conds assignmentRhs)
+    HBinary HIff (tag assignmentLhs) (tagWithCond conds assignmentRhs)
   IfStmt {..} ->
     let not_c = HBinary HEquals (val ifStmtCondition) (HInt 0)
         conds' = ifStmtCondition <| conds

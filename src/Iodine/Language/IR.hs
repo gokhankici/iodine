@@ -31,6 +31,7 @@ import qualified Data.Text             as T
 import           GHC.Generics          hiding (moduleName)
 import           Text.Printf
 import           Data.Hashable
+import qualified Text.PrettyPrint      as PP
 
 data Variable =
     Wire {variableName :: Id}
@@ -161,16 +162,50 @@ instance Show a => Show (Expr a) where
   show (Select v is _)  = printf "%s%s" (show v) (show $ toList is)
 
 instance Show a => Show (Stmt a) where
-  show (Block ss _) = printf "{ %s }" (intercalate "; " (toList $ show <$> ss))
-  show (Assignment t l r _) = printf "%s %s %s" (show l) op (show r)
-                              where op = case t of
-                                           Blocking    -> "="
-                                           NonBlocking -> "<="
-                                           Continuous  -> ":="
-  show (IfStmt c t e _) = printf "if( %s ){ %s }else{ %s }" (show c) (show t) (show e)
-  show (ModuleInstance t n ps _) = printf "%s %s(%s)" t n (intercalate ", " args)
-                                   where args = (\(k,e) -> printf "%s = %s" k (show e)) <$> HM.toList ps
-  show (Skip _) = printf "skip"
+  show = PP.render . go
+    where
+      text = PP.text . T.unpack
+      nest = PP.nest 2
+      go (Block ss a) =
+        case ss of
+          SQ.Empty          -> go (Skip a)
+          s SQ.:<| SQ.Empty -> go s
+          _                 -> PP.cat [ PP.lbrace
+                                      , nest (vcatSeq go ss)
+                                      , PP.rbrace
+                                      ]
+      go (Assignment t l r _) =
+        PP.text (show l) PP.<+>
+        PP.text op PP.<+>
+        PP.text (show r) PP.<>
+        PP.semi
+        where op = case t of
+                     Blocking    -> "="
+                     NonBlocking -> "<="
+                     Continuous  -> ":="
+      go (IfStmt c t e _) =
+        PP.cat [ PP.text "if" PP.<+> PP.parens (PP.text $ show c) PP.<+> PP.lbrace
+               , nest $ go t
+               , PP.rbrace PP.<+> PP.text "else" PP.<+> PP.lbrace
+               , nest $ go e
+               , PP.rbrace
+               ]
+      go (ModuleInstance t n ps _) =
+        -- printf "%s %s(%s)" t n (intercalate ", " args)
+        text t PP.<+>
+        text n PP.<>
+        PP.parens (PP.hcat $ PP.punctuate (PP.comma PP.<+> PP.empty) args)
+        where
+          args =
+            HM.foldrWithKey
+            (\v e acc -> (text v PP.<+> PP.equals PP.<+> PP.text (show e)) : acc)
+            []
+            ps
+      go (Skip _) = PP.text "skip"
+
+vcatSeq :: (a -> PP.Doc) -> L a -> PP.Doc
+vcatSeq f = foldl' (\d a -> d PP.$+$ f a) PP.empty
+
 
 instance Show a => Show (Event a) where
   show (PosEdge e _) = printf "@(posedge %s)" (show e)

@@ -134,7 +134,7 @@ convertExpr (HConstant c) = do
   globals <- gets (^. globalConstantLiterals)
   unless (FT.memberSEnv sym globals)
     $ modify (globalConstantLiterals %~ FT.insertSEnv sym FT.intSort)
-  return $ FT.ESym $ FT.SL constName
+  return $ FT.ECon $ FT.L constName FT.intSort
  where
   constName = "const_" <> c
   sym       = symbol constName
