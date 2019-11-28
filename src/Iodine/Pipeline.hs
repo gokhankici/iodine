@@ -14,6 +14,7 @@ import           Iodine.Language.IRParser       ( ParsedIR
 import           Iodine.Language.AnnotationParser
                                                 ( AnnotationFile(..) )
 import           Iodine.Language.Types
+import           Iodine.Transform.Merge
 import           Iodine.Transform.SSA
 import           Iodine.Transform.SanityCheck
 import           Iodine.Transform.VCGen
@@ -41,7 +42,10 @@ pipeline topmodule irReader afReader = do
   af <- fixAF <$> afReader
   (do
       sanityCheck & runReader ir
-      ssaOutput@(ssaIr, _) <- ssa ir
+      let mergedIR = merge ir
+      traverse_ (trace . show) ir
+      traverse_ (trace . show) mergedIR
+      ssaOutput@(ssaIr, _) <- ssa mergedIR
       traverse_ (trace . show) ssaIr
       vcgen ssaOutput >>= constructQuery ssaIr
     )

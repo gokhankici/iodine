@@ -15,6 +15,7 @@ where
 import           Iodine.Language.IRParser       ( ParsedIR )
 import           Iodine.Language.IR
 import           Iodine.Language.Types
+import           Iodine.Utils
 
 import           Control.Lens
 import qualified Data.Text                     as T
@@ -87,10 +88,7 @@ ssaStmt IfStmt {..} = do
   cond' <- ssaExpr ifStmtCondition
   (then', else') <- ssaBranches ifStmtThen ifStmtElse
   IfStmt cond' then' else' <$> freshId StmtId
-ssaStmt ModuleInstance {..} = do
-  ports' <- traverse ssaExpr moduleInstancePorts
-  n      <- freshId StmtId
-  return ModuleInstance { moduleInstancePorts = ports', stmtData = n, .. }
+ssaStmt ModuleInstance {..} = not_supported
 ssaStmt Skip {..}    = Skip <$> freshId StmtId
 
 

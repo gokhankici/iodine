@@ -19,6 +19,7 @@ import           Iodine.Transform.Horn
 import           Iodine.Transform.SSA           ( SSAIR
                                                 , SSAOutput
                                                 )
+import           Iodine.Utils
 
 import           Control.Applicative
 import           Control.Lens
@@ -213,39 +214,36 @@ next stmt = do
 
 transitionRelation :: S -> HornExpr
 transitionRelation s =
-  HAnd $ transitionRelation' LeftRun s |:> transitionRelation' RightRun s
+  HAnd $ transitionRelation' mempty LeftRun s |:> transitionRelation' mempty RightRun s
 
-transitionRelation' :: HornVarRun -> S -> HornExpr
-transitionRelation' r = \case
-  Block {..} -> HAnd $ transitionRelation' r <$> blockStmts
+type PathCond = L (Expr Int)
+
+transitionRelation' :: PathCond -> HornVarRun -> S -> HornExpr
+transitionRelation' conds r = \case
+  Block {..} -> HAnd $ transitionRelation' conds r <$> blockStmts
   Assignment {..} ->
-    HAnd $ HBinary HEquals (valE assignmentLhs) (valE assignmentRhs) |:> HBinary
-      HEquals
-      (tagE assignmentLhs)
-      (tagE assignmentRhs)
+    HAnd $
+    HBinary HEquals (val assignmentLhs) (val assignmentRhs) |:>
+    HBinary HEquals (tag assignmentLhs) (tagWithCond conds assignmentRhs)
   IfStmt {..} ->
-    let not_c = HBinary HEquals (valE ifStmtCondition) (HInt 0)
-        t = transitionRelation' r ifStmtThen
-        e = transitionRelation' r ifStmtElse
+    let not_c = HBinary HEquals (val ifStmtCondition) (HInt 0)
+        conds' = ifStmtCondition <| conds
+        t = transitionRelation' conds' r ifStmtThen
+        e = transitionRelation' conds' r ifStmtElse
     in  HOr $
         HAnd (HNot not_c |:> t) |:>
         HAnd (not_c |:> e)
-  ModuleInstance {..} -> error "submodules are not supported"
-  -- PhiNode {..} ->
-  --   let lhsValue = valE phiLhs
-  --       lhsTag   = tagE phiLhs
-  --   in  HAnd $ HOr (HBinary HEquals lhsValue . valE <$> phiRhs) |:> HOr
-  --         (HBinary HEquals lhsTag . tagE <$> phiRhs)
+  ModuleInstance {..} -> not_supported
   Skip {..} -> HAnd mempty
  where
   ufVal :: Maybe Id -> L (Expr Int) -> HornExpr
-  ufVal fname = HApp fname . fmap valE
+  ufVal fname = HApp fname . fmap val
 
   ufTag :: L (Expr Int) -> HornExpr
-  ufTag = HOr . fmap tagE
+  ufTag = HOr . fmap tag
 
-  valE :: Expr Int -> HornExpr
-  valE = \case
+  val :: Expr Int -> HornExpr
+  val = \case
     Constant {..} -> parseVerilogInt constantValue
     Variable {..} -> HVar { hVarName   = varName
                           , hVarModule = varModuleName
@@ -255,11 +253,17 @@ transitionRelation' r = \case
                           }
     UF {..}     -> ufVal (Just ufName) ufArgs
     IfExpr {..} -> ufVal Nothing (ifExprCondition |:> ifExprThen |> ifExprElse)
-    Str {..}    -> error "Strings are not handled (yet)"
+    Str {..}    -> not_supported
     Select {..} -> ufVal Nothing (selectVar <| selectIndices)
 
-  tagE :: Expr Int -> HornExpr
-  tagE = \case
+  tagWithCond :: PathCond -> Expr Int -> HornExpr
+  tagWithCond es e =
+    case es of
+      SQ.Empty -> tag e
+      _        -> ufTag (es |> e)
+
+  tag :: Expr Int -> HornExpr
+  tag = \case
     Constant {..} -> HBool False
     Variable {..} -> HVar { hVarName   = varName
                           , hVarModule = varModuleName
@@ -469,30 +473,12 @@ computeStmtSt stmt = do
 --   modify $ currentAlwaysEqs .~ mempty
 --   modify $ currentAssertEqs .~ mempty
 
-getVariables :: Stmt a -> Ids
-getVariables = \case
-  Block {..}      -> mfold getVariables blockStmts
-  Assignment {..} -> mfold go [assignmentLhs, assignmentRhs]
-  IfStmt {..} ->
-    go ifStmtCondition <> mfold getVariables [ifStmtThen, ifStmtElse]
-  ModuleInstance {..} -> mempty
-  -- PhiNode {..}        -> mempty
-  Skip {..}           -> mempty
- where
-  go :: Expr a -> Ids
-  go Variable {..} = HS.singleton varName
-  go Constant {..} = mempty
-  go UF {..}       = mfold go ufArgs
-  go IfExpr {..}   = mfold go [ifExprCondition, ifExprThen, ifExprElse]
-  go Str {..}      = mempty
-  go Select {..}   = go selectVar <> mfold go selectIndices
-
 getUpdatedVariables :: Stmt a -> Ids
 getUpdatedVariables = \case
   Block {..}          -> mfold getUpdatedVariables blockStmts
   Assignment {..}     -> HS.singleton $ varName assignmentLhs
   IfStmt {..}         -> mfold getVariables [ifStmtThen, ifStmtElse]
-  ModuleInstance {..} -> mempty
+  ModuleInstance {..} -> not_supported
   -- PhiNode {..}        -> mempty
   Skip {..}           -> mempty
 
@@ -516,15 +502,4 @@ newtype VCGenError = VCGenError String
 throw :: G r => String -> Sem r a
 throw = PE.throw . VCGenError
 
-combine :: (Monoid m, Traversable t) => (a -> Sem r m) -> t a -> Sem r m
-combine act as = foldl' (<>) mempty <$> traverse act as
-
-mfold :: (Foldable f, Monoid m) => (a -> m) -> f a -> m
-mfold f = foldl' (\ms a -> f a <> ms) mempty
-
-intersects :: HS.HashSet Id -> HS.HashSet Id -> Bool
-intersects s1 s2 = go (HS.toList s1)
- where
-  go []       = False
-  go (a : as) = HS.member a s2 || go as
 

@@ -13,6 +13,7 @@ import Iodine.Language.Types
 import Iodine.Language.IR
 import Iodine.Language.IRParser (ParsedIR)
 import Iodine.Language.Annotation
+import Iodine.Utils
 
 import qualified Control.Exception as E
 import           Control.Monad
@@ -92,11 +93,11 @@ handleAssignment :: (AssignmentType -> Expr a -> Expr a -> Sem r ())
 handleAssignment handler = go
   where
     gos = traverse_ go
-      
+
     go Block{..}          = gos blockStmts
     go IfStmt{..}         = gos (ifStmtThen SQ.<| ifStmtElse SQ.<| SQ.empty)
     go Assignment{..}     = handler assignmentType assignmentLhs assignmentRhs
-    go ModuleInstance{..} = pure ()
+    go ModuleInstance{..} = not_supported
     -- go PhiNode{..}        = error "phinode encountered in sanity check"
     go Skip{..}           = pure ()
 
@@ -133,6 +134,7 @@ checkSameAssignmentType =
 
 -- -----------------------------------------------------------------------------
 checkUniqueUpdateLocationOfVariables :: FD r => Sem r ()
+--
 -- -----------------------------------------------------------------------------
 checkUniqueUpdateLocationOfVariables =
   checkHelper (checkPrevious . asgnVars)
@@ -140,11 +142,11 @@ checkUniqueUpdateLocationOfVariables =
   & evalState HS.empty
 
   where
-    asgnVars :: Show a => Stmt a -> S1
+    asgnVars :: Stmt a -> S1
     asgnVars Block{..}          = foldMap asgnVars blockStmts
     asgnVars IfStmt{..}         = asgnVars ifStmtThen <> asgnVars ifStmtElse
     asgnVars Assignment{..}     = HS.singleton (varName assignmentLhs, varModuleName assignmentLhs)
-    asgnVars ModuleInstance{..} = mempty
+    asgnVars ModuleInstance{..} = not_supported
     -- asgnVars PhiNode{..}        = error "phinode encountered in sanity check"
     asgnVars Skip{..}           = mempty
 

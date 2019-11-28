@@ -20,6 +20,21 @@ ghc-options:
 - -O2
 - -flate-specialise
 - -fspecialise-aggressively
+- -Werror
+- -O2
+- -fdefer-type-errors
+- -fwarn-incomplete-patterns
+- -fwarn-incomplete-record-updates
+- -fwarn-incomplete-uni-patterns
+- -fwarn-missing-signatures
+- -fwarn-name-shadowing
+- -fwarn-orphans
+- -fwarn-overlapping-patterns
+- -fwarn-redundant-constraints
+- -fwarn-tabs
+- -fwarn-unused-binds
+- -fwarn-unused-imports
+- -fwarn-unused-matches
 
 default-extensions:
 - DataKinds
@@ -41,8 +56,11 @@ dependencies:
 - containers
 - deepseq
 - directory
+- fgl
 - filepath
 - hashable
+- hspec
+- hspec-core
 - lens
 - liquid-fixpoint
 - megaparsec
@@ -55,53 +73,29 @@ dependencies:
 - unordered-containers
 
 library:
-  source-dirs:           src
+  source-dirs:     src
   exposed-modules:
   - Iodine.Runner
   - Iodine.IodineArgs
-  ghc-options:
-  - -Werror
-  - -O2
-  - -fdefer-type-errors
-  - -fwarn-incomplete-patterns
-  - -fwarn-incomplete-record-updates
-  - -fwarn-incomplete-uni-patterns
-  - -fwarn-missing-signatures
-  - -fwarn-name-shadowing
-  - -fwarn-orphans
-  - -fwarn-overlapping-patterns
-  - -fwarn-redundant-constraints
-  - -fwarn-tabs
-  - -fwarn-unused-binds
-  - -fwarn-unused-imports
-  - -fwarn-unused-matches
 
 executables:
   iodine:
-    main:                Main.hs
-    source-dirs:         app
+    main:          Main.hs
+    source-dirs:   app
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wall
-    - -Werror
-    - -O2
     dependencies:
     - iodine
 
 tests:
   iodine-test:
-    main:                Test.hs
-    source-dirs:         test
+    main:          Test.hs
+    source-dirs:   test
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wall
-    - -Werror
-    - -O2
     dependencies:
     - iodine
-    - hspec
-    - hspec-core

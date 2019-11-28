@@ -15,18 +15,22 @@ module Iodine.Language.IR
   , Variable (..)
   , Event (..)
   , AlwaysBlock (..)
-  -- , mapExpr, mapStmt
+  , getVariables
   )
 where
 
 import           Iodine.Language.Types
+import           Iodine.Utils
 
-import           Data.Foldable         (toList)
+import           Data.Foldable
+import qualified Data.HashSet          as HS
 import qualified Data.HashMap.Strict   as HM
 import           Data.List             (intercalate)
+import qualified Data.Sequence         as SQ
 import qualified Data.Text             as T
 import           GHC.Generics          hiding (moduleName)
 import           Text.Printf
+import           Data.Hashable
 
 data Variable =
     Wire {variableName :: Id}
@@ -60,7 +64,7 @@ data Expr a =
            , selectIndices :: L (Expr a)
            , exprData      :: a
            }
-  deriving (Generic, Functor, Foldable, Traversable)
+  deriving (Eq, Generic, Functor, Foldable, Traversable)
 
 data AssignmentType = Blocking | NonBlocking | Continuous
                     deriving (Generic, Eq)
@@ -84,11 +88,6 @@ data Stmt a =
                    , moduleInstancePorts :: HM.HashMap Id (Expr a)
                    , stmtData            :: a
                    }
-  -- this is added after the SSA step
-  -- | PhiNode { phiLhs   :: Expr a
-  --           , phiRhs   :: L (Expr a)
-  --           , stmtData :: a
-  --           }
   | Skip { stmtData :: a }
   deriving (Generic, Functor, Foldable, Traversable)
 
@@ -100,7 +99,7 @@ data Event a =
             , eventData :: a
             }
   | Star { eventData :: a }
-  deriving (Generic, Functor, Foldable, Traversable)
+  deriving (Generic, Functor, Foldable, Traversable, Eq)
 
 data AlwaysBlock a =
   AlwaysBlock { abEvent :: Event a
@@ -118,6 +117,28 @@ data Module a =
          , moduleData   :: a
          }
   deriving (Generic, Functor, Foldable, Traversable)
+
+class GetVariables m where
+  -- return the name of the variables in type m
+  getVariables :: m a -> HS.HashSet Id
+
+instance GetVariables Stmt where
+  getVariables = \case
+    Block {..}          -> mfold getVariables blockStmts
+    Assignment {..}     -> mfold getVariables [assignmentLhs, assignmentRhs]
+    IfStmt {..}         -> getVariables ifStmtCondition <> mfold getVariables [ifStmtThen, ifStmtElse]
+    ModuleInstance {..} -> not_supported
+    Skip {..}           -> mempty
+
+instance GetVariables Expr where
+  getVariables = \case
+    Variable {..} -> HS.singleton varName
+    Constant {..} -> mempty
+    UF {..}       -> mfold getVariables ufArgs
+    IfExpr {..}   -> mfold getVariables [ifExprCondition, ifExprThen, ifExprElse]
+    Str {..}      -> mempty
+    Select {..}   -> mfold getVariables $ selectVar SQ.<| selectIndices
+
 
 -- -----------------------------------------------------------------------------
 -- Typeclass Instances
@@ -149,7 +170,6 @@ instance Show a => Show (Stmt a) where
   show (IfStmt c t e _) = printf "if( %s ){ %s }else{ %s }" (show c) (show t) (show e)
   show (ModuleInstance t n ps _) = printf "%s %s(%s)" t n (intercalate ", " args)
                                    where args = (\(k,e) -> printf "%s = %s" k (show e)) <$> HM.toList ps
-  -- show (PhiNode l rs _) = printf "%s = phi(%s)" (show l) (intercalate ", " (toList $ show <$> rs))
   show (Skip _) = printf "skip"
 
 instance Show a => Show (Event a) where
@@ -161,9 +181,18 @@ instance Show a => Show (AlwaysBlock a) where
   show (AlwaysBlock e s _) = printf "always %s %s" (show e) (show s)
 
 instance Show a => Show (Module a) where
-  show Module{..} = printf "module(%s, %s, %s, %s, %s)"
+  show Module{..} = printf "module(%s,\n%s,\n%s,\n%s,\n%s)"
                     moduleName
                     (show $ toList ports)
                     (show $ toList variables)
-                    (show $ toList gateStmts)
-                    (show $ toList alwaysBlocks)
+                    (intercalate "\n" $ show <$> toList gateStmts)
+                    (intercalate "\n" $ show <$> toList alwaysBlocks)
+
+instance Hashable a => Hashable (Expr a) where
+  hashWithSalt n (Variable v m a) = hashWithSalt n (v,m,a)
+  hashWithSalt _ _                = not_supported
+
+instance Hashable a => Hashable (Event a) where
+  hashWithSalt n (PosEdge e a) = hashWithSalt n (e, a)
+  hashWithSalt n (NegEdge e a) = hashWithSalt n (e, a)
+  hashWithSalt n (Star a)      = hashWithSalt n a
