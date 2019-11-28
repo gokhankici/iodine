@@ -44,7 +44,9 @@ pipeline topmodule irReader afReader = do
       sanityCheck & runReader ir
       let mergedIR = merge ir
       traverse_ (trace . show) ir
+      trace "--------------------------------------------------------------------------------"
       traverse_ (trace . show) mergedIR
+      trace "--------------------------------------------------------------------------------"
       ssaOutput@(ssaIr, _) <- ssa mergedIR
       traverse_ (trace . show) ssaIr
       vcgen ssaOutput >>= constructQuery ssaIr

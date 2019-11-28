@@ -14,7 +14,7 @@ import Iodine.Utils
 import           Control.Lens
 -- import           Control.Monad
 import           Data.Foldable
-import           Data.List             (elem)
+import           Data.List             (elem, intercalate)
 import qualified Data.IntSet           as IS
 import qualified Data.IntMap           as IM
 import qualified Data.HashMap.Strict   as HM
@@ -47,7 +47,7 @@ merge = fmap mergeModule
 mergeModule :: Module () -> Module ()
 mergeModule Module {..} =
   -- make gate statements a always* block, and merge with the rest
-  Module { alwaysBlocks = mergeAlwaysBlocks $ alwaysBlocks SQ.>< gateBlocks
+  Module { alwaysBlocks = mergeAlwaysBlocks $ alwaysBlocks <> gateBlocks
          , gateStmts    = mempty
          , ..
          }
@@ -72,7 +72,10 @@ mergeAlwaysBlocks as = HM.foldlWithKey' (\acc e ss-> acc SQ.>< mkBlocks e ss) me
 
 
 mergeAlwaysStarBlocks :: L (Stmt ()) -> L (AlwaysBlock ())
-mergeAlwaysStarBlocks stmts = makeStarBlock <$> stmtsList
+mergeAlwaysStarBlocks stmts =
+  if   G.noNodes depGraph == SQ.length stmts
+  then makeStarBlock <$> stmtsList
+  else error $ "graph size does not match up with the initial statements"
   where
     (depGraph, stmtIds) = buildDependencyGraph stmts
     components = G.components depGraph
@@ -80,10 +83,13 @@ mergeAlwaysStarBlocks stmts = makeStarBlock <$> stmtsList
     stmtsList =
       foldl'
       (\acc g ->
-         let stmtOrder =
-               if G.hasLoop g
-               then error "dependency graph has a loop"
-               else GQ.topsort g
+         let _stmtOrder = GQ.topsort g
+             stmtOrder =
+               if hasCycle g
+               then error $
+                    "star dependency graph has a loop:\n" ++
+                    intercalate "\n" ((show . (stmtIds IM.!)) <$> _stmtOrder)
+               else _stmtOrder
          in (stmtIds IM.!) <$> stmtOrder
             & SQ.fromList
             & \case
@@ -98,10 +104,7 @@ mergeAlwaysStarBlocks stmts = makeStarBlock <$> stmtsList
 -- merge the always blocks with the same non-star event after makign sure that
 -- their dependecy graph form a DAG
 mergeAlwaysEventBlocks :: Event () -> L (Stmt ()) -> AlwaysBlock ()
-mergeAlwaysEventBlocks e stmts =
-  if   G.hasLoop . fst $ buildDependencyGraph stmts
-  then error "dependency graph has a loop"
-  else AlwaysBlock e stmt' ()
+mergeAlwaysEventBlocks e stmts = AlwaysBlock e stmt' ()
   where
     stmt' =
       case stmts of
@@ -117,12 +120,12 @@ buildDependencyGraph stmts =
   traverse_ update stmts
   & runState initialState
   & run
-  & \(st, _) -> ( buildGraph (st ^. readBy) (st ^. writtenBy)
+  & \(st, _) -> ( buildGraph (st ^. readBy) (st ^. writtenBy) (st ^. stmtMap & IM.keysSet)
                 , st ^. stmtMap
                 )
 
   where
-    buildGraph readMap writeMap =
+    buildGraph readMap writeMap nodes =
       HM.foldlWithKey'
       (\g v fromIds ->
          case HM.lookup v readMap of
@@ -138,7 +141,7 @@ buildDependencyGraph stmts =
              g
              fromIds
       )
-      G.empty
+      (IS.foldr' (\n -> G.insNode (n, ())) G.empty nodes)
       writeMap
 
     -- create a new id for the given statement, and update its read & write set
@@ -181,3 +184,8 @@ append :: Monoid m => (a -> m -> m) -> a -> Maybe m -> Maybe m
 append f a = \case
   Nothing -> Just $ f a mempty
   Just m  -> Just $ f a m
+
+-- if a graph does not have a cycle, each strongly connected component of the
+-- graph should consist of a single element
+hasCycle :: DepGraph -> Bool
+hasCycle g = length (GQ.scc g) /= G.noNodes g
