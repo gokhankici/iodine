@@ -13,5 +13,21 @@
         "out"
       ]
     }
+  ],
+  "old_qualifiers": [
+    {
+      "type": "pairs",
+      "variables": [
+        "opa_r",
+        "opb_r"
+      ]
+    },
+    {
+      "type": "pairs",
+      "variables": [
+        "r1",
+        "r2"
+      ]
+    }
   ]
 }

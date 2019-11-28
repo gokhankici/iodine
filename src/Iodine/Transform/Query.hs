@@ -316,7 +316,7 @@ defaultQualifiers =
     (FT.symbol @String name)
     [ FT.QP vSymbol FT.PatNone FT.FInt
     , FT.QP (symbol "x") (FT.PatPrefix (symbol $ getVarPrefix t LeftRun) 1) s
-    , FT.QP (symbol "y") (FT.PatPrefix (symbol $ getVarPrefix t RightRun) 1) s
+    , FT.QP (symbol "y") (FT.PatPrefix (symbol $ getVarPrefix t RightRun) 2) s
     ]
     ( case t of
         Value -> FT.PAtom FT.Eq (FT.eVar @Id "x") (FT.eVar @Id "y")

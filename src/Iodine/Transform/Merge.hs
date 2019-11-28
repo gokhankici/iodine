@@ -44,9 +44,9 @@ merge :: ParsedIR -> ParsedIR
 merge = fmap mergeModule
 
 
+-- make gate statements a always* block, and merge with the rest
 mergeModule :: Module () -> Module ()
 mergeModule Module {..} =
-  -- make gate statements a always* block, and merge with the rest
   Module { alwaysBlocks = mergeAlwaysBlocks $ alwaysBlocks <> gateBlocks
          , gateStmts    = mempty
          , ..
@@ -63,24 +63,28 @@ mergeAlwaysBlocks :: L (AlwaysBlock ()) -> L (AlwaysBlock ())
 mergeAlwaysBlocks as = HM.foldlWithKey' (\acc e ss-> acc SQ.>< mkBlocks e ss) mempty eventMap
   where
     mkBlocks e stmts =
+      SQ.singleton $
       case e of
         Star{..}    -> mergeAlwaysStarBlocks stmts
-        PosEdge{..} -> SQ.singleton $ mergeAlwaysEventBlocks e stmts
-        NegEdge{..} -> SQ.singleton $ mergeAlwaysEventBlocks e stmts
+        PosEdge{..} -> mergeAlwaysEventBlocks e stmts
+        NegEdge{..} -> mergeAlwaysEventBlocks e stmts
     eventMap = foldl' updateM mempty as
     updateM m AlwaysBlock{..} = HM.alter (append (SQ.<|) abStmt) abEvent m
 
 
-mergeAlwaysStarBlocks :: L (Stmt ()) -> L (AlwaysBlock ())
+-- Merge every always* block into a single one. The statements that belong to
+-- the same connected components are ordered according to their topological
+-- sort. However, the order between connected components are random.
+mergeAlwaysStarBlocks :: L (Stmt ()) -> AlwaysBlock ()
 mergeAlwaysStarBlocks stmts =
   if   G.noNodes depGraph == SQ.length stmts
-  then makeStarBlock <$> stmtsList
+  then makeStarBlock (Block stmts' ())
   else error $ "graph size does not match up with the initial statements"
   where
     (depGraph, stmtIds) = buildDependencyGraph stmts
     components = G.components depGraph
     graphs = (\ns -> G.nfilter (`elem` ns) depGraph) <$> components
-    stmtsList =
+    stmts' =
       foldl'
       (\acc g ->
          let _stmtOrder = GQ.topsort g
@@ -92,11 +96,7 @@ mergeAlwaysStarBlocks stmts =
                else _stmtOrder
          in (stmtIds IM.!) <$> stmtOrder
             & SQ.fromList
-            & \case
-                  SQ.Empty          -> error "unreachable"
-                  s SQ.:<| SQ.Empty -> s
-                  ss                -> Block ss ()
-            & (acc SQ.|>)
+            & (acc <>)
       )
       mempty
       graphs
