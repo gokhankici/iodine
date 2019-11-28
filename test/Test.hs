@@ -135,6 +135,7 @@ simple runner testDir =
             , "merge03"
             , "merge04-1"
             , "merge04"
+            , "merge05"
             , "secverilog-01"
             ]
 
@@ -210,7 +211,6 @@ negative runner testPath = describe "negative" $ forM_ (go <$> names) runner
             , "neg-test-2"
             , "neg-test-5"
             , "tp"
-            , "neg-merge-01"
             , "neg-test-11"
             , "secverilog-neg-01"
             , "secverilog-neg-02"
