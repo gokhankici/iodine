@@ -2,9 +2,7 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Iodine.Runner ( run
-                     , main
-                     ) where
+module Iodine.Runner (run , main) where
 
 import           Iodine.IodineArgs
 import           Iodine.Language.AnnotationParser

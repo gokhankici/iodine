@@ -330,8 +330,8 @@ generateQualifiers QIff {..} = do
 {-|
 Creates the following qualifiers:
 
-1. VL_$1  ==  VR_$1
-2. VLT_$1 ==  VRT_$1
+1. VL_$1  ==  VR_$2
+2. VLT_$1 <=> VRT_$2
 3. VLT_$1 <=> false
 4. VRT_$1 <=> false
 -}

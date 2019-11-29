@@ -1,10 +1,14 @@
 module Iodine.Utils where
 
-import           Control.Applicative
-import           Control.Lens
 import           Iodine.Types
+
+import           Control.Applicative
+import           Control.Monad
+import           Control.Lens
 import           Data.Foldable
 import qualified Data.HashSet as HS
+import           Polysemy
+import           Polysemy.Error
 
 combine :: (Monad f, Monoid m, Traversable t) => (a -> f m) -> t a -> f m
 combine act as = foldl' (<>) mempty <$> traverse act as
@@ -43,3 +47,9 @@ curry2 f a b = f (a, b)
 
 curry3 ::((a, b, c) -> d) -> (a -> b -> c -> d)
 curry3 f a b c = f (a, b, c)
+
+assert :: Member (Error IodineException) r
+       => Bool                  -- | condition to check
+       -> String                -- | error message
+       -> Sem r ()
+assert cond msg = unless cond $ throw (IE Assert msg)

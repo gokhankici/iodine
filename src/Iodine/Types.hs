@@ -15,6 +15,7 @@ data IodineExceptionType =
   | SanityCheck
   | VCGen
   | Query
+  | Assert
   deriving (Show, Eq)
 
 data IodineException =

@@ -14,7 +14,7 @@ where
 import           Iodine.Language.Annotation
 import           Iodine.Language.IR
 import           Iodine.Transform.Horn
-import           Iodine.Transform.SSA (SSAIR , SSAOutput)
+import           Iodine.Transform.SSA (SSAOutput)
 import           Iodine.Types
 import           Iodine.Utils
 
@@ -24,6 +24,7 @@ import           Data.Foldable
 import qualified Data.HashMap.Strict           as HM
 import qualified Data.HashSet                  as HS
 import qualified Data.IntMap                   as IM
+import           Data.List (nub)
 import qualified Data.Sequence                 as SQ
 import qualified Data.Text                     as T
 import           Polysemy
@@ -35,23 +36,25 @@ import           Text.Printf
 import           Text.Read (readEither)
 
 import qualified Debug.Trace as DT
+
+
 -- -----------------------------------------------------------------------------
 -- vcgen state
 -- -----------------------------------------------------------------------------
 
 type Ids = HS.HashSet Id
 
-data ModuleSt = ModuleSt { _currentModule    :: Module Int -- current module
-                         , _isTopModule      :: Bool -- is the current module the top module?
+data ModuleSt = ModuleSt { _currentModule :: Module Int -- | current module
+                         , _isTopModule   :: Bool       -- | is this the top (or root) module?
                          }
                 deriving (Show)
 
-data StmtSt = StmtSt { _currentVariables :: Ids -- all vars in this block
-                     , _currentSources   :: Ids -- sources in this block
-                     , _currentSinks     :: Ids -- sinks in this block
-                     , _currentInitEqs   :: Ids -- init_eq vars in this block
-                     , _currentAlwaysEqs :: Ids -- always_eq vars in this block
-                     , _currentAssertEqs :: Ids -- assert_eq vars in this block
+data StmtSt = StmtSt { _currentVariables :: Ids -- | all vars in this block
+                     , _currentSources   :: Ids -- | sources in this block
+                     , _currentSinks     :: Ids -- | sinks in this block
+                     , _currentInitEqs   :: Ids -- | init_eq vars in this block
+                     , _currentAlwaysEqs :: Ids -- | always_eq vars in this block
+                     , _currentAssertEqs :: Ids -- | assert_eq vars in this block
                      }
               deriving (Show)
 
@@ -64,32 +67,41 @@ makeLenses ''StmtSt
 
 vcgen :: G r => SSAOutput -> Sem r VCGenOutput
 vcgen (ssaIR, trNextVariables) =
-  vcgenHelper ssaIR & runReader (NextVars trNextVariables)
-
-vcgenHelper :: FD r => SSAIR -> Sem r VCGenOutput
-vcgenHelper ssaIR = do
-  unless (SQ.length ssaIR == 1) $ throw $ printf "expecting a single module"
-  combine vcgenMod ssaIR
+  runReader (NextVars trNextVariables) $
+  do unless (SQ.length ssaIR == 1) $
+       throw $ printf "expecting a single module"
+     combine vcgenMod ssaIR
 
 vcgenMod :: FD r => Module Int -> Sem r Horns
 vcgenMod Module {..} = do
   isTop <- (moduleName ==) <$> asks afTopModule
   let moduleSt = ModuleSt Module { .. } isTop
-  combine regularChecks allStmts
-    <||> interferenceChecks allStmts
-    &    runReader moduleSt
-  where allStmts = gateStmts SQ.>< (abStmt <$> alwaysBlocks)
 
-regularChecks :: FDM r => S -> Sem r Horns
-regularChecks s =
-  withStmt s
+  assert (SQ.null gateStmts) $
+    "Gate statements should have been merged into always* blocks"
+  assert singleBlockForEvent $
+    "There should be at most one always block for each event type"
+
+  combine regularChecks alwaysBlocks <||> interferenceChecks allStmts
+    & runReader moduleSt
+
+  where
+    allStmts  = abStmt <$> alwaysBlocks
+    allEvents = fmap (const ()) <$>
+                toList (abEvent <$> alwaysBlocks)
+    singleBlockForEvent =
+      length allEvents == length (nub allEvents)
+
+regularChecks :: FDM r => AlwaysBlock Int -> Sem r Horns
+regularChecks AlwaysBlock{..} =
+  withStmt abStmt
     $    pure SQ.empty
-    ||>  initialize s
-    ||>  tagReset s
-    ||>  srcReset s
-    ||>  next s
-    <||> sinkCheck s
-    <||> assertEqCheck s
+    ||>  initialize abStmt
+    ||>  tagReset abStmt abEvent
+    ||>  srcReset abStmt abEvent
+    ||>  next abStmt
+    <||> sinkCheck abStmt
+    <||> assertEqCheck abStmt
 
 
 -- -----------------------------------------------------------------------------
@@ -127,20 +139,38 @@ initialize stmt = do
 -- We set the tags of the source variables, and unset the tags of everything else.
 -- -----------------------------------------------------------------------------
 
-tagReset :: FDS r => S -> Sem r (Horn ())
-tagReset stmt = do
+tagReset :: FDS r => S -> Event Int -> Sem r (Horn ())
+tagReset stmt event = do
   Module {..} <- asks (^. currentModule)
   srcs        <- asks (^. currentSources)
   vars        <- asks (^. currentVariables)
   let non_srcs = HS.difference vars srcs
-  let subs1    = foldl' (tags moduleName True) mempty srcs    -- sources are tagged
-  let subs     = foldl' (tags moduleName False) subs1 non_srcs -- non sources are untagged
-  return $ Horn { hornHead   = KVar stmtId subs
-                , hornBody   = KVar stmtId mempty
-                , hornType   = TagReset
-                , hornStmtId = stmtId
-                , hornData   = ()
-                }
+  let subs0 = foldl' (tags moduleName True) mempty srcs     -- sources are tagged
+  let subs  = foldl' (tags moduleName False) subs0 non_srcs -- non sources are untagged
+  case event of
+    Star _ -> do
+      aes <- alwaysEqualEqualities stmt
+      nextVars  <- (IM.! stmtId) <$> asks getNextVars
+      let tagSubs = toSubsTags moduleName nextVars
+      let initEqs = HAnd $ (uncurry2 $ HBinary HIff) <$> subs
+      return $
+        Horn { hornHead   = KVar stmtId tagSubs
+             , hornBody   = HAnd $
+                            (KVar stmtId mempty <| aes) |>
+                            initEqs |>
+                            transitionRelation stmt
+             , hornType   = TagReset
+             , hornStmtId = stmtId
+             , hornData   = ()
+             }
+    _ ->
+      return $
+      Horn { hornHead   = KVar stmtId subs
+           , hornBody   = KVar stmtId mempty
+           , hornType   = TagReset
+           , hornStmtId = stmtId
+           , hornData   = ()
+           }
 
  where
   stmtId = stmtData stmt
@@ -156,16 +186,34 @@ tagReset stmt = do
 -- We unset the tags of the source variables.
 -- -----------------------------------------------------------------------------
 
-srcReset :: FDS r => S -> Sem r (Horn ())
-srcReset stmt = do
+srcReset :: FDS r => S -> Event Int -> Sem r (Horn ())
+srcReset stmt event = do
   Module {..} <- asks (^. currentModule)
   subs <- foldl' (tags moduleName False) mempty <$> asks (^. currentSources) -- sources are untagged
-  return $ Horn { hornHead   = KVar stmtId subs
-                , hornBody   = KVar stmtId mempty
-                , hornType   = SourceReset
-                , hornStmtId = stmtId
-                , hornData   = ()
-                }
+  case event of
+    Star _ -> do
+      aes <- alwaysEqualEqualities stmt
+      nextVars  <- (IM.! stmtId) <$> asks getNextVars
+      let tagSubs = toSubsTags moduleName nextVars
+      let initEqs = HAnd $ (uncurry2 $ HBinary HIff) <$> subs
+      return $
+        Horn { hornHead   = KVar stmtId tagSubs
+             , hornBody   = HAnd $
+                            (KVar stmtId mempty <| aes) |>
+                            initEqs |>
+                            transitionRelation stmt
+             , hornType   = SourceReset
+             , hornStmtId = stmtId
+             , hornData   = ()
+             }
+    _ ->
+      return $
+      Horn { hornHead   = KVar stmtId subs
+           , hornBody   = KVar stmtId mempty
+           , hornType   = SourceReset
+           , hornStmtId = stmtId
+           , hornData   = ()
+           }
 
  where
   stmtId = stmtData stmt
@@ -185,9 +233,8 @@ srcReset stmt = do
 next :: FDS r => S -> Sem r (Horn ())
 next stmt = do
   Module {..} <- asks (^. currentModule)
-  nextVars    <- (IM.! stmtId) <$> asks getNextVars
-  equalities  <- foldl' (alwaysEqualEqualities moduleName nextVars) mempty <$>
-                 asks (^. currentAlwaysEqs)
+  nextVars <- (IM.! stmtId) <$> asks getNextVars
+  equalities <- alwaysEqualEqualities stmt
   trace $ show ("equalities" :: String, equalities)
   let subs = toSubs moduleName nextVars
   return $ Horn { hornBody   = HAnd $ (KVar stmtId mempty |:> tr) <> equalities
@@ -196,30 +243,42 @@ next stmt = do
                 , hornStmtId = stmtId
                 , hornData   = ()
                 }
- where
-  stmtId = stmtData stmt
-  tr     = transitionRelation stmt
-  alwaysEqualEqualities m nvs exprs v =
-    let exprs' =
-          exprs |>
-          HBinary HEquals (HVar v m 0 Value LeftRun) (HVar v m 0 Value RightRun) |>
-          HBinary HIff (HVar v m 0 Tag LeftRun) (HVar v m 0 Tag RightRun)
-    in case HM.lookup v nvs of
-         Just n -> exprs' |>
-                   HBinary HEquals (HVar v m n Value LeftRun) (HVar v m n Value RightRun)
-         Nothing -> exprs'
+  where
+    stmtId = stmtData stmt
+    tr     = transitionRelation stmt
+
+
+alwaysEqualEqualities :: FDS r => S -> Sem r (L HornExpr)
+alwaysEqualEqualities stmt = do
+  Module {..} <- asks (^. currentModule)
+  nextVars <- (IM.! stmtId) <$> asks getNextVars
+  foldl' (go moduleName nextVars) mempty <$>
+    asks (^. currentAlwaysEqs)
+  where
+    stmtId = stmtData stmt
+    go m nvs exprs v =
+      let exprs' =
+            exprs |>
+            HBinary HEquals (HVar v m 0 Value LeftRun) (HVar v m 0 Value RightRun) |>
+            HBinary HIff (HVar v m 0 Tag LeftRun) (HVar v m 0 Tag RightRun)
+      in case HM.lookup v nvs of
+           Just n -> exprs' |>
+                     HBinary HEquals (HVar v m n Value LeftRun) (HVar v m n Value RightRun)
+           Nothing -> exprs'
+
 
 transitionRelation :: S -> HornExpr
 transitionRelation s =
-  HAnd $ transitionRelation' mempty LeftRun s |:> transitionRelation' mempty RightRun s
+  HAnd $
+  transitionRelation' mempty LeftRun s |:>
+  transitionRelation' mempty RightRun s
 
 type PathCond = L (Expr Int)
 
 transitionRelation' :: PathCond -> HornVarRun -> S -> HornExpr
 transitionRelation' conds r = \case
   Block {..} -> HAnd $ transitionRelation' conds r <$> blockStmts
-  Assignment {..} ->
-    HAnd $
+  Assignment {..} -> HAnd $
     HBinary HEquals (val assignmentLhs) (val assignmentRhs) |:>
     let result = HBinary HIff (tag assignmentLhs) (tagWithCond conds assignmentRhs)
     in case r of
@@ -242,9 +301,6 @@ transitionRelation' conds r = \case
   ufVal :: Maybe Id -> L (Expr Int) -> HornExpr
   ufVal fname = HApp fname . fmap val
 
-  ufTag :: L (Expr Int) -> HornExpr
-  ufTag = HOr . fmap tag
-
   val :: Expr Int -> HornExpr
   val = \case
     Constant {..} -> parseVerilogInt constantValue
@@ -264,6 +320,9 @@ transitionRelation' conds r = \case
     case es of
       SQ.Empty -> tag e
       _        -> ufTag (es |> e)
+
+  ufTag :: L (Expr Int) -> HornExpr
+  ufTag = HOr . fmap tag
 
   tag :: Expr Int -> HornExpr
   tag = \case
@@ -474,6 +533,14 @@ toSubs m = HM.foldlWithKey' go mempty
       |> (HVar v m 0 Value LeftRun , HVar v m n Value LeftRun)
       |> (HVar v m 0 Tag RightRun  , HVar v m n Tag RightRun)
       |> (HVar v m 0 Value RightRun, HVar v m n Value RightRun)
+
+toSubsTags :: Id -> HM.HashMap Id Int -> L (HornExpr, HornExpr)
+toSubsTags m = HM.foldlWithKey' go mempty
+ where
+  go subs v n =
+    subs
+      |> (HVar v m 0 Tag LeftRun,  HVar v m n Tag LeftRun)
+      |> (HVar v m 0 Tag RightRun, HVar v m n Tag RightRun)
 
 -- -----------------------------------------------------------------------------
 -- other stuff
