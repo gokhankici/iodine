@@ -9,13 +9,11 @@ import Iodine.Language.IR
 import Iodine.Language.IRParser (ParsedIR)
 import Iodine.Language.Annotation
 import Iodine.Types
-import Iodine.Utils
 
 import           Control.Monad
 import           Data.Foldable
 import           Data.Function
 import qualified Data.HashSet as HS
-import           Data.Maybe
 import qualified Data.Sequence as SQ
 import           Polysemy
 import qualified Polysemy.Error as PE
@@ -36,41 +34,42 @@ type SC r = Members '[ PE.Error IodineException   -- sanity error
                      , Reader (AnnotationFile ()) -- parsed annotation file
                      ] r
 
+type M  = Module ()
+type MA = Maybe (AlwaysBlock ())
 type FD r = ( SC r
-            , Members '[ State (Maybe (Module ()))      -- current module
-                       , State (Maybe (AlwaysBlock ())) -- current always block
+            , Members '[ Reader (Module ())
+                       , Reader MA
                        ] r
             )
+
 -- -----------------------------------------------------------------------------
 sanityCheck :: SC r => Sem r ()
 -- -----------------------------------------------------------------------------
 sanityCheck =
-  allChecks
-  & evalState @(Maybe (Module ())) Nothing
-  & evalState @(Maybe (AlwaysBlock ())) Nothing
+  sequence_ [ checkAssignmentsAreToLocalVariables
+            , checkSameAssignmentType
+            , checkUniqueUpdateLocationOfVariables
+            ]
 
-allChecks :: FD r => Sem r ()
-allChecks = sequence_ [ checkAssignmentsAreToLocalVariables
-                      , checkSameAssignmentType
-                      , checkUniqueUpdateLocationOfVariables
-                      ]
-
-checkHelper :: FD r => (Stmt () -> Sem r ()) -> Sem r ()
+checkHelper :: SC r
+            => (Stmt () -> Sem (Reader MA ': Reader M ': r) ())
+            -> Sem r ()
 checkHelper goS = ask @ParsedIR >>= traverse_ (checkModule goS)
 
-checkModule :: FD r => (Stmt () -> Sem r ()) -> Module () -> Sem r ()
-checkModule goS m@Module{..} = do
-  put (Just m)
-  put @(Maybe (AlwaysBlock ())) Nothing
-  traverse_ goS gateStmts
-  let goAB ab@AlwaysBlock{..} = put (Just ab) >> goS abStmt
-  traverse_ goAB alwaysBlocks
+checkModule :: (Stmt () -> Sem (Reader MA ': Reader M ': r) ())
+            -> Module ()
+            -> Sem r ()
+checkModule goS m@Module{..} =
+  ( do (traverse_ goS gateStmts) & runReader @MA Nothing
+       let goAB ab@AlwaysBlock{..} = goS abStmt & runReader (Just ab)
+       traverse_ goAB alwaysBlocks
+  ) & runReader m
 
 getModuleName :: FD r => Sem r Id
-getModuleName = (moduleName . fromJust) <$> get @(Maybe (Module ()))
+getModuleName = asks moduleName
 
 -- -----------------------------------------------------------------------------
-checkAssignmentsAreToLocalVariables :: FD r => Sem r ()
+checkAssignmentsAreToLocalVariables :: SC r => Sem r ()
 -- Check that all assignments in a single module are to the variables
 -- of that module
 -- -----------------------------------------------------------------------------
@@ -92,12 +91,10 @@ handleAssignment handler = go
     go Block{..}          = gos blockStmts
     go IfStmt{..}         = gos (ifStmtThen SQ.<| ifStmtElse SQ.<| SQ.empty)
     go Assignment{..}     = handler assignmentType assignmentLhs assignmentRhs
-    go ModuleInstance{..} = not_supported
-    -- go PhiNode{..}        = error "phinode encountered in sanity check"
     go Skip{..}           = pure ()
 
 -- -----------------------------------------------------------------------------
-checkSameAssignmentType :: FD r => Sem r ()
+checkSameAssignmentType :: SC r => Sem r ()
 -- check that always blocks with * events only have blocking assignments, and
 -- the ones with @posedge or @negedge has non-blocking assignments
 -- -----------------------------------------------------------------------------
@@ -105,7 +102,7 @@ checkSameAssignmentType =
   checkHelper $ handleAssignment $
   \assignmentType assignmentLhs assignmentRhs -> do
     let stmt = Assignment{stmtData = (), ..}
-    mAB <- get @(Maybe (AlwaysBlock ()))
+    mAB <- ask @MA
     case mAB of
       Nothing ->
         when (assignmentType /= Continuous) $
@@ -128,7 +125,7 @@ checkSameAssignmentType =
              _                       -> pure ()
 
 -- -----------------------------------------------------------------------------
-checkUniqueUpdateLocationOfVariables :: FD r => Sem r ()
+checkUniqueUpdateLocationOfVariables :: SC r => Sem r ()
 --
 -- -----------------------------------------------------------------------------
 checkUniqueUpdateLocationOfVariables =
@@ -141,7 +138,6 @@ checkUniqueUpdateLocationOfVariables =
     asgnVars Block{..}          = foldMap asgnVars blockStmts
     asgnVars IfStmt{..}         = asgnVars ifStmtThen <> asgnVars ifStmtElse
     asgnVars Assignment{..}     = HS.singleton (varName assignmentLhs, varModuleName assignmentLhs)
-    asgnVars ModuleInstance{..} = not_supported
     asgnVars Skip{..}           = mempty
 
 runUniqueUpdateCheck :: SC r => Sem (UniqueUpdateCheck ': r) a -> Sem (State S1 ': r) a

@@ -22,8 +22,11 @@ intersects s1 s2 = go (HS.toList s1)
   go []       = False
   go (a : as) = HS.member a s2 || go as
 
-not_supported :: a
-not_supported = error "not supported"
+notSupported :: a
+notSupported = error "not supported"
+
+notSupportedM :: Member (Error IodineException) r => Sem r a
+notSupportedM = throw (IE NotSupported "")
 
 infixl 9 ||>
 (||>) :: Applicative f => f (L a) -> f a -> f (L a)

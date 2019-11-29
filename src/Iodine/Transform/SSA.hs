@@ -15,7 +15,6 @@ where
 import           Iodine.Language.IRParser       ( ParsedIR )
 import           Iodine.Language.IR
 import           Iodine.Types
-import           Iodine.Utils
 
 import           Control.Lens
 import qualified Data.Text                     as T
@@ -52,6 +51,7 @@ ssaModule Module {..} =
   Module moduleName ports variables
   <$> traverse ssaStmtSingle gateStmts
   <*> traverse ssaAB         alwaysBlocks
+  <*> traverse ssaModuleInstance moduleInstances
   <*> freshId ModId
   & runReader (ModuleName moduleName)
 
@@ -88,7 +88,6 @@ ssaStmt IfStmt {..} = do
   cond' <- ssaExpr ifStmtCondition
   (then', else') <- ssaBranches ifStmtThen ifStmtElse
   IfStmt cond' then' else' <$> freshId StmtId
-ssaStmt ModuleInstance {..} = not_supported
 ssaStmt Skip {..}    = Skip <$> freshId StmtId
 
 
@@ -115,6 +114,15 @@ ssaExpr Select {..} =
     <*> traverse ssaExpr selectIndices
     <*> freshId NoId
 
+ssaModuleInstance :: FD r => ModuleInstance a -> Sem r (ModuleInstance Int)
+ssaModuleInstance ModuleInstance{..} = do
+  ports' <- traverse ssaExpr moduleInstancePorts
+  n <- freshId StmtId
+  return $
+    ModuleInstance { moduleInstancePorts = ports'
+                   , moduleInstanceData  = n
+                   , ..
+                   }
 
 -- -----------------------------------------------------------------------------
 -- Implementation details

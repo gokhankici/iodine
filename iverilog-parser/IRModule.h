@@ -83,6 +83,7 @@ public:
     void setModuleName(const char *value) { moduleName = value; }
     void addGateStatement(const IRStmt *stmt) { gateStatements.push_back(stmt); }
     void addAlwaysBlock(const IRAlwaysBlock *ab) { alwaysBlocks.push_back(ab); }
+    void addModuleInstance(const IRStmt *stmt) { moduleInstances.push_back(stmt); }
 
     friend std::ostream &operator<<(std::ostream &, const IRModule &);
 
@@ -91,6 +92,7 @@ private:
     std::vector<IRPort> ports;
     std::vector<IRVariable> variables;
     std::vector<const IRStmt *> gateStatements;
+    std::vector<const IRStmt *> moduleInstances;
     std::vector<const IRAlwaysBlock *> alwaysBlocks;
 };
 

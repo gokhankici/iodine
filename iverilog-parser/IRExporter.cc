@@ -78,17 +78,21 @@ const IRModule *IRExporter::extractModule() const
     {
         PGate *pg = *gateItr;
         const IRStmt *stmt;
+
         if (PGAssign *assignStmt = dynamic_cast<PGAssign *>(pg))
         {
             stmt = toIRStmt(assignStmt);
+            irModule->addGateStatement(stmt);
         }
         else if (PGBuiltin *builtinStmt = dynamic_cast<PGBuiltin *>(pg))
         {
             stmt = toIRStmt(builtinStmt);
+            irModule->addGateStatement(stmt);
         }
         else if (PGModule *moduleStmt = dynamic_cast<PGModule *>(pg))
         {
             stmt = toIRStmt(moduleStmt);
+            irModule->addModuleInstance(stmt);
         }
         else
         {
@@ -96,8 +100,6 @@ const IRModule *IRExporter::extractModule() const
             pg->dump(cerr, 0);
             exit(1);
         }
-
-        irModule->addGateStatement(stmt);
     }
 
     // always blocks

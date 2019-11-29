@@ -4,6 +4,7 @@
 
 module Iodine.Types where
 
+import           Control.Exception
 import qualified Data.Sequence as SQ
 import qualified Data.Text     as T
 
@@ -16,6 +17,7 @@ data IodineExceptionType =
   | VCGen
   | Query
   | Assert
+  | NotSupported
   deriving (Show, Eq)
 
 data IodineException =
@@ -25,3 +27,5 @@ data IodineException =
 
 instance Show IodineException where
   show (IE src msg) = show src ++ ": " ++ msg
+
+instance Exception IodineException

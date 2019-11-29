@@ -21,7 +21,6 @@ ghc-options:
 - -flate-specialise
 - -fspecialise-aggressively
 - -Werror
-- -O2
 - -fdefer-type-errors
 - -fwarn-incomplete-patterns
 - -fwarn-incomplete-record-updates

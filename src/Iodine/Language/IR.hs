@@ -10,6 +10,7 @@ module Iodine.Language.IR
   ( Expr (..)
   , AssignmentType (..)
   , Stmt (..)
+  , ModuleInstance (..)
   , Module (..)
   , Port (..)
   , Variable (..)
@@ -70,6 +71,14 @@ data Expr a =
 data AssignmentType = Blocking | NonBlocking | Continuous
                     deriving (Generic, Eq)
 
+data ModuleInstance a =
+  ModuleInstance { moduleInstanceType  :: Id
+                 , moduleInstanceName  :: Id
+                 , moduleInstancePorts :: HM.HashMap Id (Expr a)
+                 , moduleInstanceData  :: a
+                 }
+  deriving (Generic, Functor, Foldable, Traversable)
+
 data Stmt a =
   Block { blockStmts :: L (Stmt a)
         , stmtData   :: a
@@ -84,11 +93,6 @@ data Stmt a =
              , ifStmtElse      :: Stmt a
              , stmtData        :: a
              }
-  | ModuleInstance { moduleInstanceType  :: Id
-                   , moduleInstanceName  :: Id
-                   , moduleInstancePorts :: HM.HashMap Id (Expr a)
-                   , stmtData            :: a
-                   }
   | Skip { stmtData :: a }
   deriving (Generic, Functor, Foldable, Traversable)
 
@@ -110,12 +114,13 @@ data AlwaysBlock a =
   deriving (Generic, Functor, Foldable, Traversable)
 
 data Module a =
-  Module { moduleName   :: Id
-         , ports        :: L Port
-         , variables    :: L Variable
-         , gateStmts    :: L (Stmt a)
-         , alwaysBlocks :: L (AlwaysBlock a)
-         , moduleData   :: a
+  Module { moduleName      :: Id
+         , ports           :: L Port
+         , variables       :: L Variable
+         , gateStmts       :: L (Stmt a)
+         , alwaysBlocks    :: L (AlwaysBlock a)
+         , moduleInstances :: L (ModuleInstance a)
+         , moduleData      :: a
          }
   deriving (Generic, Functor, Foldable, Traversable)
 
@@ -128,7 +133,6 @@ instance GetVariables Stmt where
     Block {..}          -> mfold getVariables blockStmts
     Assignment {..}     -> mfold getVariables [assignmentLhs, assignmentRhs]
     IfStmt {..}         -> getVariables ifStmtCondition <> mfold getVariables [ifStmtThen, ifStmtElse]
-    ModuleInstance {..} -> not_supported
     Skip {..}           -> mempty
 
 instance GetVariables Expr where
@@ -144,6 +148,9 @@ instance GetVariables Expr where
 -- -----------------------------------------------------------------------------
 -- Typeclass Instances
 -- -----------------------------------------------------------------------------
+
+class ToDoc a where
+  doc :: a -> PP.Doc
 
 instance Show Variable where
   show (Wire v)     = printf "(Wire %s)" v
@@ -161,19 +168,23 @@ instance Show a => Show (Expr a) where
   show (Str s _)        = T.unpack s
   show (Select v is _)  = printf "%s%s" (show v) (show $ toList is)
 
-instance Show a => Show (Stmt a) where
-  show = PP.render . go
+instance Show a => Show (Event a) where
+  show (PosEdge e _) = printf "@(posedge %s)" (show e)
+  show (NegEdge e _) = printf "@(negedge %s)" (show e)
+  show (Star _)      = "*"
+
+instance Show a => ToDoc (Stmt a) where
+  doc = go
     where
-      text = PP.text . T.unpack
       nest = PP.nest 2
+      vcatSeq f = foldl' (\d a -> d PP.$+$ f a) PP.empty
       go (Block ss a) =
         case ss of
           SQ.Empty          -> go (Skip a)
           s SQ.:<| SQ.Empty -> go s
-          _                 -> PP.cat [ PP.lbrace
-                                      , nest (vcatSeq go ss)
-                                      , PP.rbrace
-                                      ]
+          _                 -> PP.lbrace PP.$+$
+                               nest (vcatSeq go ss) PP.$+$
+                               PP.rbrace
       go (Assignment t l r _) =
         PP.text (show l) PP.<+>
         PP.text op PP.<+>
@@ -190,42 +201,57 @@ instance Show a => Show (Stmt a) where
                , nest $ go e
                , PP.rbrace
                ]
-      go (ModuleInstance t n ps _) =
-        -- printf "%s %s(%s)" t n (intercalate ", " args)
-        text t PP.<+>
-        text n PP.<>
-        PP.parens (PP.hcat $ PP.punctuate (PP.comma PP.<+> PP.empty) args)
-        where
-          args =
-            HM.foldrWithKey
-            (\v e acc -> (text v PP.<+> PP.equals PP.<+> PP.text (show e)) : acc)
-            []
-            ps
       go (Skip _) = PP.text "skip"
 
-vcatSeq :: (a -> PP.Doc) -> L a -> PP.Doc
-vcatSeq f = foldl' (\d a -> d PP.$+$ f a) PP.empty
 
+instance Show a => ToDoc (ModuleInstance a) where
+  doc (ModuleInstance t n ps _) =
+    text t PP.<+>
+    text n PP.<>
+    PP.parens (PP.hcat $ PP.punctuate (PP.comma PP.<> PP.text " ") args)
+    where
+      text = PP.text . T.unpack
+      args =
+        HM.foldrWithKey
+        (\v e acc -> (text v PP.<+> PP.equals PP.<+> PP.text (show e)) : acc)
+        []
+        ps
 
-instance Show a => Show (Event a) where
-  show (PosEdge e _) = printf "@(posedge %s)" (show e)
-  show (NegEdge e _) = printf "@(negedge %s)" (show e)
-  show (Star _)      = "*"
+instance Show a => ToDoc (AlwaysBlock a) where
+  doc (AlwaysBlock e s _) =
+    PP.sep [ PP.text "always" PP.<+> PP.text (show e)
+           , doc s
+           ]
+
+instance Show a => Show (Stmt a) where
+  show = PP.render . doc
+
+instance Show a => Show (ModuleInstance a) where
+  show = PP.render . doc
 
 instance Show a => Show (AlwaysBlock a) where
-  show (AlwaysBlock e s _) = printf "always %s %s" (show e) (show s)
+  show = PP.render . doc
 
 instance Show a => Show (Module a) where
-  show Module{..} = printf "module(%s,\n%s,\n%s,\n%s,\n%s)"
+  show Module{..} = printf "module(%s,\n%s,\n%s,\n%s,\n%s,\n%s)"
                     moduleName
-                    (show $ toList ports)
-                    (show $ toList variables)
-                    (intercalate "\n" $ show <$> toList gateStmts)
-                    (intercalate "\n" $ show <$> toList alwaysBlocks)
+                    (goL  ports)
+                    (goL  variables)
+                    (goNL gateStmts)
+                    (goNL alwaysBlocks)
+                    (goNL moduleInstances)
+    where
+      goL :: Show x => L x -> String
+      goL = show . toList
+
+      goNL :: Show x => L x -> String
+      goNL = wrap "[" "]" . intercalate ",\n" . fmap show . toList
+
+      wrap l r s = l ++ s ++ r
 
 instance Hashable a => Hashable (Expr a) where
   hashWithSalt n (Variable v m a) = hashWithSalt n (v,m,a)
-  hashWithSalt _ _                = not_supported
+  hashWithSalt _ _                = notSupported
 
 instance Hashable a => Hashable (Event a) where
   hashWithSalt n (PosEdge e a) = hashWithSalt n (e, a)

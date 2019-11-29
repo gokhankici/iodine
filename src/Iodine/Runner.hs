@@ -8,16 +8,18 @@ import           Iodine.IodineArgs
 import           Iodine.Language.AnnotationParser
 import           Iodine.Language.IRParser
 import           Iodine.Pipeline
-import           Iodine.Transform.Fixpoint           (printSolution)
 import           Iodine.Types
 
+import qualified Language.Fixpoint.Solver         as F
+import qualified Language.Fixpoint.Types          as FT
+import qualified Language.Fixpoint.Types.Config   as FC
+
+import qualified Control.Exception                as E
 import           Control.Monad
 import qualified Data.ByteString.Lazy             as B
 import           Data.Function
+import qualified Data.HashMap.Strict              as HM
 import qualified Data.Text                        as T
-import qualified Language.Fixpoint.Solver         as F
-import qualified Language.Fixpoint.Types          as FT
-import qualified Language.Fixpoint.Types.Config as FC
 import           Polysemy                         hiding (run)
 import           Polysemy.Error
 import           Polysemy.Trace
@@ -121,7 +123,11 @@ checkIR IodineArgs{..}
   | otherwise = do
       irFileContents <- readFile fileName
       annotFileContents <- B.readFile annotFile
-      mFInfo <- pipeline (T.pack moduleName) (parse (fileName, irFileContents)) (return $ parseAnnotations annotFileContents)
+      mFInfo <-
+        pipeline
+        (T.pack moduleName)                           -- top module name
+        (parse (fileName, irFileContents))            -- ir reader
+        (return $ parseAnnotations annotFileContents) -- anootation file reader
         & traceToIO
         & errorToIOFinal
         & embedToFinal
@@ -134,6 +140,8 @@ checkIR IodineArgs{..}
           return safe
         Left e      -> errorHandle e
   where
+    printSolution =
+      void . HM.traverseWithKey go where go k v = print k >> putStrLn (FT.showpp v)
     config = FC.defConfig { FC.eliminate = FC.Some
                           , FC.save      = True
                           , FC.srcFile   = fileName
@@ -147,5 +155,5 @@ checkIR IodineArgs{..}
 -- -----------------------------------------------------------------------------
 
 errorHandle :: IodineException -> IO Bool
-errorHandle e = hPutStrLn stderr (show e) >> return False
+errorHandle e = E.throwIO e
 

@@ -81,5 +81,6 @@ std::ostream &operator<<(std::ostream &out, const IRModule &irModule)
                << irModule.ports << ", "
                << irModule.variables << ", "
                << irModule.gateStatements << ", "
-               << irModule.alwaysBlocks << ")";
+               << irModule.alwaysBlocks << ","
+               << irModule.moduleInstances << ")";
 }

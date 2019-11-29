@@ -9,7 +9,6 @@ module Iodine.Transform.Merge (merge) where
 import Iodine.Types
 import Iodine.Language.IR
 import Iodine.Language.IRParser
-import Iodine.Utils
 
 import           Control.Lens
 -- import           Control.Monad
@@ -170,7 +169,6 @@ buildDependencyGraph stmts =
       forM_ (getVariables ifStmtCondition) (insertToReads n)
       updateN n ifStmtThen
       updateN n ifStmtElse
-    updateN _ ModuleInstance {..} = not_supported
     updateN _ Skip {..} = return ()
 
     insertToWrites n v =

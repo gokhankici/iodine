@@ -44,6 +44,7 @@ parseModule =
   <*> (comma *> list parseVariable)
   <*> (comma *> list parseStmt)
   <*> (comma *> list parseAlwaysBlock)
+  <*> (comma *> list parseModuleInstance)
   <*> parseData
 
 parsePort :: Parser Port
@@ -86,11 +87,6 @@ parseStmt =
                         <*> (comma *> parseStmt)
                         <*> (comma *> parseStmt)
                         <*> parseData) <|>
-  parseTerm "mod_inst" (ModuleInstance
-                        <$> identifier
-                        <*> (comma *> identifier)
-                        <*> (comma *> parseMap identifier parseExpr)
-                        <*> parseData) <|>
   (rWord "skip" *> return (Skip ()))
   where
     parseAsn k t = parseTerm k $
@@ -98,6 +94,16 @@ parseStmt =
                    <$> parseExpr
                    <*> (comma *> parseExpr)
                    <*> parseData
+
+parseModuleInstance :: Parser (ModuleInstance ())
+parseModuleInstance =
+  parseTerm "mod_inst" $
+  ModuleInstance
+  <$> identifier
+  <*> (comma *> identifier)
+  <*> (comma *> parseMap identifier parseExpr)
+  <*> parseData
+
 
 parseEvent :: Parser (Event ())
 parseEvent =

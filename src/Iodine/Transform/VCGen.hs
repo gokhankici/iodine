@@ -66,8 +66,7 @@ makeLenses ''StmtSt
 -- -----------------------------------------------------------------------------
 
 vcgen :: G r => SSAOutput -> Sem r VCGenOutput
-vcgen (ssaIR, trNextVariables) =
-  runReader (NextVars trNextVariables) $
+vcgen (ssaIR, trNextVariables) = runReader (NextVars trNextVariables) $
   do unless (SQ.length ssaIR == 1) $
        throw $ printf "expecting a single module"
      combine vcgenMod ssaIR
@@ -82,7 +81,9 @@ vcgenMod Module {..} = do
   assert singleBlockForEvent $
     "There should be at most one always block for each event type"
 
-  combine regularChecks alwaysBlocks <||> interferenceChecks allStmts
+  combine regularChecks alwaysBlocks
+    <||> interferenceChecks allStmts
+    <||> combine moduleInstanceChecks moduleInstances
     & runReader moduleSt
 
   where
@@ -103,6 +104,8 @@ regularChecks AlwaysBlock{..} =
     <||> sinkCheck abStmt
     <||> assertEqCheck abStmt
 
+moduleInstanceChecks :: FD r => ModuleInstance Int -> Sem r Horns
+moduleInstanceChecks _ = notSupportedM
 
 -- -----------------------------------------------------------------------------
 -- 1. initialize
@@ -295,7 +298,6 @@ transitionRelation' conds r = \case
     in  HOr $
         HAnd (HNot not_c |:> t) |:>
         HAnd (not_c |:> e)
-  ModuleInstance {..} -> not_supported
   Skip {..} -> HAnd mempty
  where
   ufVal :: Maybe Id -> L (Expr Int) -> HornExpr
@@ -312,7 +314,7 @@ transitionRelation' conds r = \case
                           }
     UF {..}     -> ufVal (Just ufName) ufArgs
     IfExpr {..} -> ufVal Nothing (ifExprCondition |:> ifExprThen |> ifExprElse)
-    Str {..}    -> not_supported
+    Str {..}    -> notSupported
     Select {..} -> ufVal Nothing (selectVar <| selectIndices)
 
   tagWithCond :: PathCond -> Expr Int -> HornExpr
@@ -520,8 +522,6 @@ getUpdatedVariables = \case
   Block {..}          -> mfold getUpdatedVariables blockStmts
   Assignment {..}     -> HS.singleton $ varName assignmentLhs
   IfStmt {..}         -> mfold getVariables [ifStmtThen, ifStmtElse]
-  ModuleInstance {..} -> not_supported
-  -- PhiNode {..}        -> mempty
   Skip {..}           -> mempty
 
 toSubs :: Id -> HM.HashMap Id Int -> L (HornExpr, HornExpr)

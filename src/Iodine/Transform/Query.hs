@@ -43,9 +43,19 @@ import           Iodine.Utils
 type FInfo = FT.FInfo HornClauseId
 type Horns = L (Horn ())
 
-type G r   = Members '[Trace, Reader (AnnotationFile ()), PE.Error IodineException] r
-type FD r  = (G r, Members '[State St, Reader Horns, Reader (L (Module Int))] r)
-type FDC r = (FD r, Member (State FT.IBindEnv) r)
+type G r   = Members '[ Trace
+                      , Reader (AnnotationFile ())
+                      , PE.Error IodineException
+                      ] r
+type FD r  = ( G r
+             , Members '[ State St
+                        -- , Reader Horns
+                        -- , Reader (L (Module Int))
+                        ] r
+             )
+type FDC r = ( FD r
+             , Member (State FT.IBindEnv) r
+             )
 
 
 -- -----------------------------------------------------------------------------
@@ -77,17 +87,13 @@ makeLenses ''St
 -- | Given the verification conditions, generate the query to be sent to the
 -- fixpoint solver
 constructQuery :: G r => L (Module Int) -> Horns -> Sem r FInfo
-constructQuery modules horns =
-  ( do setConstants
-       ask >>= traverse_ generateConstraint
-       ask >>= traverse_ generateWFConstraints
-       asks afQualifiers >>= traverse_ generateQualifiers
-       ask >>= generateAutoQualifiers
-       toFInfo
-  )
-  & evalState initialState
-  & runReader horns
-  & runReader modules
+constructQuery modules horns = evalState initialState $ do
+  setConstants
+  traverse_ generateConstraint horns
+  traverse_ generateWFConstraints modules
+  asks afQualifiers >>= traverse_ generateQualifiers
+  ask >>= generateAutoQualifiers
+  toFInfo
 
 
 -- -----------------------------------------------------------------------------
@@ -111,8 +117,9 @@ generateConstraint Horn {..} = do
 -- | Create a well formedness constraint for every statement of the module
 generateWFConstraints :: FD r => Module Int -> Sem r ()
 generateWFConstraints Module {..} =
-  traverse_ (generateWFConstraint moduleName) gateStmts
-    >> traverse_ (generateWFConstraint moduleName . abStmt) alwaysBlocks
+  traverse_ (generateWFConstraint moduleName . abStmt) alwaysBlocks >>
+  traverse_ (generateWFConstraintMI moduleName) moduleInstances
+
 
 
 -- | Create a well formedness constraint for the given statement
@@ -140,6 +147,12 @@ generateWFConstraint m stmt = do
   e      = FT.PKVar kvar mempty
   md     = HornClauseId stmtId WellFormed
 
+-- | Create a well formedness constraint for the given module instance
+generateWFConstraintMI :: FD r
+                       => Id    -- | module name
+                       -> ModuleInstance Int
+                       -> Sem r ()
+generateWFConstraintMI _ _ = notSupportedM
 
 -- -----------------------------------------------------------------------------
 -- HornExpr -> FT.Expr
