@@ -137,6 +137,7 @@ simple runner testDir =
             , "merge04"
             , "merge05"
             , "secverilog-01"
+            , "nb-test-01"
             ]
 
 
@@ -220,6 +221,19 @@ negative runner testPath = describe "negative" $ forM_ (go <$> names) runner
 -- -----------------------------------------------------------------------------
 -- MAJOR TESTS
 -- -----------------------------------------------------------------------------
+majorStubs :: Runner -> Spec
+majorStubs runner = describe "major-stub" $ forM_ ts runner
+  where
+    b  = benchmarkDir
+    d  = b </> "crypto_cores/sha_core/trunk/rtl"
+    ts = [ UnitTest { testName    = "sha_stub"
+                    , moduleName  = "sha256"
+                    , verilogFile = d </> "sha256_stub.v"
+                    , annotFile   = Just $ d </> "annot-sha256.json"
+                    , testType    = Succ
+                    }
+         ]
+
 major :: Runner -> FilePath -> Spec
 major runner _parserDir = describe "major" $ forM_ ts runner
   where
@@ -294,6 +308,7 @@ spec ta va = sequential $ do
   negative r testDir
   mips r mipsDir
   abduction r $ testDir </> "abduction" </> "pos"
+  majorStubs r
   major r parserDir
   where
     testDir   = "test"

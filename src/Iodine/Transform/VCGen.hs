@@ -14,7 +14,7 @@ where
 import           Iodine.Language.Annotation
 import           Iodine.Language.IR
 import           Iodine.Transform.Horn
-import           Iodine.Transform.SSA (SSAOutput)
+import           Iodine.Transform.Normalize (NormalizeOutput)
 import           Iodine.Types
 import           Iodine.Utils
 
@@ -65,7 +65,7 @@ makeLenses ''StmtSt
 -- vcgen implementation
 -- -----------------------------------------------------------------------------
 
-vcgen :: G r => SSAOutput -> Sem r VCGenOutput
+vcgen :: G r => NormalizeOutput -> Sem r VCGenOutput
 vcgen (ssaIR, trNextVariables) = runReader (NextVars trNextVariables) $
   do unless (SQ.length ssaIR == 1) $
        throw $ printf "expecting a single module"

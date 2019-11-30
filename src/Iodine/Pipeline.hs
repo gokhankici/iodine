@@ -10,7 +10,7 @@ import           Iodine.Language.AnnotationParser
                                                 ( AnnotationFile(..) )
 import           Iodine.Types
 import           Iodine.Transform.Merge
-import           Iodine.Transform.SSA
+import           Iodine.Transform.Normalize
 import           Iodine.Transform.SanityCheck
 import           Iodine.Transform.VCGen
 import           Iodine.Transform.Query
@@ -20,6 +20,7 @@ import           Polysemy
 import           Polysemy.Error
 import           Polysemy.Reader
 import           Polysemy.Trace
+import           Text.Printf
 
 {- |
 Implements the following pipeline:
@@ -39,15 +40,14 @@ pipeline topmodule irReader afReader = do
   af <- fixAF <$> afReader
   (do
       sanityCheck & runReader ir
-      traceList ir
+      traceResult "IR" ir
       let mergedIR = merge ir
-      traceList mergedIR
-      ssaOutput@(ssaIR, _) <- ssa mergedIR
-      traceList ssaIR
-      vcgen ssaOutput >>= constructQuery ssaIR
+      traceResult "Merged IR" mergedIR
+      ssaOutput@(normalizedIR, _) <- normalize mergedIR
+      traceResult "Normalized IR" normalizedIR
+      vcgen ssaOutput >>= constructQuery normalizedIR
     )
     & runReader af
-
  where
     -- TODO: this is currently a hack, annotation file needs to be updated
   fixAF AnnotationFile {..} =
@@ -58,8 +58,11 @@ pipeline topmodule irReader afReader = do
     , ..
     }
 
-traceList :: (Member Trace r, Show a) => L a -> Sem r ()
-traceList l = traverse_ (trace . toStr) l >> trace sep
+traceResult :: (Member Trace r, Show a) => String -> L a -> Sem r ()
+traceResult t l = do
+  trace (printf "=== %s ===" t)
+  traverse_ (trace . toStr) l
+  trace sep
   where
     toStr a = show a ++ "\n"
     sep = replicate 80 '-'
