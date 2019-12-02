@@ -1,8 +1,10 @@
 {
+  "clock": "clk",
   "annotations": [
     {
       "type": "source",
       "variables": [
+        "reset",
         "ID_instr"
       ]
     },

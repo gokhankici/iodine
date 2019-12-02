@@ -34,6 +34,7 @@ type SC r = Members '[ PE.Error IodineException   -- sanity error
                      , Reader (AnnotationFile ()) -- parsed annotation file
                      ] r
 
+type S  = Stmt ()
 type M  = Module ()
 type MA = Maybe (AlwaysBlock ())
 type FD r = ( SC r
@@ -42,6 +43,9 @@ type FD r = ( SC r
                        ] r
             )
 
+-- | Type alias for the Sanity Check Monad
+type SCM r a = Sem (Reader MA ': Reader M ': r) a
+
 -- -----------------------------------------------------------------------------
 sanityCheck :: SC r => Sem r ()
 -- -----------------------------------------------------------------------------
@@ -49,14 +53,15 @@ sanityCheck =
   sequence_ [ checkAssignmentsAreToLocalVariables
             , checkSameAssignmentType
             , checkUniqueUpdateLocationOfVariables
+            , checkSinksAndSources
             ]
 
 checkHelper :: SC r
-            => (Stmt () -> Sem (Reader MA ': Reader M ': r) ())
+            => (S -> SCM r ()) -- | checks the statement
             -> Sem r ()
 checkHelper goS = ask @ParsedIR >>= traverse_ (checkModule goS)
 
-checkModule :: (Stmt () -> Sem (Reader MA ': Reader M ': r) ())
+checkModule :: (S -> SCM r ())
             -> Module ()
             -> Sem r ()
 checkModule goS m@Module{..} =
@@ -126,7 +131,6 @@ checkSameAssignmentType =
 
 -- -----------------------------------------------------------------------------
 checkUniqueUpdateLocationOfVariables :: SC r => Sem r ()
---
 -- -----------------------------------------------------------------------------
 checkUniqueUpdateLocationOfVariables =
   checkHelper (checkPrevious . asgnVars)
@@ -148,6 +152,32 @@ runUniqueUpdateCheck = reinterpret $ \case
     newAssignments <- get @S1
     when (HS.size oldAssignments + HS.size assignments /= HS.size newAssignments) $
       throw $ printf "found multiple assignments to variables from %s" (show $ toList assignments)
+
+-- -----------------------------------------------------------------------------
+checkSinksAndSources :: SC r => Sem r ()
+-- -----------------------------------------------------------------------------
+checkSinksAndSources = do
+  AnnotationFile{..} <- ask
+  let isNotClock name = case afClock of
+                          Nothing -> True
+                          Just n  -> name /= n
+  let srcs = getSourceVar <$> SQ.filter isSource afAnnotations
+  let snks = getSinkVar   <$> SQ.filter isSink   afAnnotations
+  ask >>=
+    traverse_
+    (\Module{..} ->
+        when (moduleName == afTopModule) $ do
+        for_ ports $ \case
+          Input v ->
+            let name = variableName v
+            in when (isNotClock name && name `SQ.elemIndexL` srcs == Nothing) $
+               throw $ printf "The input port %s is not declared as a taint source!" name
+          Output _ -> return ()
+        for_ snks $ \snk ->
+          when (Register snk `SQ.elemIndexL` variables == Nothing) $
+          throw $ printf "Sink %s is not found or not a register" snk
+    )
+
 
 throw :: Member (PE.Error IodineException) r => String -> Sem r a
 throw = PE.throw . IE SanityCheck

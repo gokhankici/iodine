@@ -1,10 +1,13 @@
 {
+  "clock": "clk",
   "annotations": [
     {
       "type": "source",
       "variables": [
         "x",
-        "y"
+        "y",
+        "in_eq",
+        "in_neq"
       ]
     },
     {

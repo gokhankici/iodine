@@ -42,6 +42,7 @@ data St =
   St { _modId  :: Int    -- | counter for modules
      , _abId   :: Int    -- | counter for always blocks
      , _stmtId :: Int    -- | counter for statements
+     , _exprId :: Int
      , _funId  :: Int    -- | counter for functions
      , _trSubs :: TRSubs -- | This substitution map is used to determine the
                          -- kvar in the head position of the horn clauses. Has
@@ -98,9 +99,9 @@ normalizeEvent :: FD r => Event a -> Sem r (Event Int)
 normalizeEvent =
   -- normalizing event does not require statement state
   runReader initialStmtSt . \case
-  PosEdge {..} -> PosEdge <$> normalizeExpr eventExpr <*> freshId NoId
-  NegEdge {..} -> NegEdge <$> normalizeExpr eventExpr <*> freshId NoId
-  Star {..}    -> Star    <$> freshId NoId
+  PosEdge {..} -> PosEdge <$> normalizeExpr eventExpr <*> freshId EventId
+  NegEdge {..} -> NegEdge <$> normalizeExpr eventExpr <*> freshId EventId
+  Star {..}    -> Star    <$> freshId EventId
 
 -- | Normalize a module instance. This just assigns zero to the expressions that
 -- appear in port assignments.
@@ -251,7 +252,7 @@ assignment to the variables, and zero for the rest of the expression types. It
 -}
 normalizeExpr :: FDR r => Expr a -> Sem r (Expr Int)
 normalizeExpr = \case
-  Constant {..} -> Constant constantValue <$> freshId NoId
+  Constant {..} -> Constant constantValue <$> freshId ExprId
 
   Variable {..} -> Variable varName varModuleName <$> getLastBlocking varName
 
@@ -266,15 +267,15 @@ normalizeExpr = \case
     <$> normalizeExpr ifExprCondition
     <*> normalizeExpr ifExprThen
     <*> normalizeExpr ifExprElse
-    <*> freshId NoId
+    <*> freshId ExprId
 
-  Str {..} -> Str strValue <$> freshId NoId
+  Str {..} -> Str strValue <$> freshId ExprId
 
   Select {..} ->
     Select
     <$> normalizeExpr selectVar
     <*> traverse normalizeExpr selectIndices
-    <*> freshId NoId
+    <*> freshId ExprId
 
 
 -- #############################################################################
@@ -287,7 +288,7 @@ type FDS r  = (FDM r, Members '[State StmtSt] r)
 newtype ModuleName = ModuleName { getModuleName :: Id }
 
 initialSt :: St
-initialSt = St 0 0 0 0 mempty
+initialSt = St 0 0 0 0 0 mempty
 
 initialStmtSt :: StmtSt
 initialStmtSt = StmtSt mempty mempty mempty
@@ -297,15 +298,16 @@ runNormalize act = do
   (st, res) <- act & runState initialSt
   return (res, st ^. trSubs)
 
-data IdType = ModId | ABId | StmtId | FunId | NoId
+data IdType = ModId | ABId | StmtId | FunId | ExprId | EventId
 
 freshId :: FD r => IdType -> Sem r Int
 freshId = \case
-  ModId  -> incrCount modId
-  ABId   -> incrCount abId
-  StmtId -> incrCount stmtId
-  FunId  -> incrCount funId
-  NoId   -> return 0
+  ModId   -> incrCount modId
+  ABId    -> incrCount abId
+  StmtId  -> incrCount stmtId
+  FunId   -> incrCount funId
+  ExprId  -> incrCount exprId
+  EventId -> return 0
   where
     incrCount :: FD r => (Lens St St Int Int) -> Sem r Int
     incrCount l = gets (^. l) <* modify (l +~ 1)

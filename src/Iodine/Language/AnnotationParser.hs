@@ -33,7 +33,8 @@ instance FromJSON AF where
     fmap AF $ AnnotationFile <$>
     join  getAnnotation (o .:? "annotations" .!= S.empty) <*>
     fmap2 getQualifier  (o .:? "qualifiers"  .!= S.empty) <*>
-    o .:? "topmodule" .!= ""
+    o .:? "topmodule" .!= "" <*>
+    o .:?  "clock"
     where
       join f = fmap (concatSeq . fmap f)
       fmap2  = fmap . fmap

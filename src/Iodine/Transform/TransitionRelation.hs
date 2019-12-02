@@ -51,8 +51,9 @@ transitionRelation' conds r stmt =
 
     IfStmt {..} ->
       let conds' = ifStmtCondition <| conds
-          c      = HBinary HEquals    (val ifStmtCondition) (HInt 0)
-          not_c  = HBinary HNotEquals (val ifStmtCondition) (HInt 0)
+          hc     = val ifStmtCondition
+          c      = HBinary HEquals    hc (HInt 0)
+          not_c  = HBinary HNotEquals hc (HInt 0)
           t      = transitionRelation' conds' r ifStmtThen
           e      = transitionRelation' conds' r ifStmtElse
       in  HOr $ HAnd (c |:> t) |:> HAnd (not_c |:> e)
@@ -61,13 +62,12 @@ transitionRelation' conds r stmt =
       HBool True
 
  where
-  ufVal :: Maybe Id -> HornAppReturnType -> L (Expr Int) -> HornExpr
-  ufVal mName t es = HApp name t hes
+  ufVal :: Id -> HornAppReturnType -> L (Expr Int) -> HornExpr
+  ufVal name t es = HApp name t hes
     where
-      name = case mName of
-               Just n  -> n
-               Nothing -> "uf_noname_" <> T.pack (show $ stmtData stmt)
       hes = fmap val $ keepVariables es
+
+  mkUFName n = "uf_noname_" <> T.pack (show n)
 
   val :: Expr Int -> HornExpr
   val = \case
@@ -78,10 +78,12 @@ transitionRelation' conds r stmt =
                           , hVarType   = Value
                           , hVarRun    = r
                           }
-    UF {..}     -> ufVal (Just ufName) HornInt ufArgs
-    IfExpr {..} -> ufVal Nothing HornInt (ifExprCondition |:> ifExprThen |> ifExprElse)
+    UF {..}     -> ufVal ufName HornInt ufArgs
+    IfExpr {..} -> ufVal name HornInt (ifExprCondition |:> ifExprThen |> ifExprElse)
+      where name = mkUFName exprData
     Str {..}    -> notSupported
-    Select {..} -> ufVal Nothing HornInt (selectVar <| selectIndices)
+    Select {..} -> ufVal name HornInt (selectVar <| selectIndices)
+      where name = mkUFName exprData
 
   tagWithCond :: PathCond -> Expr Int -> HornExpr
   tagWithCond es e =

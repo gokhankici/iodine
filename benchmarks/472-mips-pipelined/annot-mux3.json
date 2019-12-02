@@ -3,7 +3,10 @@
     {
       "type": "source",
       "variables": [
-        "y"
+        "sel",
+        "a",
+        "b",
+        "c"
       ]
     },
     {

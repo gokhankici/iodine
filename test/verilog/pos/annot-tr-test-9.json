@@ -1,9 +1,12 @@
 {
+  "clock": "clk",
   "annotations": [
     {
       "type": "source",
       "variables": [
-        "a"
+        "a",
+        "b",
+        "ar"
       ]
     },
     {

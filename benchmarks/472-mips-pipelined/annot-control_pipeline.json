@@ -3,14 +3,7 @@
     {
       "type": "source",
       "variables": [
-        "ALUSrc",
-        "Branch",
-        "Jump",
-        "MemRead",
-        "MemWrite",
-        "MemtoReg",
-        "RegDst",
-        "RegWrite"
+        "opcode"
       ]
     },
     {

@@ -1,4 +1,5 @@
 {
+  "clock": "clk",
   "annotations": [
     { "type": "source",    "variables": ["x"] },
     { "type": "sink",      "variables": ["y"] },

@@ -14,7 +14,7 @@ data Annotation a =
     Source       { getSourceVar   :: Id
                  , annotationData :: a
                  }
-  | Sink         { getSourceVar   :: Id
+  | Sink         { getSinkVar     :: Id
                  , annotationData :: a
                  }
   | Sanitize     (L Id) a
@@ -46,8 +46,12 @@ data AnnotationFile a =
   AnnotationFile { afAnnotations :: L (Annotation a)
                  , afQualifiers  :: L (Qualifier a)
                  , afTopModule   :: Id
+                 , afClock       :: Maybe Id
                  }
   deriving (Generic, Show, Functor, Foldable, Traversable)
 
 isSource :: Annotation a -> Bool
 isSource = \case Source{..} -> True; _ -> False
+
+isSink :: Annotation a -> Bool
+isSink = \case Sink{..} -> True; _ -> False

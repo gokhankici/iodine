@@ -1,4 +1,5 @@
 {
+  "clock": "g_clk",
   "annotations": [
     {
       "type": "source",

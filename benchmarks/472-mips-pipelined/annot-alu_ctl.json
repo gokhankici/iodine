@@ -3,7 +3,8 @@
     {
       "type": "source",
       "variables": [
-        "ALUOperation"
+        "ALUOp",
+        "Funct"
       ]
     },
     {

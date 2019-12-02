@@ -1,9 +1,11 @@
 {
+  "clock": "clk",
   "annotations": [
     {
       "type": "source",
       "variables": [
-        "d_out"
+        "reset",
+        "d_in"
       ]
     },
     {
