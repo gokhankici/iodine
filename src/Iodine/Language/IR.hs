@@ -26,21 +26,21 @@ import           Iodine.Utils
 import           Data.Foldable
 import qualified Data.HashSet          as HS
 import qualified Data.HashMap.Strict   as HM
-import           Data.List             (intercalate)
 import qualified Data.Sequence         as SQ
 import qualified Data.Text             as T
 import           GHC.Generics          hiding (moduleName)
-import           Text.Printf
 import           Data.Hashable
 import qualified Text.PrettyPrint      as PP
 
 data Variable =
-    Wire {variableName :: Id}
-  | Register {variableName :: Id}
+    Wire     { variableName :: Id }
+  | Register { variableName :: Id }
+  deriving (Eq)
 
 data Port =
     Input  { portVariable :: Variable }
   | Output { portVariable :: Variable }
+  deriving (Eq)
 
 data Expr a =
   Constant { constantValue :: Id
@@ -148,106 +148,129 @@ instance GetVariables Expr where
 -- -----------------------------------------------------------------------------
 -- Typeclass Instances
 -- -----------------------------------------------------------------------------
+class ShowIndex a where
+  showIndex :: a -> String
 
-class ToDoc a where
+instance ShowIndex () where
+  showIndex () = ""
+
+instance ShowIndex Int where
+  showIndex n  = " #" ++ show n
+
+docIndex :: ShowIndex a => a -> PP.Doc
+docIndex = PP.text . showIndex
+
+
+
+class Doc a where
   doc :: a -> PP.Doc
 
-instance Show Variable where
-  show (Wire v)     = printf "(Wire %s)" v
-  show (Register v) = printf "(Reg %s)" v
+sep :: PP.Doc
+sep = PP.comma
 
-instance Show Port where
-  show (Input p)  = printf "(Input %s)" (show p)
-  show (Output p) = printf "(Output %s)" (show p)
+docList :: Doc a => L a -> PP.Doc
+docList l = PP.hsep $ PP.punctuate sep (doc <$> toList l)
 
-instance Show a => Show (Expr a) where
-  show (Constant c _)   = T.unpack c
-  show (Variable v _ a) = printf "%s#%s" v (show a)
-  show (UF n es _)      = printf "%s(%s)" n (intercalate ", " $ show <$> toList es)
-  show (IfExpr c t e _) = printf "(%s ? %s : %s)" (show c) (show t) (show e)
-  show (Str s _)        = T.unpack s
-  show (Select v is _)  = printf "%s%s" (show v) (show $ toList is)
+nest :: PP.Doc -> PP.Doc
+nest = PP.nest 2
 
-instance Show a => Show (Event a) where
-  show (PosEdge e _) = printf "@(posedge %s)" (show e)
-  show (NegEdge e _) = printf "@(negedge %s)" (show e)
-  show (Star _)      = "*"
+vcat :: Doc a => L a -> PP.Doc
+vcat = PP.vcat . fmap doc . toList
 
-instance Show a => ToDoc (Stmt a) where
-  doc = go
-    where
-      nest = PP.nest 2
-      vcatSeq f = foldl' (\d a -> d PP.$+$ f a) PP.empty
-      go (Block ss a) =
-        case ss of
-          SQ.Empty          -> go (Skip a)
-          s SQ.:<| SQ.Empty -> go s
-          _                 -> PP.lbrace PP.$+$
-                               nest (vcatSeq go ss) PP.$+$
-                               PP.rbrace
-      go (Assignment t l r _) =
-        PP.text (show l) PP.<+>
-        PP.text op PP.<+>
-        PP.text (show r) PP.<>
-        PP.semi
-        where op = case t of
-                     Blocking    -> "="
-                     NonBlocking -> "<="
-                     Continuous  -> ":="
-      go (IfStmt c t e _) =
-        PP.cat [ PP.text "if" PP.<+> PP.parens (PP.text $ show c) PP.<+> PP.lbrace
-               , nest $ go t
-               , PP.rbrace PP.<+> PP.text "else" PP.<+> PP.lbrace
-               , nest $ go e
-               , PP.rbrace
-               ]
-      go (Skip _) = PP.text "skip"
+instance Doc T.Text where
+  doc = PP.text . T.unpack
+
+instance Doc Variable where
+  doc (Wire v)     = PP.text "wire" PP.<+> doc v PP.<> PP.semi
+  doc (Register v) = PP.text "reg " PP.<+> doc v PP.<> PP.semi
+
+instance Doc Port where
+  doc (Input p)  = PP.text "input " PP.<+> doc (variableName p) PP.<> PP.semi
+  doc (Output p) = PP.text "output" PP.<+> doc (variableName p) PP.<> PP.semi
+
+instance ShowIndex a => Doc (Expr a) where
+  doc (Constant c _)   = doc c
+  doc (Variable v _ a) = doc v PP.<> docIndex a
+  doc (UF n es _)      = doc n PP.<> PP.parens (docList es)
+  doc (IfExpr c t e _) = PP.parens $ PP.hsep [doc c, PP.text "?", doc t, PP.colon, doc e]
+  doc (Str s _)        = PP.quotes $ doc s
+  doc (Select v is _)  = doc v PP.<> PP.brackets (docList is)
+
+instance ShowIndex a => Doc (Event a) where
+  doc (PosEdge e _) = PP.text "@(posedge " PP.<> doc e PP.<> PP.rparen
+  doc (NegEdge e _) = PP.text "@(negedge " PP.<> doc e PP.<> PP.rparen
+  doc (Star _)      = PP.text "*"
+
+instance ShowIndex a => Doc (Stmt a) where
+  doc (Block ss a) =
+    case ss of
+      SQ.Empty          -> doc (Skip a)
+      s SQ.:<| SQ.Empty -> doc s
+      _                 -> PP.lbrace PP.$+$
+                           nest (vcat ss) PP.$+$
+                           PP.rbrace
+  doc (Assignment t l r _) =
+    doc l PP.<+> PP.text op PP.<+> doc r PP.<> PP.semi
+    where op = case t of
+                 Blocking    -> "="
+                 NonBlocking -> "<="
+                 Continuous  -> ":="
+  doc (IfStmt c t e _) =
+    PP.cat [ PP.text "if" PP.<+> PP.parens (doc c) PP.<+> PP.lbrace
+           , nest $ doc t
+           , PP.rbrace PP.<+> PP.text "else" PP.<+> PP.lbrace
+           , nest $ doc e
+           , PP.rbrace
+           ]
+  doc (Skip _) = PP.text "skip" PP.<> PP.semi
 
 
-instance Show a => ToDoc (ModuleInstance a) where
+instance ShowIndex a => Doc (ModuleInstance a) where
   doc (ModuleInstance t n ps _) =
-    text t PP.<+>
-    text n PP.<>
-    PP.parens (PP.hcat $ PP.punctuate (PP.comma PP.<> PP.text " ") args)
+    doc t PP.<+> doc n PP.<> PP.parens (PP.hsep $ PP.punctuate sep args)
     where
-      text = PP.text . T.unpack
       args =
-        HM.foldrWithKey
-        (\v e acc -> (text v PP.<+> PP.equals PP.<+> PP.text (show e)) : acc)
+        HM.foldlWithKey'
+        (\acc v e-> (doc v PP.<+> PP.equals PP.<+> doc e) : acc)
         []
         ps
 
-instance Show a => ToDoc (AlwaysBlock a) where
+instance ShowIndex a => Doc (AlwaysBlock a) where
   doc (AlwaysBlock e s _) =
-    PP.sep [ PP.text "always" PP.<+> PP.text (show e)
+    PP.sep [ PP.text "always"
+             PP.<> PP.text (showIndex $ stmtData s)
+             PP.<+> doc e
            , doc s
            ]
 
-instance Show a => Show (Stmt a) where
-  show = PP.render . doc
-
-instance Show a => Show (ModuleInstance a) where
-  show = PP.render . doc
-
-instance Show a => Show (AlwaysBlock a) where
-  show = PP.render . doc
-
-instance Show a => Show (Module a) where
-  show Module{..} = printf "module(%s,\n%s,\n%s,\n%s,\n%s,\n%s)"
-                    moduleName
-                    (goL  ports)
-                    (goL  variables)
-                    (goNL gateStmts)
-                    (goNL alwaysBlocks)
-                    (goNL moduleInstances)
+instance ShowIndex a => Doc (Module a) where
+  doc Module{..} =
+    PP.vcat [ PP.text "module" PP.<> PP.parens args PP.<> PP.semi
+            , PP.nest 2 contents
+            , PP.text "endmodule"
+            ]
     where
-      goL :: Show x => L x -> String
-      goL = show . toList
+      contents =
+        vcatNL [ vcat ports
+               , vcat variables
+               , vcatNS gateStmts
+               , vcatNS moduleInstances
+               , vcatNS alwaysBlocks
+               ]
+      args =
+        PP.hsep $
+        PP.punctuate sep (doc . variableName . portVariable <$> toList ports)
 
-      goNL :: Show x => L x -> String
-      goNL = wrap "[" "]" . intercalate ",\n" . fmap show . toList
+      vcatNS :: Doc b => L b -> PP.Doc
+      vcatNS = vcatNL . fmap doc . toList
 
-      wrap l r s = l ++ s ++ r
+      vcatNL :: [PP.Doc] -> PP.Doc
+      vcatNL = PP.vcat . go
+        where
+          go []     = []
+          go [a]    = [a]
+          go (a:as) = a : PP.text "" : go as
+
 
 instance Hashable a => Hashable (Expr a) where
   hashWithSalt n (Variable v m a) = hashWithSalt n (v,m,a)
@@ -257,3 +280,13 @@ instance Hashable a => Hashable (Event a) where
   hashWithSalt n (PosEdge e a) = hashWithSalt n (e, a)
   hashWithSalt n (NegEdge e a) = hashWithSalt n (e, a)
   hashWithSalt n (Star a)      = hashWithSalt n a
+
+
+instance ShowIndex a => Show (Stmt a) where
+  show = PP.render . doc
+
+instance ShowIndex a => Show (AlwaysBlock a) where
+  show = PP.render . doc
+
+instance ShowIndex a => Show (Module a) where
+  show = PP.render . doc

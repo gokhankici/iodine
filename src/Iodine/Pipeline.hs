@@ -27,7 +27,7 @@ Implements the following pipeline:
 
 IR ----+
        |
-Annot ---> SanityCheck -> Merge -> SSA -> VCGen -> Query
+Annot ---> SanityCheck -> Merge -> Normalie -> VCGen -> Query
 -}
 pipeline
   :: Members '[Error IodineException, Trace] r

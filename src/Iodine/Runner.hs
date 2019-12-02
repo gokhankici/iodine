@@ -7,6 +7,7 @@ module Iodine.Runner (run , main) where
 import           Iodine.IodineArgs
 import           Iodine.Language.AnnotationParser
 import           Iodine.Language.IRParser
+import           Iodine.Transform.Query (FInfo)
 import           Iodine.Pipeline
 import           Iodine.Types
 
@@ -18,7 +19,6 @@ import qualified Control.Exception                as E
 import           Control.Monad
 import qualified Data.ByteString.Lazy             as B
 import           Data.Function
-import qualified Data.HashMap.Strict              as HM
 import qualified Data.Text                        as T
 import           Polysemy                         hiding (run)
 import           Polysemy.Error
@@ -26,7 +26,7 @@ import           Polysemy.Trace
 import           System.Directory
 import           System.Environment
 import           System.Exit
-import           System.FilePath.Posix
+import           System.FilePath
 import           System.IO
 import           System.Process
 
@@ -120,11 +120,19 @@ checkIR IodineArgs{..}
       case result of
         Right parsedIR -> forM_ parsedIR print >> return True
         Left e         -> errorHandle e
+  | vcgen = computeFInfo >> return True
   | otherwise = do
+      finfo <- computeFInfo
+      result <- F.solve config finfo
+      let safe = FT.isSafe result
+      (readFile fqoutFile >>= putStrLn) `E.catch` (\(_ :: E.IOException) -> return ())
+      return safe
+  where
+    computeFInfo :: IO FInfo
+    computeFInfo = do
       irFileContents <- readFile fileName
       annotFileContents <- B.readFile annotFile
-      mFInfo <-
-        pipeline
+      mFInfo <- pipeline
         (T.pack moduleName)                           -- top module name
         (parse (fileName, irFileContents))            -- ir reader
         (return $ parseAnnotations annotFileContents) -- anootation file reader
@@ -133,27 +141,27 @@ checkIR IodineArgs{..}
         & embedToFinal
         & runFinal
       case mFInfo of
-        Right finfo -> do
-          result <- F.solve config finfo
-          let safe = FT.isSafe result
-          unless safe $ printSolution $ FT.resSolution result
-          return safe
+        Right finfo -> return finfo
         Left e      -> errorHandle e
-  where
-    printSolution =
-      void . HM.traverseWithKey go where go k v = print k >> putStrLn (FT.showpp v)
+
+    config :: FC.Config
     config = FC.defConfig { FC.eliminate = FC.Some
-                          , FC.save      = True
+                          , FC.save      = not noSave
                           , FC.srcFile   = fileName
                           , FC.metadata  = True
                           , FC.minimize  = False
                           }
+
+    fqoutFile :: FilePath
+    fqoutFile =
+      let (dir, base) = splitFileName fileName
+      in dir </> ".liquid" </> (base <.> "fqout")
 
 
 -- -----------------------------------------------------------------------------
 -- Common Functions
 -- -----------------------------------------------------------------------------
 
-errorHandle :: IodineException -> IO Bool
+errorHandle :: IodineException -> IO a
 errorHandle e = E.throwIO e
 

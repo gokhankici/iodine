@@ -3,7 +3,7 @@ module test(clk, in1, in2, out);
    input wire [1:0] in1;
    input wire [1:0] in2;
    output reg [1:0] out = 2;
-   wire             fast;
+   reg              fast;
    reg [1:0]        temp1 = 3;
 
    // @annot{taint_source(in1)}

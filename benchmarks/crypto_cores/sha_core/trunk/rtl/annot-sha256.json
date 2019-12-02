@@ -3,7 +3,10 @@
     {
       "type": "source",
       "variables": [
-        "text_i"
+        "rst_i",
+        "text_i_",
+        "cmd_i",
+        "cmd_w_i"
       ]
     },
     {

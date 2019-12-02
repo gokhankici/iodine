@@ -226,10 +226,10 @@ majorStubs runner = describe "major-stub" $ forM_ ts runner
   where
     b  = benchmarkDir
     d  = b </> "crypto_cores/sha_core/trunk/rtl"
-    ts = [ UnitTest { testName    = "sha_stub"
+    ts = [ UnitTest { testName    = "sha_stub_3"
                     , moduleName  = "sha256"
-                    , verilogFile = d </> "sha256_stub.v"
-                    , annotFile   = Just $ d </> "annot-sha256.json"
+                    , verilogFile = d </> "sha256_stub_3.v"
+                    , annotFile   = Just $ d </> "annot-sha256_stub_3.json"
                     , testType    = Succ
                     }
          ]

@@ -26,7 +26,7 @@ data Horn a =
        deriving (Show, Functor)
 
 
-data HornBinaryOp = HEquals | HImplies | HIff
+data HornBinaryOp = HEquals | HNotEquals | HImplies | HIff
 
 data HornType = Init
               | TagReset
@@ -39,10 +39,12 @@ data HornType = Init
               deriving (Eq, Show, Generic)
 
 data HornVarType = Tag | Value
-                   deriving (Show)
+                   deriving (Eq, Show)
 
 data HornVarRun  = LeftRun | RightRun
-                   deriving (Show)
+                   deriving (Eq, Show)
+
+data HornAppReturnType = HornInt | HornBool
 
 data HornExpr =
   HConstant Id
@@ -60,19 +62,34 @@ data HornExpr =
             , hBinaryLhs :: HornExpr
             , hBinaryRhs :: HornExpr
             }
-  | HApp { hAppMFun :: Maybe Id -- a unique function name or Nothing
-         , hAppArgs :: L HornExpr
+  | HApp { hAppFun  :: Id                -- | a unique function name
+         , hAppRet  :: HornAppReturnType -- | function return type
+         , hAppArgs :: L HornExpr        -- | function arguments
          }
   | HNot { hNotArg :: HornExpr }
   | KVar { hKVarId   :: Int
          , hKVarSubs :: L (HornExpr, HornExpr)
          }
 
+mkEqual :: (HornExpr, HornExpr) -> HornExpr
+mkEqual (e1, e2) = HBinary op e1 e2
+  where op = if isBoolean e1 || isBoolean e2 then HIff else HEquals
+
+
+isBoolean :: HornExpr -> Bool
+isBoolean (HBool _) = True
+isBoolean HVar{..}  = hVarType == Tag
+isBoolean HAnd{..}  = True
+isBoolean HOr{..}   = True
+isBoolean HNot{..}  = True
+isBoolean _         = False
+
 
 instance Show HornBinaryOp where
-  show HEquals  = "="
-  show HImplies = "=>"
-  show HIff     = "<=>"
+  show HEquals    = "="
+  show HNotEquals = "!="
+  show HImplies   = "=>"
+  show HIff       = "<=>"
 
 instance Show HornExpr where
   show = PP.render . go
@@ -95,11 +112,7 @@ instance Show HornExpr where
         HAnd es -> PP.text "&&" PP.<+> goL es
         HOr es -> PP.text "||" PP.<+> goL es
         HBinary{..} -> PP.hsep [go hBinaryLhs, PP.text (show hBinaryOp), go hBinaryRhs]
-        HApp{..} ->
-          let name = case hAppMFun of
-                       Nothing -> PP.text "unnamed"
-                       Just n  -> text n
-          in name PP.<> PP.parens (goArgs hAppArgs)
+        HApp{..} -> text hAppFun PP.<> PP.parens (goArgs hAppArgs)
         HNot e -> PP.char '!' PP.<+> go e
         KVar{..} ->
           let args =

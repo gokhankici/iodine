@@ -73,7 +73,6 @@ data St = St { _hornConstraints           :: HM.HashMap Integer (FT.SubC HornCla
 
              , _constraintCounter         :: Integer
              , _qualifierCounter          :: Int
-             , _ufCounter                 :: Int
              , _invBindMap                :: HM.HashMap Id FT.BindId
              }
 
@@ -208,27 +207,25 @@ convertExpr (HOr es) =
 
 convertExpr HBinary {..} =
   case hBinaryOp of
-    HEquals  -> FT.EEq  <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
-    HImplies -> FT.PImp <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
-    HIff     -> FT.PIff <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
+    HEquals    -> FT.EEq         <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
+    HNotEquals -> FT.PAtom FT.Ne <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
+    HImplies   -> FT.PImp        <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
+    HIff       -> FT.PIff        <$> convertExpr hBinaryLhs <*> convertExpr hBinaryRhs
 
 convertExpr HNot {..} = FT.PNot <$> convertExpr hNotArg
 
 -- | create a new uninterpreted function if the function application does not
 -- have a name for the function
 convertExpr HApp {..} = do
-  fsym <- case hAppMFun of
-    Just f  -> return $ symbol f
-    Nothing -> do
-      n <- gets (^. ufCounter) <* modify (& ufCounter +~ 1)
-      return . symbol $ "uf_noname_" <> T.pack (show n)
+  let fsym = symbol hAppFun
   modify (globalConstantLiterals %~ FT.insertSEnv fsym sort)
   FT.mkEApp (FT.dummyLoc fsym) . toList <$> traverse convertExpr hAppArgs
  where
   arity = SQ.length hAppArgs
+  ret   = toFSort hAppRet
   sort  = if arity > 0
-          then FT.mkFFunc 0 (replicate (arity + 1) FT.intSort)
-          else FT.intSort
+          then FT.mkFFunc 0 $ (replicate arity FT.intSort) ++ [ret]
+          else ret
 
 convertExpr KVar {..} =
   FT.PKVar (mkKVar hKVarId) . FT.mkSubst . toList <$>
@@ -269,6 +266,9 @@ addBinding name sr = do
   modify (invBindMap . at name ?~ n)
   return n
 
+toFSort :: HornAppReturnType -> FT.Sort
+toFSort HornInt  = FT.intSort
+toFSort HornBool = FT.boolSort
 
 -- -----------------------------------------------------------------------------
 -- generate qualifiers
@@ -515,7 +515,7 @@ addQualifier :: FD r => FT.Qualifier -> Sem r ()
 addQualifier q = modify (& qualifiers %~ (|> q))
 
 initialState :: St
-initialState = St mempty mempty mempty mempty defaultQualifiers 0 0 0 mempty
+initialState = St mempty mempty mempty mempty defaultQualifiers 0 0 mempty
 
 -- | return the current constraint id and increment it later
 freshConstraintId :: FD r => Sem r Integer

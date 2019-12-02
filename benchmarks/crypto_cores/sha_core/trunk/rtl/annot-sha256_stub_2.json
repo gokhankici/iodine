@@ -1,0 +1,44 @@
+{
+  "annotations": [
+    {
+      "type": "source",
+      "variables": [
+        "rst_i",
+        "text_i_",
+        "cmd_i",
+        "cmd_w_i"
+      ]
+    },
+    {
+      "type": "sink",
+      "variables": [
+        "text_o",
+        "cmd"
+      ]
+    },
+    {
+      "type": "always_eq",
+      "variables": [
+        "rst_i",
+        "cmd_i",
+        "cmd_w_i"
+      ]
+    },
+    {
+      "type": "initial_eq",
+      "variables": [
+        "cmd",
+        "text_o",
+        "round",
+        "read_counter",
+        "busy"
+      ]
+    },
+    {
+      "type": "assert_eq",
+      "variables": [
+        "cmd"
+       ]
+     }
+  ]
+}
