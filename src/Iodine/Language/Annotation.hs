@@ -58,9 +58,9 @@ instance FromJSON Annotations where
     Annotations
     <$> o .:  "source"
     <*> o .:  "sink"
-    <*> o .:? "init_eq"   .!= mempty
-    <*> o .:? "always_eq" .!= mempty
-    <*> o .:? "assert_eq" .!= mempty
+    <*> o .:? "initial_eq" .!= mempty
+    <*> o .:? "always_eq"  .!= mempty
+    <*> o .:? "assert_eq"  .!= mempty
 
 instance FromJSON Qualifier where
   parseJSON = withObject "Qualifier" $ \o -> do
@@ -105,7 +105,7 @@ getSources :: Member (Reader AnnotationFile) r => Id -> Sem r (HS.HashSet Id)
 getSources m = (^. sources) <$> getAnnotations m
 
 getSinks :: Member (Reader AnnotationFile) r => Id -> Sem r (HS.HashSet Id)
-getSinks m = (^. sources) <$> getAnnotations m
+getSinks m = (^. sinks) <$> getAnnotations m
 
 getClock :: Member (Reader AnnotationFile) r => Id -> Sem r (Maybe Id)
 getClock m = asks (view clock . toModuleAnnotations m)

@@ -1,8 +1,19 @@
 {
-  "clock": "clk",
-  "annotations": [
-    { "type": "source",    "variables": ["x"] },
-    { "type": "sink",      "variables": ["y"] },
-    { "type": "always_eq", "variables": ["x"] }
-  ]
+  "top_module": "test",
+  "modules": {
+    "test": {
+      "annotations": {
+        "source": [
+          "x"
+        ],
+        "sink": [
+          "y"
+        ],
+        "always_eq": [
+          "x"
+        ]
+      },
+      "clock": "clk"
+    }
+  }
 }

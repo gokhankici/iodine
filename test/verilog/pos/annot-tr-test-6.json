@@ -1,24 +1,20 @@
 {
-  "clock": "clk",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "x",
-        "slow"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "y"
-      ]
-    },
-    {
-      "type": "initial_eq",
-      "variables": [
-        "slow"
-      ]
+  "top_module": "test",
+  "modules": {
+    "test": {
+      "annotations": {
+        "source": [
+          "slow",
+          "x"
+        ],
+        "sink": [
+          "y"
+        ],
+        "initial_eq": [
+          "slow"
+        ]
+      },
+      "clock": "clk"
     }
-  ]
+  }
 }

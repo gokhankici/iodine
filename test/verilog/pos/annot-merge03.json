@@ -1,36 +1,19 @@
 {
-  "clock": "clk",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "opa",
-        "opb",
-        "sel",
-        "merge"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "out"
-      ]
+  "top_module": "test",
+  "modules": {
+    "test": {
+      "annotations": {
+        "source": [
+          "merge",
+          "opa",
+          "opb",
+          "sel"
+        ],
+        "sink": [
+          "out"
+        ]
+      },
+      "clock": "clk"
     }
-  ],
-  "old_qualifiers": [
-    {
-      "type": "pairs",
-      "variables": [
-        "opa_r",
-        "opb_r"
-      ]
-    },
-    {
-      "type": "pairs",
-      "variables": [
-        "r1",
-        "r2"
-      ]
-    }
-  ]
+  }
 }

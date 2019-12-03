@@ -1,23 +1,22 @@
 {
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "opcode"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "ALUSrc",
-        "Branch",
-        "Jump",
-        "MemRead",
-        "MemWrite",
-        "MemtoReg",
-        "RegDst",
-        "RegWrite"
-      ]
+  "top_module": "control_pipeline",
+  "modules": {
+    "control_pipeline": {
+      "annotations": {
+        "source": [
+          "opcode"
+        ],
+        "sink": [
+          "ALUSrc",
+          "Branch",
+          "Jump",
+          "MemRead",
+          "MemtoReg",
+          "MemWrite",
+          "RegDst",
+          "RegWrite"
+        ]
+      }
     }
-  ]
+  }
 }

@@ -1,19 +1,18 @@
 {
-  "clock": "clk",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "a",
-        "b",
-        "ar"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "r"
-      ]
+  "top_module": "test",
+  "modules": {
+    "test": {
+      "annotations": {
+        "source": [
+          "a",
+          "ar",
+          "b"
+        ],
+        "sink": [
+          "r"
+        ]
+      },
+      "clock": "clk"
     }
-  ]
+  }
 }

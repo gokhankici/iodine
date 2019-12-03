@@ -1,22 +1,18 @@
 {
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "address"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "data_out"
-      ]
-    },
-    {
-      "type": "always_eq",
-      "variables": [
-        "address"
-      ]
+  "top_module": "rom32",
+  "modules": {
+    "rom32": {
+      "annotations": {
+        "source": [
+          "address"
+        ],
+        "sink": [
+          "data_out"
+        ],
+        "always_eq": [
+          "address"
+        ]
+      }
     }
-  ]
+  }
 }

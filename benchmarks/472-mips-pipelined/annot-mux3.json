@@ -1,25 +1,21 @@
 {
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "sel",
-        "a",
-        "b",
-        "c"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "y"
-      ]
-    },
-    {
-      "type": "always_eq",
-      "variables": [
-        "sel"
-      ]
+  "top_module": "mux3",
+  "modules": {
+    "mux3": {
+      "annotations": {
+        "source": [
+          "a",
+          "b",
+          "c",
+          "sel"
+        ],
+        "sink": [
+          "y"
+        ],
+        "always_eq": [
+          "sel"
+        ]
+      }
     }
-  ]
+  }
 }

@@ -1,28 +1,27 @@
 {
-  "clock": "clk",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "in1",
-        "in2",
-        "in3"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "out"
+  "top_module": "test",
+  "modules": {
+    "test": {
+      "annotations": {
+        "source": [
+          "in1",
+          "in2",
+          "in3"
+        ],
+        "sink": [
+          "out"
+        ]
+      },
+      "clock": "clk",
+      "qualifiers": [
+        {
+          "type": "pairs",
+          "variables": [
+            "in1_r",
+            "in2_r"
+          ]
+        }
       ]
     }
-  ],
-  "qualifiers": [
-    {
-      "type": "pairs",
-      "variables": [
-        "in1_r",
-        "in2_r"
-      ]
-    }
-  ]
+  }
 }

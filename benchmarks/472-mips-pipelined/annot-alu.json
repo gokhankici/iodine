@@ -1,19 +1,18 @@
 {
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "a",
-        "b",
-        "ctl"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "result",
-        "zero"
-      ]
+  "top_module": "alu",
+  "modules": {
+    "alu": {
+      "annotations": {
+        "source": [
+          "a",
+          "b",
+          "ctl"
+        ],
+        "sink": [
+          "result",
+          "zero"
+        ]
+      }
     }
-  ]
+  }
 }

@@ -1,24 +1,20 @@
 {
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "ALUOp",
-        "Funct"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "ALUOperation"
-      ]
-    },
-    {
-      "type": "always_eq",
-      "variables": [
-        "ALUOp",
-        "Funct"
-      ]
+  "top_module": "alu_ctl",
+  "modules": {
+    "alu_ctl": {
+      "annotations": {
+        "source": [
+          "ALUOp",
+          "Funct"
+        ],
+        "sink": [
+          "ALUOperation"
+        ],
+        "always_eq": [
+          "ALUOp",
+          "Funct"
+        ]
+      }
     }
-  ]
+  }
 }

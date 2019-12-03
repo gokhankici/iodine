@@ -1,24 +1,20 @@
 {
-  "clock": "clk",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "reset",
-        "d_in"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "d_out"
-      ]
-    },
-    {
-      "type": "always_eq",
-      "variables": [
-        "reset"
-      ]
+  "top_module": "reg32",
+  "modules": {
+    "reg32": {
+      "annotations": {
+        "source": [
+          "d_in",
+          "reset"
+        ],
+        "sink": [
+          "d_out"
+        ],
+        "always_eq": [
+          "reset"
+        ]
+      },
+      "clock": "clk"
     }
-  ]
+  }
 }

@@ -1,34 +1,27 @@
 {
-  "clock": "clk",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "in",
-        "wallclock"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "out"
-      ]
-    },
-    {
-      "type": "always_eq",
-      "variables": [
-        "in"
-      ]
-    },
-    {
-      "type": "initial_eq",
-      "variables": [
-        "in",
-        "inH",
-        "out",
-        "state",
-        "wallclock"
-      ]
+  "top_module": "test",
+  "modules": {
+    "test": {
+      "annotations": {
+        "source": [
+          "in",
+          "wallclock"
+        ],
+        "sink": [
+          "out"
+        ],
+        "always_eq": [
+          "in"
+        ],
+        "initial_eq": [
+          "in",
+          "inH",
+          "out",
+          "state",
+          "wallclock"
+        ]
+      },
+      "clock": "clk"
     }
-  ]
+  }
 }

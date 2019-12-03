@@ -1,35 +1,28 @@
 {
-  "clock": "clk",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "x",
-        "y",
-        "in_eq",
-        "in_neq"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "out"
-      ]
-    },
-    {
-      "type": "always_eq",
-      "variables": [
-        "in_eq"
-      ]
-    },
-    {
-      "type": "initial_eq",
-      "variables": [
-        "cond1",
-        "cond2",
-        "x",
-        "y"
-      ]
+  "top_module": "test",
+  "modules": {
+    "test": {
+      "annotations": {
+        "source": [
+          "in_eq",
+          "in_neq",
+          "x",
+          "y"
+        ],
+        "sink": [
+          "out"
+        ],
+        "always_eq": [
+          "in_eq"
+        ],
+        "initial_eq": [
+          "cond1",
+          "cond2",
+          "x",
+          "y"
+        ]
+      },
+      "clock": "clk"
     }
-  ]
+  }
 }

@@ -1,25 +1,21 @@
 {
-  "clock": "clk",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "in"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "out"
-      ]
-    },
-    {
-      "type": "initial_eq",
-      "variables": [
-        "in",
-        "out",
-        "sec"
-      ]
+  "top_module": "test",
+  "modules": {
+    "test": {
+      "annotations": {
+        "source": [
+          "in"
+        ],
+        "sink": [
+          "out"
+        ],
+        "initial_eq": [
+          "in",
+          "out",
+          "sec"
+        ]
+      },
+      "clock": "clk"
     }
-  ]
+  }
 }

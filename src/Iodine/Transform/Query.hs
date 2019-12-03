@@ -386,8 +386,9 @@ generateAutoQualifiers :: FD r => AnnotationFile -> Sem r ()
 generateAutoQualifiers af = forM_ sourcePairs $ \(s1, s2) ->
   mkQ (mkVar s1) (mkVar s2) <$> freshQualifierId >>= addQualifier
   where
+    annots = toAnnotations topModuleName af
     topModuleName = af ^. afTopModule
-    srcs = HS.foldl' (|>) mempty ((toAnnotations topModuleName af) ^. sources)
+    srcs = HS.foldl' (|>) mempty (annots ^. sources)
 
     sourcePairs = twoPairs srcs
     -- sources     = getSourceVar <$> SQ.filter isSource afAnnotations

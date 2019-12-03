@@ -1,37 +1,30 @@
 {
-  "clock": "clk",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "RN1",
-        "RN2",
-		"WN",
-		"WD",
-		"RegWrite"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "RD1",
-        "RD2"
-      ]
-    },
-    {
-      "type": "always_eq",
-      "variables": [
-        "RN1",
-        "RN2",
-		"WN",
-		"RegWrite"
-      ]
-    },
-    {
-      "type": "initial_eq",
-      "variables": [
-        "file_array"
-      ]
+  "top_module": "reg_file",
+  "modules": {
+    "reg_file": {
+      "annotations": {
+        "source": [
+          "RegWrite",
+          "RN1",
+          "RN2",
+          "WD",
+          "WN"
+        ],
+        "sink": [
+          "RD1",
+          "RD2"
+        ],
+        "always_eq": [
+          "RegWrite",
+          "RN1",
+          "RN2",
+          "WN"
+        ],
+        "initial_eq": [
+          "file_array"
+        ]
+      },
+      "clock": "clk"
     }
-  ]
+  }
 }

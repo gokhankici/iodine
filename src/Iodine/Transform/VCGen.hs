@@ -442,14 +442,17 @@ computeStmtStM s = do
 
 computeStmtSt :: Annotations -> Module Int -> S -> StmtSt
 computeStmtSt as Module{..} stmt =
-  initialStmtSt
-  & currentSources       .~ filterAs sources
-  & currentSinks         .~ filterAs sinks
-  & currentInitialEquals .~ filterAs initialEquals
-  & currentAlwaysEquals  .~ filterAs alwaysEquals
-  & currentAssertEquals  .~ filterAs assertEquals
-  & currentInitialEquals %~ HS.union extraInitEquals
+  StmtSt
+  { _currentVariables     = vs
+  , _currentSources       = filterAs sources
+  , _currentSinks         = filterAs sinks
+  , _currentInitialEquals = HS.union extraInitEquals $ filterAs initialEquals
+  , _currentAlwaysEquals  = filterAs alwaysEquals
+  , _currentAssertEquals  = filterAs assertEquals
+  }
   where
+    filterAs l = HS.intersection (as ^. l) vs 
+    vs = getVariables stmt
     extraInitEquals =
       foldl'
       (\vars -> \case
@@ -461,16 +464,6 @@ computeStmtSt as Module{..} stmt =
             vars)
       mempty
       variables
-    filterAs l = HS.intersection vs (as ^. l)
-    vs = getVariables stmt
-    initialStmtSt =
-      StmtSt { _currentVariables     = mempty
-             , _currentSources       = mempty
-             , _currentSinks         = mempty
-             , _currentInitialEquals = mempty
-             , _currentAlwaysEquals  = mempty
-             , _currentAssertEquals  = mempty
-             }
 
 getUpdatedVariables :: Stmt a -> Ids
 getUpdatedVariables = \case

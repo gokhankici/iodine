@@ -1,43 +1,33 @@
 {
-  "clock": "clk_i",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "rst_i",
-        "text_i_",
-        "cmd_i",
-        "cmd_w_i"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "cmd"
-      ]
-    },
-    {
-      "type": "always_eq",
-      "variables": [
-        "rst_i",
-        "cmd_i",
-        "cmd_w_i"
-      ]
-    },
-    {
-      "type": "initial_eq",
-      "variables": [
-        "cmd",
-        "round",
-        "read_counter",
-        "busy"
-      ]
-    },
-    {
-      "type": "assert_eq",
-      "variables": [
-        "cmd"
-       ]
-     }
-  ]
+  "top_module": "sha256",
+  "modules": {
+    "sha256": {
+      "annotations": {
+        "source": [
+          "cmd_i",
+          "cmd_w_i",
+          "rst_i",
+          "text_i_"
+        ],
+        "sink": [
+          "cmd"
+        ],
+        "always_eq": [
+          "cmd_i",
+          "cmd_w_i",
+          "rst_i"
+        ],
+        "initial_eq": [
+          "busy",
+          "cmd",
+          "read_counter",
+          "round"
+        ],
+        "assert_eq": [
+          "cmd"
+        ]
+      },
+      "clock": "clk_i"
+    }
+  }
 }

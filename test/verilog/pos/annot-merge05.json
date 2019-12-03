@@ -1,29 +1,28 @@
 {
-  "clock": "clk",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "opa",
-        "opb",
-        "fast"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "out"
+  "top_module": "test",
+  "modules": {
+    "test": {
+      "annotations": {
+        "source": [
+          "fast",
+          "opa",
+          "opb"
+        ],
+        "sink": [
+          "out"
+        ]
+      },
+      "clock": "clk",
+      "qualifiers": [
+        {
+          "type": "implies",
+          "lhs": "x",
+          "rhs": [
+            "opb",
+            "opa"
+          ]
+        }
       ]
     }
-  ],
-  "qualifiers": [
-    {
-      "type": "implies",
-      "lhs": "x",
-      "rhs": [
-        "opb",
-        "opa"
-      ]
-    }
-  ]
+  }
 }

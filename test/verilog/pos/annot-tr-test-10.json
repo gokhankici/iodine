@@ -1,18 +1,17 @@
 {
-  "clock": "clk",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "i1",
-        "i2"
-      ]
-    },
-    {
-      "type": "sink",
-      "variables": [
-        "o"
-      ]
+  "top_module": "test",
+  "modules": {
+    "test": {
+      "annotations": {
+        "source": [
+          "i1",
+          "i2"
+        ],
+        "sink": [
+          "o"
+        ]
+      },
+      "clock": "clk"
     }
-  ]
+  }
 }
