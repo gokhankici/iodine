@@ -37,23 +37,18 @@ import           Text.Printf
 
 type Ids = HS.HashSet Id
 
--- | State relevant to modules
-data ModuleSt = ModuleSt { _currentModule :: Module Int -- | current module
-                         , _isTopModule   :: Bool       -- | is this the top (or root) module?
-                         }
-                deriving (Show)
-
 -- | State relevant to statements
-data StmtSt = StmtSt { _currentVariables :: Ids -- | all vars in this block
-                     , _currentSources   :: Ids -- | sources in this block
-                     , _currentSinks     :: Ids -- | sinks in this block
-                     , _currentInitEqs   :: Ids -- | init_eq vars in this block
-                     , _currentAlwaysEqs :: Ids -- | always_eq vars in this block
-                     , _currentAssertEqs :: Ids -- | assert_eq vars in this block
+data StmtSt = StmtSt { _currentVariables     :: Ids -- | all vars in this block
+
+                     -- the rest is the filtered version of the Annotations type
+                     , _currentSources       :: Ids
+                     , _currentSinks         :: Ids
+                     , _currentInitialEquals :: Ids
+                     , _currentAlwaysEquals  :: Ids
+                     , _currentAssertEquals  :: Ids
                      }
               deriving (Show)
 
-makeLenses ''ModuleSt
 makeLenses ''StmtSt
 
 
@@ -88,9 +83,8 @@ vcgen (ssaIR, trNextVariables) = runReader (NextVars trNextVariables) $
      combine vcgenMod ssaIR
 
 vcgenMod :: FD r => Module Int -> Sem r Horns
-vcgenMod Module {..} = do
-  isTop <- (moduleName ==) <$> asks afTopModule
-  let moduleSt = ModuleSt Module { .. } isTop
+vcgenMod m@Module {..} = do
+  annots <- getAnnotations moduleName
 
   assert (SQ.null gateStmts) $
     "Gate statements should have been merged into always* blocks"
@@ -100,7 +94,8 @@ vcgenMod Module {..} = do
   combine regularChecks alwaysBlocks
     <||> interferenceChecks allStmts
     <||> combine moduleInstanceChecks moduleInstances
-    & runReader moduleSt
+    & runReader m
+    & runReader annots
 
   where
     allStmts = abStmt <$> alwaysBlocks
@@ -126,11 +121,11 @@ moduleInstanceChecks _ = notSupportedM
 initialize :: FDS r => S -> Event Int -> Sem r (Horn ())
 -- -------------------------------------------------------------------------------------------------
 initialize stmt event = do
-  Module {..} <- asks (^. currentModule)
+  Module {..} <- ask
   -- untag everything
   zeroTags <- foldl' (mkZeroTags moduleName) mempty <$> asks (^. currentVariables)
   -- init_eq and always_eq are initially set to the same values
-  initEqs <- asks $ \st -> (st ^. currentInitEqs) `HS.union` (st ^. currentAlwaysEqs)
+  initEqs <- HS.union <$> asks (^. currentInitialEquals) <*> asks (^. currentAlwaysEquals)
   let subs = foldl' (valEquals moduleName) zeroTags initEqs
   case event of
     Star _ -> do
@@ -170,7 +165,7 @@ initialize stmt event = do
 tagReset :: FDS r => S -> Event Int -> Sem r (Horn ())
 -- -------------------------------------------------------------------------------------------------
 tagReset stmt event = do
-  Module {..} <- asks (^. currentModule)
+  Module {..} <- ask
   srcs        <- asks (^. currentSources)
   vars        <- asks (^. currentVariables)
   let non_srcs = HS.difference vars srcs
@@ -212,7 +207,7 @@ tagReset stmt event = do
 srcTagReset :: FDS r => S -> Event Int -> Sem r (Horn ())
 -- -------------------------------------------------------------------------------------------------
 srcTagReset stmt event = do
-  Module {..} <- asks (^. currentModule)
+  Module {..} <- ask
   -- sources are untagged
   srcs <- asks (^. currentSources)
   let srcTagSubs = foldl' (mkZeroTags moduleName) mempty srcs
@@ -253,7 +248,7 @@ srcTagReset stmt event = do
 next :: FDS r => S -> Sem r (Horn ())
 -- -------------------------------------------------------------------------------------------------
 next stmt = do
-  Module {..} <- asks (^. currentModule)
+  Module {..} <- ask
   nextVars <- (IM.! stmtId) <$> asks getNextVars
   aes <- alwaysEqualEqualities stmt
   trace $ show ("equalities" :: String, aes)
@@ -274,9 +269,9 @@ next stmt = do
 sinkCheck :: FDS r => S -> Sem r Horns
 -- -------------------------------------------------------------------------------------------------
 sinkCheck stmt = do
-  Module {..} <- asks (^. currentModule)
-  sinks       <- asks (^. currentSinks)
-  return $ foldl' (\hs v -> hs |> go moduleName v) mempty sinks
+  Module {..} <- ask
+  snks <- asks (^. currentSinks)
+  return $ foldl' (\hs v -> hs |> go moduleName v) mempty snks
  where
   stmtId = stmtData stmt
   go m v = Horn
@@ -294,8 +289,8 @@ sinkCheck stmt = do
 assertEqCheck :: FDS r => S -> Sem r Horns
 -- -------------------------------------------------------------------------------------------------
 assertEqCheck stmt = do
-  Module {..} <- asks (^. currentModule)
-  aes         <- asks (^. currentAssertEqs)
+  Module {..} <- ask
+  aes         <- asks (^. currentAssertEquals)
   return $ foldl' (\hs v -> hs |> go moduleName v) mempty aes
  where
   stmtId = stmtData stmt
@@ -330,12 +325,12 @@ interferenceCheck :: (FDM r, Members '[State ICSts, State Horns] r)
                   => S -> Sem r ()
 interferenceCheck stmt = do
   -- traverse the statements we have looked at so far
-  stmtSt <- computeStmtSt stmt
+  stmtSt <- computeStmtStM stmt
   let currentSt =
         ICSt { icStmt      = stmt
              , writtenVars = currentWrittenVars
              , allVars     = currentAllVars
-             , aeVars      = stmtSt ^. currentAlwaysEqs
+             , aeVars      = stmtSt ^. currentAlwaysEquals
              }
   get @ICSts >>=
     traverse_
@@ -363,7 +358,7 @@ interferenceCheckWR :: FDM r
                     -> ICSt   -- | statement whose variable is being overwritten
                     -> Sem r (Horn ())
 interferenceCheckWR wSt rSt = do
-  Module {..} <- asks (^. currentModule)
+  Module {..} <- ask
   wNext       <- (IM.! stmtData wStmt) <$> asks getNextVars
   let rNext = HM.filterWithKey (\var _ -> HS.member var rVars) wNext
       subs = toSubs moduleName rNext
@@ -402,9 +397,9 @@ interferenceCheckWR wSt rSt = do
 
 alwaysEqualEqualities :: FDS r => S -> Sem r (L HornExpr)
 alwaysEqualEqualities stmt = do
-  Module {..} <- asks (^. currentModule)
+  Module {..} <- ask
   nextVars <- (IM.! stmtId) <$> asks getNextVars
-  foldl' (go moduleName nextVars) mempty <$> asks (^. currentAlwaysEqs)
+  foldl' (go moduleName nextVars) mempty <$> asks (^. currentAlwaysEquals)
   where
     stmtId = stmtData stmt
     go m nvs exprs v =
@@ -424,49 +419,58 @@ type VCGenOutput = Horns
 
 type Substitutions = HM.HashMap Id Int
 newtype NextVars = NextVars { getNextVars :: IM.IntMap Substitutions }
-type AF = AnnotationFile ()
 
-type G r = Members '[Reader AF, PE.Error IodineException, PT.Trace] r
+type G r = Members '[ Reader AnnotationFile
+                    , PE.Error IodineException
+                    , PT.Trace
+                    ] r
 
-type FD r = (G r, Members '[Reader NextVars] r)
-type FDM r = (G r, Members '[Reader ModuleSt, Reader NextVars] r)
-type FDS r = (G r, Members '[Reader ModuleSt, Reader StmtSt, Reader NextVars] r)
+type FD r  = (G r,   Members '[Reader NextVars] r)      -- FD  = global effects + next var map
+type FDM r = (FD r,  Members '[Reader (Module Int)] r)  -- FDM = FD + current module
+type FDS r = (FDM r, Members '[Reader StmtSt] r)        -- FDS = FDM + current statement state
 
 withStmt :: FDM r => S -> Sem (Reader StmtSt ': r) a -> Sem r a
 withStmt s act = do
-  stmtSt <- computeStmtSt s
+  stmtSt <- computeStmtStM s
   act & runReader stmtSt
 
-computeStmtSt :: FDM r => S -> Sem r StmtSt
-computeStmtSt stmt = do
-  as          <- asks afAnnotations
-  Module {..} <- asks (^. currentModule)
-  isTop       <- asks (^. isTopModule)
-  (do
-      modify $ currentVariables .~ vs
-      let addIf v setter = when (HS.member v vs) $ modify setter
-      trace $ show ("isTop" :: String, isTop)
-      trace $ show ("as" :: String, as)
-      trace $ show ("vs" :: String, vs)
-      for_ as $ \case
-        Source   s  _ -> when isTop $ addIf s (currentSources %~ HS.insert s)
-        Sink     s  _ -> when isTop $ addIf s (currentSinks %~ HS.insert s)
-        Sanitize ss _ -> when isTop
-          $ traverse_ (\s -> addIf s (currentInitEqs %~ HS.insert s)) ss
-        SanitizeMod m v _ ->
-          when (moduleName == m) $ addIf v (currentInitEqs %~ HS.insert v)
-        SanitizeGlob s _ ->
-          when isTop $ addIf s (currentAlwaysEqs %~ HS.insert s)
-        AssertEq v _ -> when isTop $ addIf v (currentAssertEqs %~ HS.insert v)
-      for_ variables $ \case
-        w@Wire{..}     ->
-          when ((Input w) `SQ.elemIndexL` ports == Nothing) $
-          modify $ currentInitEqs %~ HS.insert variableName
-        Register{..} -> return ()
-    )
-    & runState (StmtSt mempty mempty mempty mempty mempty mempty)
-    & fmap fst
-  where vs = getVariables stmt
+computeStmtStM :: FDM r => S -> Sem r StmtSt
+computeStmtStM s = do
+  m@Module{..} <- ask
+  as  <- getAnnotations moduleName
+  return $ computeStmtSt as m s
+
+computeStmtSt :: Annotations -> Module Int -> S -> StmtSt
+computeStmtSt as Module{..} stmt =
+  initialStmtSt
+  & currentSources       .~ filterAs sources
+  & currentSinks         .~ filterAs sinks
+  & currentInitialEquals .~ filterAs initialEquals
+  & currentAlwaysEquals  .~ filterAs alwaysEquals
+  & currentAssertEquals  .~ filterAs assertEquals
+  & currentInitialEquals %~ HS.union extraInitEquals
+  where
+    extraInitEquals =
+      foldl'
+      (\vars -> \case
+          w@Wire{..} ->
+            if   ((Input w) `SQ.elemIndexL` ports == Nothing)
+            then HS.insert variableName vars
+            else vars
+          Register{..} ->
+            vars)
+      mempty
+      variables
+    filterAs l = HS.intersection vs (as ^. l)
+    vs = getVariables stmt
+    initialStmtSt =
+      StmtSt { _currentVariables     = mempty
+             , _currentSources       = mempty
+             , _currentSinks         = mempty
+             , _currentInitialEquals = mempty
+             , _currentAlwaysEquals  = mempty
+             , _currentAssertEquals  = mempty
+             }
 
 getUpdatedVariables :: Stmt a -> Ids
 getUpdatedVariables = \case

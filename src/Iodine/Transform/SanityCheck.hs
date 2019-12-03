@@ -10,11 +10,11 @@ import Iodine.Language.IRParser (ParsedIR)
 import Iodine.Language.Annotation
 import Iodine.Types
 
+import           Control.Lens
 import           Control.Monad
 import           Data.Foldable
-import           Data.Function
-import qualified Data.HashSet as HS
-import qualified Data.Sequence as SQ
+import qualified Data.HashSet   as HS
+import qualified Data.Sequence  as SQ
 import           Polysemy
 import qualified Polysemy.Error as PE
 import           Polysemy.Reader
@@ -31,7 +31,7 @@ makeSem ''UniqueUpdateCheck
 
 type SC r = Members '[ PE.Error IodineException   -- sanity error
                      , Reader ParsedIR            -- parsed IR
-                     , Reader (AnnotationFile ()) -- parsed annotation file
+                     , Reader AnnotationFile      -- parsed annotation file
                      ] r
 
 type S  = Stmt ()
@@ -157,25 +157,24 @@ runUniqueUpdateCheck = reinterpret $ \case
 checkSinksAndSources :: SC r => Sem r ()
 -- -----------------------------------------------------------------------------
 checkSinksAndSources = do
-  AnnotationFile{..} <- ask
-  let isNotClock name = case afClock of
-                          Nothing -> True
-                          Just n  -> name /= n
-  let srcs = getSourceVar <$> SQ.filter isSource afAnnotations
-  let snks = getSinkVar   <$> SQ.filter isSink   afAnnotations
-  ask >>=
+  topModuleName <- asks (^. afTopModule)
+  ask @ParsedIR >>=
     traverse_
-    (\Module{..} ->
-        when (moduleName == afTopModule) $ do
-        for_ ports $ \case
-          Input v ->
-            let name = variableName v
-            in when (isNotClock name && name `SQ.elemIndexL` srcs == Nothing) $
-               throw $ printf "The input port %s is not declared as a taint source!" name
-          Output _ -> return ()
-        for_ snks $ \snk ->
-          when (Register snk `SQ.elemIndexL` variables == Nothing) $
-          throw $ printf "Sink %s is not found or not a register" snk
+    (\Module{..} -> do
+        srcs <- getSources moduleName
+        snks <- getSinks moduleName
+        clk  <- getClock moduleName
+        let isNotClock name = maybe True (name /=) clk
+        when (moduleName == topModuleName) $ do
+          for_ ports $ \case
+            Input v ->
+              let name = variableName v
+              in when (isNotClock name && not (HS.member name srcs)) $
+                 throw $ printf "The input port %s is not declared as a taint source!" name
+            Output _ -> return ()
+          for_ snks $ \snk ->
+            when (Register snk `SQ.elemIndexL` variables == Nothing) $
+            throw $ printf "Sink %s is not found or not a register" snk
     )
 
 

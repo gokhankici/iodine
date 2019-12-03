@@ -1,0 +1,48 @@
+passed test test/verilog/pos/annot-tr-test-1.json
+passed test test/verilog/pos/annot-tr-test-2.json
+passed test test/verilog/pos/annot-tr-test-3.json
+passed test test/verilog/pos/annot-tr-test-4.json
+passed test test/verilog/pos/annot-tr-test-5.json
+passed test test/verilog/pos/annot-tr-test-6.json
+passed test test/verilog/pos/annot-tr-test-9.json
+passed test test/verilog/pos/annot-tr-test-10.json
+passed test test/verilog/pos/annot-tr-test-11.json
+passed test test/verilog/pos/annot-merge-02.json
+passed test test/verilog/pos/annot-merge03.json
+passed test test/verilog/pos/annot-merge04-1.json
+passed test test/verilog/pos/annot-merge04.json
+passed test test/verilog/pos/annot-merge05.json
+passed test test/verilog/pos/annot-secverilog-01.json
+passed test test/verilog/pos/annot-nb-test-01.json
+failed stalling_cpu examples/verilog/annot-stall.json
+
+passed test test/verilog/neg/annot-neg-test-1.json
+failed test test/verilog/neg/annot-neg-test-2.json
+passed test test/verilog/neg/annot-neg-test-5.json
+passed test test/verilog/neg/annot-tp.json
+passed test test/verilog/neg/annot-neg-test-11.json
+passed test test/verilog/neg/annot-secverilog-neg-01.json
+passed test test/verilog/neg/annot-secverilog-neg-02.json
+
+passed reg32 benchmarks/472-mips-pipelined/annot-reg32.json
+passed mux3 benchmarks/472-mips-pipelined/annot-mux3.json
+passed control_pipeline benchmarks/472-mips-pipelined/annot-control_pipeline.json
+passed alu benchmarks/472-mips-pipelined/annot-alu.json
+passed alu_ctl benchmarks/472-mips-pipelined/annot-alu_ctl.json
+passed rom32 benchmarks/472-mips-pipelined/annot-rom32.json
+passed reg_file benchmarks/472-mips-pipelined/annot-reg_file.json
+
+failed mips_pipeline benchmarks/472-mips-pipelined/annot-472-mips-fragment.json
+failed mips_pipeline benchmarks/472-mips-pipelined/annot-472-mips-fragment-2.json
+failed mips_pipeline benchmarks/472-mips-pipelined/annot-472-mips-fragment-3.json
+failed mips_pipeline benchmarks/472-mips-pipelined/annot-472-mips-fragment-4.json
+
+passed sha256 benchmarks/crypto_cores/sha_core/trunk/rtl/annot-sha256_stub_3.json
+
+failed mips_pipeline benchmarks/472-mips-pipelined/annot-mips_pipeline.json
+failed yarvi benchmarks/yarvi/shared/annot-yarvi.json
+passed sha256 benchmarks/crypto_cores/sha_core/trunk/rtl/annot-sha256.json
+failed fpu benchmarks/fpu/verilog/annot-fpu.json
+failed divider benchmarks/fpu2/divider/annot-divider.json
+failed ModExp benchmarks/crypto_cores/RSA4096/ModExp2/annot-ModExp.json
+failed scarv_cop_palu benchmarks/xcrypto-ref/rtl/coprocessor/annot-scarv_cop_palu.json

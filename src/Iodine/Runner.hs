@@ -5,7 +5,7 @@
 module Iodine.Runner (run , main) where
 
 import           Iodine.IodineArgs
-import           Iodine.Language.AnnotationParser
+import           Iodine.Language.Annotation
 import           Iodine.Language.IRParser
 import           Iodine.Transform.Query (FInfo)
 import           Iodine.Pipeline
@@ -19,7 +19,6 @@ import qualified Control.Exception                as E
 import           Control.Monad
 import qualified Data.ByteString.Lazy             as B
 import           Data.Function
-import qualified Data.Text                        as T
 import           Polysemy                         hiding (run)
 import           Polysemy.Error
 import           Polysemy.Trace
@@ -133,7 +132,6 @@ checkIR IodineArgs{..}
       irFileContents <- readFile fileName
       annotFileContents <- B.readFile annotFile
       mFInfo <- pipeline
-        (T.pack moduleName)                           -- top module name
         (parse (fileName, irFileContents))            -- ir reader
         (return $ parseAnnotations annotFileContents) -- anootation file reader
         & traceToIO

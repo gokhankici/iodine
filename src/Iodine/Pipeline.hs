@@ -6,8 +6,7 @@
 module Iodine.Pipeline (pipeline) where
 
 import           Iodine.Language.IRParser       ( ParsedIR )
-import           Iodine.Language.AnnotationParser
-                                                ( AnnotationFile(..) )
+import           Iodine.Language.Annotation
 import           Iodine.Types
 import           Iodine.Transform.Merge
 import           Iodine.Transform.Normalize
@@ -31,13 +30,12 @@ Annot ---> SanityCheck -> Merge -> Normalie -> VCGen -> Query
 -}
 pipeline
   :: Members '[Error IodineException, Trace] r
-  => Id                         -- | top module name
-  -> Sem r ParsedIR             -- | parsed ir
-  -> Sem r (AnnotationFile ())  -- | parsed annotation file contents
+  => Sem r ParsedIR             -- | parsed ir
+  -> Sem r AnnotationFile       -- | parsed annotation file contents
   -> Sem r FInfo                -- | fixpoint query to run
-pipeline topmodule irReader afReader = do
+pipeline irReader afReader = do
   ir <- irReader
-  af <- fixAF <$> afReader
+  af <- afReader
   (do
       sanityCheck & runReader ir
       traceResult "IR" ir
@@ -48,15 +46,6 @@ pipeline topmodule irReader afReader = do
       vcgen ssaOutput >>= constructQuery normalizedIR
     )
     & runReader af
- where
-    -- TODO: this is currently a hack, annotation file needs to be updated
-  fixAF AnnotationFile {..} =
-    AnnotationFile
-    { afTopModule = if afTopModule == ""
-                    then topmodule
-                    else afTopModule
-    , ..
-    }
 
 traceResult :: (Member Trace r, Show a) => String -> L a -> Sem r ()
 traceResult t l = do

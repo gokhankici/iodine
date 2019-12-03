@@ -17,9 +17,10 @@ import           Control.Lens
 import           Control.Monad
 import           Data.Foldable
 import qualified Data.HashMap.Strict           as HM
+import qualified Data.HashSet                  as HS
 import qualified Data.Sequence                 as SQ
 import qualified Data.Text                     as T
-import           GHC.Generics            hiding ( moduleName )
+import           GHC.Generics            hiding ( moduleName, to )
 import qualified Language.Fixpoint.Types       as FT
 import           Polysemy
 import           Polysemy.Reader
@@ -44,7 +45,7 @@ type FInfo = FT.FInfo HornClauseId
 type Horns = L (Horn ())
 
 type G r   = Members '[ Trace
-                      , Reader (AnnotationFile ())
+                      , Reader AnnotationFile
                       , PE.Error IodineException
                       ] r
 type FD r  = ( G r
@@ -57,7 +58,11 @@ type FDC r = ( FD r
              , Member (State FT.IBindEnv) r
              )
 
-
+type QFD r = Members '[ Trace
+                      , PE.Error IodineException
+                      , Reader (Module Int)
+                      , State St
+                      ] r
 -- -----------------------------------------------------------------------------
 -- solver state
 -- -----------------------------------------------------------------------------
@@ -90,7 +95,8 @@ constructQuery modules horns = evalState initialState $ do
   setConstants
   traverse_ generateConstraint horns
   traverse_ generateWFConstraints modules
-  asks afQualifiers >>= traverse_ generateQualifiers
+  for_ modules $ \m@Module{..} ->
+    (getQualifiers moduleName >>= traverse_ generateQualifiers) & runReader m
   ask >>= generateAutoQualifiers
   toFInfo
 
@@ -276,7 +282,7 @@ toFSort HornBool = FT.boolSort
 
 -- | Creates the fixpoint qualifier based on the description given in the
 -- annotation file
-generateQualifiers :: FD r => Qualifier () -> Sem r ()
+generateQualifiers :: QFD r => Qualifier -> Sem r ()
 
 {-|
 For the following annotation:
@@ -289,10 +295,10 @@ the following qualifier is generated:
 
 VLT_lvar => VLT_rvar1 || VLT_rvar2 || ...
 -}
-generateQualifiers QImplies {..} = do
-  m <- asks afTopModule
+generateQualifiers (QImplies lhs rhss) = do
+  m <- asks moduleName
   let q n = makeQualifierN ("CustomImp_" ++ show n) m LeftRun
-            qualifierLhs (FT.PImp) qualifierRhss
+            lhs (FT.PImp) rhss
   q <$> freshQualifierId >>= addQualifier
 
 
@@ -307,13 +313,13 @@ the following qualifier is generated for every (vi, vj) pair:
 
 VLT_v1 <=> VLT_v2
 -}
-generateQualifiers QPairs {..} =
-  (varPairs <$> asks afTopModule) >>=
+generateQualifiers (QPairs vs) =
+  (varPairs <$> asks moduleName) >>=
   traverse_ (\pair ->
                (q pair <$> freshQualifierId) >>=
                addQualifier)
  where
-  vars m       = (`HVarTL0` m) <$> qualifierEqs
+  vars m       = (`HVarTL0` m) <$> vs
   varPairs m   = twoPairs $ getFixpointName <$> vars m
   q (x1, x2) n =
     makeQualifier2 ("Custom2_" ++ show n) Tag
@@ -333,10 +339,10 @@ the following qualifiers are generated:
 1. VLT_lvar <=> VLT_rvar1 || VLT_rvar2 || ...
 2. VRT_lvar <=> VRT_rvar1 || VRT_rvar2 || ...
 -}
-generateQualifiers QIff {..} = do
-  m <- asks afTopModule
+generateQualifiers (QIff lhs rhss) = do
+  m <- asks moduleName
   let q n = makeQualifierN ("CustomIff_" ++ show n) m LeftRun
-            qualifierLhs (FT.PIff) qualifierRhss
+            lhs (FT.PIff) rhss
   q <$> freshQualifierId >>= addQualifier
 
 
@@ -376,16 +382,19 @@ Creates the following qualifiers based on the annotations:
 
 1. Create a qualifier equating the tags of every source pairs
 -}
-generateAutoQualifiers :: FD r => AnnotationFile () -> Sem r ()
-generateAutoQualifiers AnnotationFile {..} = forM_ sourcePairs $ \(s1, s2) ->
+generateAutoQualifiers :: FD r => AnnotationFile -> Sem r ()
+generateAutoQualifiers af = forM_ sourcePairs $ \(s1, s2) ->
   mkQ (mkVar s1) (mkVar s2) <$> freshQualifierId >>= addQualifier
   where
-    sourcePairs = twoPairs sources
-    sources     = getSourceVar <$> SQ.filter isSource afAnnotations
+    topModuleName = af ^. afTopModule
+    srcs = HS.foldl' (|>) mempty ((toAnnotations topModuleName af) ^. sources)
+
+    sourcePairs = twoPairs srcs
+    -- sources     = getSourceVar <$> SQ.filter isSource afAnnotations
     mkQ s1 s2 n = makeQualifier2 ("SrcTagEq_" ++ show n) Tag
                   (FT.PatExact (symbol s1))
                   (FT.PatExact (symbol s2))
-    mkVar v     = getFixpointName $ HVarTL0 v afTopModule
+    mkVar v     = getFixpointName $ HVarTL0 v topModuleName
 
 
 -- | create a qualifier where the given patterns are compared
@@ -511,7 +520,7 @@ getVarPrefix hVarType hVarRun =
     (Value, RightRun) -> "VR_"
 
 -- | update the state with the given fixpoint qualifier
-addQualifier :: FD r => FT.Qualifier -> Sem r ()
+addQualifier :: Member (State St) r => FT.Qualifier -> Sem r ()
 addQualifier q = modify (& qualifiers %~ (|> q))
 
 initialState :: St
@@ -523,7 +532,7 @@ freshConstraintId =
   gets (^. constraintCounter) <* modify (& constraintCounter +~ 1)
 
 -- | return the current qualifier id and increment it later
-freshQualifierId :: FD r => Sem r Int
+freshQualifierId :: Member (State St) r => Sem r Int
 freshQualifierId =
   gets (^. qualifierCounter) <* modify (& qualifierCounter +~ 1)
 
