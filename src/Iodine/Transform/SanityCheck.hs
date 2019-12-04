@@ -53,7 +53,7 @@ sanityCheck =
   sequence_ [ checkAssignmentsAreToLocalVariables
             , checkSameAssignmentType
             , checkUniqueUpdateLocationOfVariables
-            , checkSinksAndSources
+            , checkVariables
             ]
 
 checkHelper :: SC r
@@ -154,29 +154,63 @@ runUniqueUpdateCheck = reinterpret $ \case
       throw $ printf "found multiple assignments to variables from %s" (show $ toList assignments)
 
 -- -----------------------------------------------------------------------------
-checkSinksAndSources :: SC r => Sem r ()
+checkVariables :: SC r => Sem r ()
 -- -----------------------------------------------------------------------------
-checkSinksAndSources = do
-  topModuleName <- asks (^. afTopModule)
-  ask @ParsedIR >>=
-    traverse_
+checkVariables = do
+  ask @ParsedIR >>= traverse_
     (\Module{..} -> do
-        srcs <- getSources moduleName
-        snks <- getSinks moduleName
+        af <- getAnnotations moduleName
+        let srcs = af ^. sources
+            snks = af ^. sinks
+            vars = foldr' HS.insert HS.empty (variableName <$> variables)
+            isVar vs = vs `subset` vars
+
+        when (HS.null srcs) $
+          throw "No source variable is given!"
+        when (HS.null snks) $
+          throw "No sink variable is given!"
+
+        -- all annotation variables actually exist
+        forM_ [ srcs
+              , snks
+              , af ^. initialEquals
+              , af ^. alwaysEquals
+              , af ^. assertEquals
+              ] $ \vs ->
+          unless (isVar vs) $
+          throw $ printf "element(s) in %s is not a valid variable" (show vs)
+
         clk  <- getClock moduleName
         let isNotClock name = maybe True (name /=) clk
-        when (moduleName == topModuleName) $ do
-          for_ ports $ \case
-            Input v ->
-              let name = variableName v
-              in when (isNotClock name && not (HS.member name srcs)) $
-                 throw $ printf "The input port %s is not declared as a taint source!" name
-            Output _ -> return ()
-          for_ snks $ \snk ->
-            when (Register snk `SQ.elemIndexL` variables == Nothing) $
-            throw $ printf "Sink %s is not found or not a register" snk
-    )
 
+        -- all inputs must be a source
+        for_ ports $ \case
+          Input v ->
+            let name = variableName v
+            in when (isNotClock name && not (HS.member name srcs)) $
+               throw $ printf "The input port %s is not declared as a taint source!" name
+          Output _ -> return ()
+
+        -- sinks have to be registers
+        for_ snks $ \snk ->
+          when (Register snk `SQ.elemIndexL` variables == Nothing) $
+          throw $ printf "Sink %s is not found or not a register" snk
+
+        -- always block events only refer to specified clocks
+        for_ alwaysBlocks $ \AlwaysBlock{..} ->
+          case abEvent of
+            Star _ -> return ()
+            _      ->
+              case eventExpr abEvent of
+                Variable{..} ->
+                  when (isNotClock varName || varModuleName /= moduleName) $
+                  throw $ "always block has bad event: " ++ show abEvent
+                _ ->
+                  throw $ "always block has bad event: " ++ show abEvent
+
+    )
+  where
+    s1 `subset` s2 = HS.null (HS.difference s1 s2)
 
 throw :: Member (PE.Error IodineException) r => String -> Sem r a
 throw = PE.throw . IE SanityCheck

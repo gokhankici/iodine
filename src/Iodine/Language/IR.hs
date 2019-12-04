@@ -282,6 +282,9 @@ instance Hashable a => Hashable (Event a) where
   hashWithSalt n (Star a)      = hashWithSalt n a
 
 
+instance ShowIndex a => Show (Event a) where
+  show = PP.render . doc
+
 instance ShowIndex a => Show (Stmt a) where
   show = PP.render . doc
 

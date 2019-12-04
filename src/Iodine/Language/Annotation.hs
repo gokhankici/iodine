@@ -7,6 +7,7 @@ module Iodine.Language.Annotation where
 import           Iodine.Types
 
 import           Control.Lens
+import           Control.Monad
 import           Data.Aeson
 import           Data.Aeson.Types
 import qualified Data.ByteString.Lazy       as B
@@ -42,7 +43,7 @@ data AnnotationFile =
                  , _afTopModule   :: Id                              -- | name of the top module
                  }
   deriving (Show)
-                 
+
 makeLenses ''Annotations
 makeLenses ''ModuleAnnotations
 makeLenses ''AnnotationFile
@@ -54,13 +55,18 @@ parseAnnotations bs =
     Left msg -> error $ "Parsing annotation file failed:\n" ++ msg
 
 instance FromJSON Annotations where
-  parseJSON = withObject "Annotations" $ \o ->
+  parseJSON = withObject "Annotations" $ \o -> do
+    let allKeys   = HM.keysSet o
+        validKeys = HS.fromList ["source", "sink", "initial_eq", "always_eq", "assert_eq"]
+        keyDiff   = HS.difference allKeys validKeys
+    unless (HS.null keyDiff) $
+      parserThrowError [] ("invalid keys " ++ show keyDiff)
     Annotations
-    <$> o .:  "source"
-    <*> o .:  "sink"
-    <*> o .:? "initial_eq" .!= mempty
-    <*> o .:? "always_eq"  .!= mempty
-    <*> o .:? "assert_eq"  .!= mempty
+      <$> o .:  "source"
+      <*> o .:  "sink"
+      <*> o .:? "initial_eq" .!= mempty
+      <*> o .:? "always_eq"  .!= mempty
+      <*> o .:? "assert_eq"  .!= mempty
 
 instance FromJSON Qualifier where
   parseJSON = withObject "Qualifier" $ \o -> do

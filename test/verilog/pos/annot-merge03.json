@@ -4,7 +4,6 @@
     "test": {
       "annotations": {
         "source": [
-          "merge",
           "opa",
           "opb",
           "sel"

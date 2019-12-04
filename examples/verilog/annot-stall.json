@@ -1,29 +1,42 @@
 {
-  "clock": "clk",
-  "annotations": [
-    {
-      "type": "source",
-      "variables": [
-        "IF_instr"
-      ]
+  "top_module": "stalling_cpu",
+  "modules": {
+    "stalling_cpu": {
+      "annotations": {
+        "source": [
+          "IF_instr"
+        ],
+        "sink": [
+          "WB_ALUOut"
+        ],
+        "always_eq": [
+          "IF_instr"
+        ],
+        "initial_eq": [
+          "Stall"
+        ]
+      },
+      "clock": "clk"
     },
-    {
-      "type": "sink",
-      "variables": [
-        "WB_ALUOut"
-      ]
+    "decide_stall": {
+      "annotations": {
+        "source": [
+          "i"
+        ],
+        "sink": [
+          "o"
+        ]
+      }
     },
-    {
-      "type": "always_eq",
-      "variables": [
-        "IF_instr"
-      ]
-    },
-    {
-      "type": "initial_eq",
-      "variables": [
-        "Stall"
-      ]
+    "alu": {
+      "annotations": {
+        "source": [
+          "i"
+        ],
+        "sink": [
+          "o"
+        ]
+      }
     }
-  ]
+  }
 }
