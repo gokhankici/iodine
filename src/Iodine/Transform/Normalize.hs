@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -39,21 +40,21 @@ type TRSubs = IM.IntMap VarId
 
 -- | Global state
 data St =
-  St { _modId  :: Int    -- | counter for modules
-     , _abId   :: Int    -- | counter for always blocks
-     , _stmtId :: Int    -- | counter for statements
+  St { _modId  :: Int    -- ^ counter for modules
+     , _abId   :: Int    -- ^ counter for always blocks
+     , _stmtId :: Int    -- ^ counter for statements
      , _exprId :: Int
-     , _funId  :: Int    -- | counter for functions
-     , _trSubs :: TRSubs -- | This substitution map is used to determine the
+     , _funId  :: Int    -- ^ counter for functions
+     , _trSubs :: TRSubs -- ^ This substitution map is used to determine the
                          -- kvar in the head position of the horn clauses. Has
                          -- type (stmt -> var -> var index)
      }
 
 -- | State only relevant to assignments
 data StmtSt =
-  StmtSt { _varMaxIds       :: VarId  -- | counter for variables
-         , _lastBlocking    :: VarId  -- | last blocking assignment of the vars
-         , _lastNonBlocking :: VarId  -- | non blocking assignments of the vars
+  StmtSt { _varMaxIds       :: VarId  -- ^ counter for variables
+         , _lastBlocking    :: VarId  -- ^ last blocking assignment of the vars
+         , _lastNonBlocking :: VarId  -- ^ non blocking assignments of the vars
          }
 
 makeLenses ''St
@@ -173,9 +174,9 @@ This way, the id of the variable that represents the current value becomes equal
 in both sides.
 -}
 normalizeBranches :: FDS r
-                  => Stmt a                     -- | then branch
-                  -> Stmt a                     -- | else branch
-                  -> Sem r (Stmt Int, Stmt Int) -- | normalized then & else branches
+                  => Stmt a                     -- ^ then branch
+                  -> Stmt a                     -- ^ else branch
+                  -> Sem r (Stmt Int, Stmt Int) -- ^ normalized then & else branches
 normalizeBranches thenS elseS = do
   stInit <- get @StmtSt
   thenS' <- normalizeStmt thenS
@@ -211,8 +212,8 @@ implement both of them.
 type BBResult = (VarId, L (Stmt Int), L (Stmt Int))
 balanceBranches :: FDM r
                 => AssignmentType
-                -> (VarId, VarId) -- | variable id maps of the branches
-                -> Sem r BBResult -- | merged variable id map, and extra
+                -> (VarId, VarId) -- ^ variable id maps of the branches
+                -> Sem r BBResult -- ^ merged variable id map, and extra
                                   -- assignment statements needed for the
                                   -- branches
 balanceBranches t (varMap1, varMap2) = do

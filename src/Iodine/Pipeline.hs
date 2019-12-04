@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -30,9 +31,9 @@ Annot ---> SanityCheck -> Merge -> Normalie -> VCGen -> Query
 -}
 pipeline
   :: Members '[Error IodineException, Trace] r
-  => Sem r ParsedIR             -- | parsed ir
-  -> Sem r AnnotationFile       -- | parsed annotation file contents
-  -> Sem r FInfo                -- | fixpoint query to run
+  => Sem r ParsedIR             -- ^ parsed ir
+  -> Sem r AnnotationFile       -- ^ parsed annotation file contents
+  -> Sem r FInfo                -- ^ fixpoint query to run
 pipeline irReader afReader = do
   ir <- irReader
   af <- afReader

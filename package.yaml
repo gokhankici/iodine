@@ -15,8 +15,12 @@ category:            Hardware Verification
 
 description:         Please see the README on Github at <https://github.com/gokhankici/iodine#readme>
 
+custom-setup:
+  dependencies:
+  - base
+  - Cabal
+
 ghc-options:
-- -fplugin=Polysemy.Plugin
 - -O2
 - -flate-specialise
 - -fspecialise-aggressively

@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module Iodine.IodineArgs (IodineArgs(..), parseArgs) where

@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE StrictData        #-}

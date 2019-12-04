@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -62,9 +63,9 @@ data HornExpr =
             , hBinaryLhs :: HornExpr
             , hBinaryRhs :: HornExpr
             }
-  | HApp { hAppFun  :: Id                -- | a unique function name
-         , hAppRet  :: HornAppReturnType -- | function return type
-         , hAppArgs :: L HornExpr        -- | function arguments
+  | HApp { hAppFun  :: Id                -- ^ a unique function name
+         , hAppRet  :: HornAppReturnType -- ^ function return type
+         , hAppArgs :: L HornExpr        -- ^ function arguments
          }
   | HNot { hNotArg :: HornExpr }
   | KVar { hKVarId   :: Int

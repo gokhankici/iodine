@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
+
 module Iodine.Utils where
 
 import           Iodine.Types
@@ -57,8 +59,8 @@ curry3 ::((a, b, c) -> d) -> (a -> b -> c -> d)
 curry3 f a b c = f (a, b, c)
 
 assert :: Member (Error IodineException) r
-       => Bool                  -- | condition to check
-       -> String                -- | error message
+       => Bool                  -- ^ condition to check
+       -> String                -- ^ error message
        -> Sem r ()
 assert cond msg = unless cond $ throw (IE Assert msg)
 

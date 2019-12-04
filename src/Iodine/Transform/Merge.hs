@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -184,7 +185,7 @@ makeStarBlock s = AlwaysBlock Star s
 
 {- |
 given a updater function and an element, create a helper function to be used
-with `alter`
+with `HM.alter`
 -}
 append :: Monoid m => (a -> m -> m) -> a -> Maybe m -> Maybe m
 append f a = \case

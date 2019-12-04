@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveGeneric   #-}
 {-# LANGUAGE StrictData      #-}
@@ -129,7 +130,7 @@ generateWFConstraints Module {..} =
 
 -- | Create a well formedness constraint for the given statement
 generateWFConstraint :: FD r
-                     => Id      -- | module name
+                     => Id      -- ^ module name
                      -> Stmt Int
                      -> Sem r ()
 generateWFConstraint m stmt = do
@@ -154,7 +155,7 @@ generateWFConstraint m stmt = do
 
 -- | Create a well formedness constraint for the given module instance
 generateWFConstraintMI :: FD r
-                       => Id    -- | module name
+                       => Id    -- ^ module name
                        -> ModuleInstance Int
                        -> Sem r ()
 generateWFConstraintMI _ _ = notSupportedM
@@ -399,10 +400,10 @@ generateAutoQualifiers af = forM_ sourcePairs $ \(s1, s2) ->
 
 
 -- | create a qualifier where the given patterns are compared
-makeQualifier2 :: String         -- | name of the qualifier
-               -> HornVarType    -- | type of its operands
-               -> FT.QualPattern -- | lhs of the operation
-               -> FT.QualPattern -- | rhs of the operation
+makeQualifier2 :: String         -- ^ name of the qualifier
+               -> HornVarType    -- ^ type of its operands
+               -> FT.QualPattern -- ^ lhs of the operation
+               -> FT.QualPattern -- ^ rhs of the operation
                -> FT.Qualifier
 makeQualifier2 name t lhs rhs =
   FT.mkQual
@@ -424,14 +425,14 @@ type FTBinOp = FT.Expr -> FT.Expr -> FT.Expr
 {-|
 Creates the following qualifier between the boolean values:
 
-lhs `ftBinOp` (rhs_1 || rhs_2 || rhs_3 || ...)
+lhs @ftBinOp@ (rhs_1 || rhs_2 || rhs_3 || ...)
 -}
-makeQualifierN :: String        -- | name of the qualifier
-               -> Id            -- | module name
-               -> HornVarRun    -- | run type
-               -> Id            -- | lhs of the operation
-               -> FTBinOp       -- | binary operator
-               -> L Id          -- | rhs of the operation
+makeQualifierN :: String        -- ^ name of the qualifier
+               -> Id            -- ^ module name
+               -> HornVarRun    -- ^ run type
+               -> Id            -- ^ lhs of the operation
+               -> FTBinOp       -- ^ binary operator
+               -> L Id          -- ^ rhs of the operation
                -> FT.Qualifier
 makeQualifierN name m r lhs fOp rhss =
   FT.mkQual
@@ -456,9 +457,9 @@ makeQualifierN name m r lhs fOp rhss =
     typ          = FT.boolSort
 
 -- | return the name of the variable in Tag type with 0 index
-mkVarT0 :: Id                 -- | variable name
-        -> Id                 -- | module name
-        -> HornVarRun         -- | run type
+mkVarT0 :: Id                 -- ^ variable name
+        -> Id                 -- ^ module name
+        -> HornVarRun         -- ^ run type
         -> Id
 mkVarT0 = curry3 $ getFixpointName . uncurry3 HVarT0
 

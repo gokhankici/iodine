@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -39,8 +40,8 @@ data ModuleAnnotations =
   deriving (Show)
 
 data AnnotationFile =
-  AnnotationFile { _afAnnotations :: HM.HashMap Id ModuleAnnotations -- | module -> annotations
-                 , _afTopModule   :: Id                              -- | name of the top module
+  AnnotationFile { _afAnnotations :: HM.HashMap Id ModuleAnnotations -- ^ module -> annotations
+                 , _afTopModule   :: Id                              -- ^ name of the top module
                  }
   deriving (Show)
 

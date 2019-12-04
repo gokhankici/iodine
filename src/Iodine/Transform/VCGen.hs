@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData      #-}
@@ -38,7 +39,7 @@ import           Text.Printf
 type Ids = HS.HashSet Id
 
 -- | State relevant to statements
-data StmtSt = StmtSt { _currentVariables     :: Ids -- | all vars in this block
+data StmtSt = StmtSt { _currentVariables     :: Ids -- ^ all vars in this block
 
                      -- the rest is the filtered version of the Annotations type
                      , _currentSources       :: Ids
@@ -57,8 +58,8 @@ Verification condition generation creates the following 7 type of horn
 constraints to encode our check:
 
 1. Initialize: Encodes that initially, every tag is set to 0. We also encode
-that the values of the variables that annotated as `initial_eq` or `always_eq`
-are the same. Keep in mind that `always_eq` annotations apply to the rest of the
+that the values of the variables that annotated as @initial_eq@ or @always_eq@
+are the same. Keep in mind that @always_eq@ annotations apply to the rest of the
 constraints listed below as well.
 
 2. Tag Reset: The tags of the sources are set to 1, and the tags of the rest of
@@ -70,7 +71,7 @@ the variables are set to zero.
 
 5. Sink check: Checks that variables defined as sinks are tainted equally.
 
-6. Assert equals check: Checks that variables that are annotated as `assert_eq`
+6. Assert equals check: Checks that variables that are annotated as @assert_eq@
 always have the same value.
 
 7. Non-interference checks: This is used to make sure that the invariants of
@@ -317,7 +318,7 @@ interferenceChecks stmts =
 data ICSt = ICSt { icStmt      :: S
                  , writtenVars :: Ids
                  , allVars     :: Ids
-                 , aeVars      :: Ids -- | always_eq vars
+                 , aeVars      :: Ids -- ^ always_eq vars
                  }
 type ICSts = IM.IntMap ICSt
 
@@ -354,8 +355,8 @@ interferenceCheck stmt = do
 
 -- return the write/read interference check
 interferenceCheckWR :: FDM r
-                    => ICSt   -- | statement info that overwrites a variable
-                    -> ICSt   -- | statement whose variable is being overwritten
+                    => ICSt   -- ^ statement info that overwrites a variable
+                    -> ICSt   -- ^ statement whose variable is being overwritten
                     -> Sem r (Horn ())
 interferenceCheckWR wSt rSt = do
   Module {..} <- ask
@@ -472,9 +473,9 @@ getUpdatedVariables = \case
   IfStmt {..}         -> mfold getVariables [ifStmtThen, ifStmtElse]
   Skip {..}           -> mempty
 
-toSubs :: Id                     -- | module name
-       -> Substitutions          -- | substitution map
-       -> L (HornExpr, HornExpr) -- | variable updates for the kvar
+toSubs :: Id                     -- ^ module name
+       -> Substitutions          -- ^ substitution map
+       -> L (HornExpr, HornExpr) -- ^ variable updates for the kvar
 toSubs m = HM.foldlWithKey' go mempty
  where
   go subs v n =
@@ -484,9 +485,9 @@ toSubs m = HM.foldlWithKey' go mempty
       |> (HVar v m 0 Tag   RightRun, HVar v m n Tag   RightRun)
       |> (HVar v m 0 Value RightRun, HVar v m n Value RightRun)
 
-toSubsTags :: Id                     -- | module name
-           -> Substitutions          -- | substitution map
-           -> L (HornExpr, HornExpr) -- | variable updates for the kvar (for tags only)
+toSubsTags :: Id                     -- ^ module name
+           -> Substitutions          -- ^ substitution map
+           -> L (HornExpr, HornExpr) -- ^ variable updates for the kvar (for tags only)
 toSubsTags m = HM.foldlWithKey' go mempty
  where
   go subs v n =

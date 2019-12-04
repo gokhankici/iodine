@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -57,7 +58,7 @@ sanityCheck =
             ]
 
 checkHelper :: SC r
-            => (S -> SCM r ()) -- | checks the statement
+            => (S -> SCM r ()) -- ^ checks the statement
             -> Sem r ()
 checkHelper goS = ask @ParsedIR >>= traverse_ (checkModule goS)
 
