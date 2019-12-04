@@ -22,16 +22,16 @@ import           Iodine.Utils
 import           Control.Lens
 import           Control.Monad
 import           Data.Foldable
-import qualified Data.HashMap.Strict           as HM
-import qualified Data.HashSet                  as HS
-import qualified Data.IntMap                   as IM
+import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet as HS
+import qualified Data.IntMap as IM
 import           Data.List (nub)
-import qualified Data.Sequence                 as SQ
+import qualified Data.Sequence as SQ
 import           Polysemy
-import qualified Polysemy.Error                as PE
+import qualified Polysemy.Error as PE
 import           Polysemy.Reader
 import           Polysemy.State
-import qualified Polysemy.Trace                as PT
+import qualified Polysemy.Trace as PT
 import           Text.Printf
 
 

@@ -5,21 +5,21 @@
 
 module Iodine.Pipeline (pipeline) where
 
-import           Iodine.Language.IRParser       ( ParsedIR )
-import           Iodine.Language.Annotation
-import           Iodine.Types
-import           Iodine.Transform.Merge
-import           Iodine.Transform.Normalize
-import           Iodine.Transform.SanityCheck
-import           Iodine.Transform.VCGen
-import           Iodine.Transform.Query
-import           Data.Function
-import           Data.Foldable
-import           Polysemy
-import           Polysemy.Error
-import           Polysemy.Reader
-import           Polysemy.Trace
-import           Text.Printf
+import Data.Foldable
+import Data.Function
+import Iodine.Language.Annotation
+import Iodine.Language.IRParser ( ParsedIR )
+import Iodine.Transform.Merge
+import Iodine.Transform.Normalize
+import Iodine.Transform.Query
+import Iodine.Transform.SanityCheck
+import Iodine.Transform.VCGen
+import Iodine.Types
+import Polysemy
+import Polysemy.Error
+import Polysemy.Reader
+import Polysemy.Trace
+import Text.Printf
 
 {- |
 Implements the following pipeline:

@@ -10,13 +10,13 @@ import           Control.Monad (void)
 import           Data.Char (isLetter, isDigit)
 import           Data.Foldable (toList)
 import           Data.Hashable
-import qualified Data.HashMap.Strict        as HM
-import qualified Data.Text                  as T
-import           Text.Megaparsec            ((<|>))
-import qualified Text.Megaparsec            as MP
-import qualified Text.Megaparsec.Char       as MPC
+import qualified Data.HashMap.Strict as HM
+import qualified Data.Text as T
+import           Text.Megaparsec ((<|>))
+import qualified Text.Megaparsec as MP
+import qualified Text.Megaparsec.Char as MPC
 import qualified Text.Megaparsec.Char.Lexer as MPL
-import qualified Data.Sequence              as SQ
+import qualified Data.Sequence as SQ
 import           Polysemy
 import           Polysemy.Error
 

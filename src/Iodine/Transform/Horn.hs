@@ -11,10 +11,10 @@ import           Iodine.Types
 
 import           GHC.Generics
 import           Control.DeepSeq
-import qualified Data.Text                     as T
+import qualified Data.Text as T
 import           Data.Foldable
-import qualified Language.Fixpoint.Types       as FT
-import qualified Text.PrettyPrint              as PP
+import qualified Language.Fixpoint.Types as FT
+import qualified Text.PrettyPrint as PP
 
 data Horn a =
        Horn { hornHead   :: HornExpr

@@ -5,16 +5,16 @@
 
 module Iodine.Transform.SanityCheck (sanityCheck) where
 
-import Iodine.Language.IR
-import Iodine.Language.IRParser (ParsedIR)
-import Iodine.Language.Annotation
-import Iodine.Types
+import           Iodine.Language.Annotation
+import           Iodine.Language.IR
+import           Iodine.Language.IRParser (ParsedIR)
+import           Iodine.Types
 
 import           Control.Lens
 import           Control.Monad
 import           Data.Foldable
-import qualified Data.HashSet   as HS
-import qualified Data.Sequence  as SQ
+import qualified Data.HashSet as HS
+import qualified Data.Sequence as SQ
 import           Polysemy
 import qualified Polysemy.Error as PE
 import           Polysemy.Reader

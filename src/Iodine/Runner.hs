@@ -7,19 +7,19 @@ module Iodine.Runner (run , main) where
 import           Iodine.IodineArgs
 import           Iodine.Language.Annotation
 import           Iodine.Language.IRParser
-import           Iodine.Transform.Query (FInfo)
 import           Iodine.Pipeline
+import           Iodine.Transform.Query (FInfo)
 import           Iodine.Types
 
-import qualified Language.Fixpoint.Solver         as F
-import qualified Language.Fixpoint.Types          as FT
-import qualified Language.Fixpoint.Types.Config   as FC
+import qualified Language.Fixpoint.Solver as F
+import qualified Language.Fixpoint.Types as FT
+import qualified Language.Fixpoint.Types.Config as FC
 
-import qualified Control.Exception                as E
+import qualified Control.Exception as E
 import           Control.Monad
-import qualified Data.ByteString.Lazy             as B
+import qualified Data.ByteString.Lazy as B
 import           Data.Function
-import           Polysemy                         hiding (run)
+import           Polysemy hiding (run)
 import           Polysemy.Error
 import           Polysemy.Trace
 import           System.Directory

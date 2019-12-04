@@ -2,9 +2,9 @@
 
 module Iodine.IodineArgs (IodineArgs(..), parseArgs) where
 
-import           System.Console.CmdArgs.Implicit
-import           Text.Printf
-import           System.Environment
+import System.Console.CmdArgs.Implicit
+import System.Environment
+import Text.Printf
 
 -- -----------------------------------------------------------------------------
 -- Argument Parsing

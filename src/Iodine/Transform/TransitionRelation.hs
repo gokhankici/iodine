@@ -14,9 +14,9 @@ import           Iodine.Utils
 
 import           Control.Lens
 import           Data.Foldable
-import qualified Data.HashSet                  as HS
-import qualified Data.Sequence                 as SQ
-import qualified Data.Text                     as T
+import qualified Data.HashSet as HS
+import qualified Data.Sequence as SQ
+import qualified Data.Text as T
 import           Polysemy
 import           Polysemy.State
 import           Text.Printf

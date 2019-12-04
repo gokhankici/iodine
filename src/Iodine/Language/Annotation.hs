@@ -10,9 +10,9 @@ import           Control.Lens
 import           Control.Monad
 import           Data.Aeson
 import           Data.Aeson.Types
-import qualified Data.ByteString.Lazy       as B
-import qualified Data.HashSet               as HS
-import qualified Data.HashMap.Strict        as HM
+import qualified Data.ByteString.Lazy as B
+import qualified Data.HashSet as HS
+import qualified Data.HashMap.Strict as HM
 import           Polysemy
 import           Polysemy.Reader
 

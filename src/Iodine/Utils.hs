@@ -3,14 +3,14 @@ module Iodine.Utils where
 import           Iodine.Types
 
 import           Control.Applicative
-import           Control.Monad
 import           Control.Lens
+import           Control.Monad
 import           Data.Foldable
 import qualified Data.HashSet as HS
+import qualified Debug.Trace as DT
 import           Polysemy
 import           Polysemy.Error
 import qualified Polysemy.Trace as PT
-import qualified Debug.Trace as DT
 
 enableTrace :: Bool
 enableTrace = False

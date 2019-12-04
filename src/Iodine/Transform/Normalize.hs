@@ -14,15 +14,15 @@ module Iodine.Transform.Normalize
   )
 where
 
-import           Iodine.Language.IRParser       ( ParsedIR )
 import           Iodine.Language.IR
+import           Iodine.Language.IRParser ( ParsedIR )
 import           Iodine.Types
 
 import           Control.Lens
-import qualified Data.Text                     as T
-import qualified Data.HashMap.Strict           as HM
-import qualified Data.IntMap                   as IM
-import qualified Data.Sequence                 as SQ
+import qualified Data.Text as T
+import qualified Data.HashMap.Strict as HM
+import qualified Data.IntMap as IM
+import qualified Data.Sequence as SQ
 import           Polysemy
 import           Polysemy.State
 import           Polysemy.Reader

@@ -12,30 +12,30 @@ module Iodine.Transform.Query
   )
 where
 
+import           Iodine.Language.Annotation
+import           Iodine.Language.IR
+import           Iodine.Transform.Horn
+import           Iodine.Transform.VCGen ( getVariables )
+import           Iodine.Types
+import           Iodine.Utils
+
 import           Control.DeepSeq
 import           Control.Lens
 import           Control.Monad
 import           Data.Foldable
-import qualified Data.HashMap.Strict           as HM
-import qualified Data.HashSet                  as HS
-import qualified Data.Sequence                 as SQ
-import qualified Data.Text                     as T
-import           GHC.Generics            hiding ( moduleName, to )
-import qualified Language.Fixpoint.Types       as FT
+import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet as HS
+import qualified Data.Sequence as SQ
+import qualified Data.Text as T
+import           GHC.Generics hiding ( moduleName, to )
+import qualified Language.Fixpoint.Types as FT
 import           Polysemy
 import           Polysemy.Reader
 import           Polysemy.Trace
 import           Polysemy.State
-import qualified Polysemy.Error                as PE
-import qualified Text.PrettyPrint.HughesPJ     as PP
+import qualified Polysemy.Error as PE
+import qualified Text.PrettyPrint.HughesPJ as PP
 import           Text.Printf
-
-import           Iodine.Language.Annotation
-import           Iodine.Language.IR
-import           Iodine.Transform.Horn
-import           Iodine.Transform.VCGen         ( getVariables )
-import           Iodine.Types
-import           Iodine.Utils
 
 -- -----------------------------------------------------------------------------
 -- type definitions

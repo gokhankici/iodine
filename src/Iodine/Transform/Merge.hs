@@ -6,20 +6,20 @@
 
 module Iodine.Transform.Merge (merge) where
 
-import Iodine.Types
-import Iodine.Language.IR
-import Iodine.Language.IRParser
+import           Iodine.Types
+import           Iodine.Language.IR
+import           Iodine.Language.IRParser
 
 import           Control.Lens
 import           Data.Foldable
-import           Data.List             (elem, intercalate)
-import qualified Data.IntSet           as IS
-import qualified Data.IntMap           as IM
-import qualified Data.HashMap.Strict   as HM
-import qualified Data.Sequence         as SQ
-import qualified Data.Graph.Inductive  as G
+import qualified Data.Graph.Inductive as G
 import           Data.Graph.Inductive.PatriciaTree (Gr)
 import qualified Data.Graph.Inductive.Query as GQ
+import qualified Data.HashMap.Strict as HM
+import qualified Data.IntMap as IM
+import qualified Data.IntSet as IS
+import           Data.List (elem, intercalate)
+import qualified Data.Sequence as SQ
 import           Polysemy
 import           Polysemy.State
 

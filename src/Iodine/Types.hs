@@ -6,7 +6,7 @@ module Iodine.Types where
 
 import           Control.Exception
 import qualified Data.Sequence as SQ
-import qualified Data.Text     as T
+import qualified Data.Text as T
 
 type Id = T.Text
 type L  = SQ.Seq
