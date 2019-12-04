@@ -128,7 +128,7 @@ initialize stmt event = do
   initEqs <- HS.union <$> asks (^. currentInitialEquals) <*> asks (^. currentAlwaysEquals)
   let subs = foldl' (valEquals moduleName) zeroTags initEqs
   case event of
-    Star _ -> do
+    Star -> do
       nextVars <- (IM.! stmtId) <$> asks getNextVars
       let starSubs = toSubs moduleName nextVars
       -- VLT* = False &&
@@ -174,7 +174,7 @@ tagReset stmt event = do
   -- non sources are untagged
   let allTagSubs = foldl' (tags moduleName False) srcTagSubs non_srcs
   case event of
-    Star _ -> do
+    Star -> do
       aes <- alwaysEqualEqualities stmt
       nextVars  <- (IM.! stmtId) <$> asks getNextVars
       let onlyTagSubs = toSubsTags moduleName nextVars
@@ -212,7 +212,7 @@ srcTagReset stmt event = do
   srcs <- asks (^. currentSources)
   let srcTagSubs = foldl' (mkZeroTags moduleName) mempty srcs
   case event of
-    Star _ -> do
+    Star -> do
       aes <- alwaysEqualEqualities stmt
       nextVars  <- (IM.! stmtId) <$> asks getNextVars
       let onlyTagSubs = toSubsTags moduleName nextVars

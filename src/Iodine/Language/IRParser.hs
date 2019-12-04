@@ -107,16 +107,15 @@ parseModuleInstance =
 
 parseEvent :: Parser (Event ())
 parseEvent =
-  parseTerm "posedge" (PosEdge <$> parseExpr <*> parseData) <|>
-  parseTerm "negedge" (NegEdge <$> parseExpr <*> parseData) <|>
-  (rWord "star" *> return (Star ()))
+  parseTerm "posedge" (PosEdge <$> parseExpr) <|>
+  parseTerm "negedge" (NegEdge <$> parseExpr) <|>
+  (rWord "star" *> return Star)
 
 parseAlwaysBlock :: Parser (AlwaysBlock ())
 parseAlwaysBlock =
   parseTerm "always" (AlwaysBlock
                      <$> parseEvent
-                     <*> (comma *> parseStmt)
-                     <*> parseData)
+                     <*> (comma *> parseStmt))
 
 parseData :: Parser ()
 parseData = return ()

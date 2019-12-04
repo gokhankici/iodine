@@ -97,19 +97,14 @@ data Stmt a =
   deriving (Generic, Functor, Foldable, Traversable)
 
 data Event a =
-  PosEdge { eventExpr :: Expr a
-          , eventData :: a
-          }
-  | NegEdge { eventExpr :: Expr a
-            , eventData :: a
-            }
-  | Star { eventData :: a }
+    PosEdge { eventExpr :: Expr a }
+  | NegEdge { eventExpr :: Expr a }
+  | Star
   deriving (Generic, Functor, Foldable, Traversable, Eq)
 
 data AlwaysBlock a =
   AlwaysBlock { abEvent :: Event a
               , abStmt  :: Stmt a
-              , abData  :: a
               }
   deriving (Generic, Functor, Foldable, Traversable)
 
@@ -197,9 +192,9 @@ instance ShowIndex a => Doc (Expr a) where
   doc (Select v is _)  = doc v PP.<> PP.brackets (docList is)
 
 instance ShowIndex a => Doc (Event a) where
-  doc (PosEdge e _) = PP.text "@(posedge " PP.<> doc e PP.<> PP.rparen
-  doc (NegEdge e _) = PP.text "@(negedge " PP.<> doc e PP.<> PP.rparen
-  doc (Star _)      = PP.text "*"
+  doc (PosEdge e) = PP.text "@(posedge " PP.<> doc e PP.<> PP.rparen
+  doc (NegEdge e) = PP.text "@(negedge " PP.<> doc e PP.<> PP.rparen
+  doc Star        = PP.text "*"
 
 instance ShowIndex a => Doc (Stmt a) where
   doc (Block ss a) =
@@ -226,8 +221,8 @@ instance ShowIndex a => Doc (Stmt a) where
 
 
 instance ShowIndex a => Doc (ModuleInstance a) where
-  doc (ModuleInstance t n ps _) =
-    doc t PP.<+> doc n PP.<> PP.parens (PP.hsep $ PP.punctuate sep args)
+  doc (ModuleInstance t n ps a) =
+    doc t PP.<+> doc n PP.<> PP.parens (PP.hsep $ PP.punctuate sep args) PP.<> docIndex a
     where
       args =
         HM.foldlWithKey'
@@ -236,7 +231,7 @@ instance ShowIndex a => Doc (ModuleInstance a) where
         ps
 
 instance ShowIndex a => Doc (AlwaysBlock a) where
-  doc (AlwaysBlock e s _) =
+  doc (AlwaysBlock e s) =
     PP.sep [ PP.text "always"
              PP.<> PP.text (showIndex $ stmtData s)
              PP.<+> doc e
@@ -245,7 +240,7 @@ instance ShowIndex a => Doc (AlwaysBlock a) where
 
 instance ShowIndex a => Doc (Module a) where
   doc Module{..} =
-    PP.vcat [ PP.text "module" PP.<> PP.parens args PP.<> PP.semi
+    PP.vcat [ PP.text "module" PP.<+> doc moduleName PP.<> PP.parens args PP.<> PP.semi
             , PP.nest 2 contents
             , PP.text "endmodule"
             ]
@@ -265,7 +260,7 @@ instance ShowIndex a => Doc (Module a) where
       vcatNS = vcatNL . fmap doc . toList
 
       vcatNL :: [PP.Doc] -> PP.Doc
-      vcatNL = PP.vcat . go
+      vcatNL = PP.vcat . go . filter (not . PP.isEmpty)
         where
           go []     = []
           go [a]    = [a]
@@ -277,9 +272,9 @@ instance Hashable a => Hashable (Expr a) where
   hashWithSalt _ _                = notSupported
 
 instance Hashable a => Hashable (Event a) where
-  hashWithSalt n (PosEdge e a) = hashWithSalt n (e, a)
-  hashWithSalt n (NegEdge e a) = hashWithSalt n (e, a)
-  hashWithSalt n (Star a)      = hashWithSalt n a
+  hashWithSalt n (PosEdge e) = hashWithSalt n (1::Int, e)
+  hashWithSalt n (NegEdge e) = hashWithSalt n (2::Int, e)
+  hashWithSalt n Star        = hashWithSalt n (3::Int)
 
 
 instance ShowIndex a => Show (Event a) where

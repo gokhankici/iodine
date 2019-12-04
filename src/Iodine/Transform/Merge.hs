@@ -11,7 +11,6 @@ import Iodine.Language.IR
 import Iodine.Language.IRParser
 
 import           Control.Lens
--- import           Control.Monad
 import           Data.Foldable
 import           Data.List             (elem, intercalate)
 import qualified Data.IntSet           as IS
@@ -65,7 +64,7 @@ mergeAlwaysBlocks as = HM.foldlWithKey' (\acc e ss-> acc SQ.>< mkBlocks e ss) me
     mkBlocks e stmts =
       SQ.singleton $
       case e of
-        Star{..}    -> mergeAlwaysStarBlocks stmts
+        Star        -> mergeAlwaysStarBlocks stmts
         PosEdge{..} -> mergeAlwaysEventBlocks e stmts
         NegEdge{..} -> mergeAlwaysEventBlocks e stmts
     eventMap = foldl' updateM mempty as
@@ -108,7 +107,7 @@ merge the always blocks with the same non-star event after makign sure that
 their dependecy graph form a DAG
 -}
 mergeAlwaysEventBlocks :: Event () -> L (Stmt ()) -> AlwaysBlock ()
-mergeAlwaysEventBlocks e stmts = AlwaysBlock e stmt' ()
+mergeAlwaysEventBlocks e stmts = AlwaysBlock e stmt'
   where
     stmt' =
       case stmts of
@@ -181,7 +180,7 @@ initialState :: St
 initialState = St mempty mempty 0 mempty
 
 makeStarBlock :: Stmt () -> AlwaysBlock ()
-makeStarBlock s = AlwaysBlock (Star ()) s ()
+makeStarBlock s = AlwaysBlock Star s
 
 {- |
 given a updater function and an element, create a helper function to be used

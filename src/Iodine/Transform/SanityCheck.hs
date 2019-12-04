@@ -124,7 +124,7 @@ checkSameAssignmentType =
                           else str
         in case (abEvent, assignmentType) of
              (_, Continuous)         -> err2
-             (Star{..}, NonBlocking) -> err
+             (Star, NonBlocking)     -> err
              (PosEdge{..}, Blocking) -> err
              (NegEdge{..}, Blocking) -> err
              _                       -> pure ()
@@ -199,8 +199,8 @@ checkVariables = do
         -- always block events only refer to specified clocks
         for_ alwaysBlocks $ \AlwaysBlock{..} ->
           case abEvent of
-            Star _ -> return ()
-            _      ->
+            Star -> return ()
+            _    ->
               case eventExpr abEvent of
                 Variable{..} ->
                   when (isNotClock varName || varModuleName /= moduleName) $

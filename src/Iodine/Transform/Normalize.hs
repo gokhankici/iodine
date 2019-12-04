@@ -91,7 +91,6 @@ normalizeAB AlwaysBlock {..} =
   AlwaysBlock
   <$> normalizeEvent abEvent
   <*> normalizeStmtTop abStmt
-  <*> freshId ABId
 
 -- | Normalize the event of an always block. This just assigns zero to the
 -- expressions that appear under an event.
@@ -99,9 +98,9 @@ normalizeEvent :: FD r => Event a -> Sem r (Event Int)
 normalizeEvent =
   -- normalizing event does not require statement state
   runReader initialStmtSt . \case
-  PosEdge {..} -> PosEdge <$> normalizeExpr eventExpr <*> freshId EventId
-  NegEdge {..} -> NegEdge <$> normalizeExpr eventExpr <*> freshId EventId
-  Star {..}    -> Star    <$> freshId EventId
+  PosEdge {..} -> PosEdge <$> normalizeExpr eventExpr
+  NegEdge {..} -> NegEdge <$> normalizeExpr eventExpr
+  Star         -> return Star
 
 -- | Normalize a module instance. This just assigns zero to the expressions that
 -- appear in port assignments.
