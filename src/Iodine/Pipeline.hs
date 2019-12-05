@@ -18,6 +18,7 @@ import Iodine.Transform.VCGen
 import Iodine.Types
 import Polysemy
 import Polysemy.Error
+import Polysemy.Output
 import Polysemy.Reader
 import Polysemy.Trace
 import Text.Printf
@@ -30,23 +31,20 @@ IR ----+
 Annot ---> SanityCheck -> Merge -> Normalie -> VCGen -> Query
 -}
 pipeline
-  :: Members '[Error IodineException, Trace] r
-  => Sem r ParsedIR             -- ^ parsed ir
-  -> Sem r AnnotationFile       -- ^ parsed annotation file contents
+  :: Members '[Error IodineException, Trace, Output String] r
+  => AnnotationFile             -- ^ annotation file
+  -> Sem r ParsedIR             -- ^ ir parser
   -> Sem r FInfo                -- ^ fixpoint query to run
-pipeline irReader afReader = do
+pipeline af irReader = do
   ir <- irReader
-  af <- afReader
-  (do
-      sanityCheck & runReader ir
-      traceResult "IR" ir
-      let mergedIR = merge ir
-      traceResult "Merged IR" mergedIR
-      ssaOutput@(normalizedIR, _) <- normalize mergedIR
-      traceResult "Normalized IR" normalizedIR
-      vcgen ssaOutput >>= constructQuery normalizedIR
-    )
-    & runReader af
+  runReader af $ do
+    sanityCheck & runReader ir
+    traceResult "IR" ir
+    let mergedIR = merge ir
+    traceResult "Merged IR" mergedIR
+    ssaOutput@(normalizedIR, _) <- normalize mergedIR
+    traceResult "Normalized IR" normalizedIR
+    vcgen ssaOutput >>= constructQuery normalizedIR
 
 traceResult :: (Member Trace r, Show a) => String -> L a -> Sem r ()
 traceResult t l = do

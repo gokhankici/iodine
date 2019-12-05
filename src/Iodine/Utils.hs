@@ -9,13 +9,8 @@ import           Control.Lens
 import           Control.Monad
 import           Data.Foldable
 import qualified Data.HashSet as HS
-import qualified Debug.Trace as DT
 import           Polysemy
 import           Polysemy.Error
-import qualified Polysemy.Trace as PT
-
-enableTrace :: Bool
-enableTrace = False
 
 combine :: (Monad f, Monoid m, Traversable t) => (a -> f m) -> t a -> f m
 combine act as = foldl' (<>) mempty <$> traverse act as
@@ -63,9 +58,3 @@ assert :: Member (Error IodineException) r
        -> String                -- ^ error message
        -> Sem r ()
 assert cond msg = unless cond $ throw (IE Assert msg)
-
-dt_trace :: String -> a -> a
-dt_trace = if enableTrace then DT.trace else flip const
-
-trace :: Member PT.Trace r => String -> Sem r ()
-trace msg = if enableTrace then PT.trace msg else return ()

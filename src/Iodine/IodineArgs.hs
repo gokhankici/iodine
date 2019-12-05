@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
+{-# OPTIONS_GHC -fno-cse #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
 module Iodine.IodineArgs (IodineArgs(..), parseArgs) where
@@ -12,58 +13,49 @@ import Text.Printf
 -- -----------------------------------------------------------------------------
 {- |
 @
-iodine v1.0, (C) Rami Gokhan Kici 2019
+iodine v2.0, (C) Rami Gokhan Kici 2019
 
-iodine [OPTIONS] FILE MODULENAME ANNOT_FILE
+iodine [OPTIONS] FILE FILE
 
 Common flags:
-     --iverilog-dir=DIR        path of the iverilog-parser directory
-     --ir                      just generate the IR file
-     --vcgen                   just generate the .fq file
-  -m --minimize                run delta-debugging of fixpoint
-     --no-save --nosave        do not save the fq file
-  -a --abduction               run abduction algorithm
-  -t --time                    print the runtime
-     --no-output --nofpoutput  disable the output from fixpoint
-     --verbose                 enable verbose output
-  -h --help                    Display help message
-  -V --version                 Print version information
-     --numeric-version         Print just the version number
-@
+     --iverilog-dir=DIR  path of the iverilog-parser directory
+     --print-ir          just run the verilog parser
+     --vcgen             just generate the .fq file
+     --no-save           do not save the fq file
+     --abduction         run abduction algorithm
+     --no-fp-output      disable the output from fixpoint
+     --verbose           enable verbose output
+  -h --help              Display help message
+  -V --version           Print version information
+     --numeric-version   Print just the version number
 
 Verifies whether the given Verilog file runs in constant time.
 
 First argument is the path the to the verilog file.
-Second argument is the name of the root Verilog module in that file.
-Third argument is a JSON file that contains the annotations.
+Second argument is a JSON file that contains the annotations.
 -}
 data IodineArgs =
   IodineArgs { fileName    :: FilePath -- this is used for both the Verilog and IR file
-             , moduleName  :: String
+             , annotFile   :: FilePath
              , iverilogDir :: FilePath
              , printIR     :: Bool
-             , ir          :: Bool
              , vcgen       :: Bool
-             , minimize    :: Bool
              , noSave      :: Bool
-             , abduction   :: Bool
-             , time        :: Bool
              , noFPOutput  :: Bool
-             , annotFile   :: FilePath
+             , enableTrace :: Bool
+             , abduction   :: Bool
              , verbose     :: Bool
+             , moduleName  :: String
              }
   deriving (Show, Data, Typeable)
 
 verylogArgs :: IodineArgs
 verylogArgs = IodineArgs { fileName    = def
                                           &= argPos 0
-                                          &= typ "FILE"
-                          , moduleName  = def
-                                          &= argPos 1
-                                          &= typ "MODULENAME"
+                                          &= typFile
                           , annotFile   = def
-                                          &= argPos 2
-                                          &= typ "ANNOT_FILE"
+                                          &= argPos 1
+                                          &= typFile
                           , iverilogDir = "iverilog-parser"
                                           &= typDir
                                           &= explicit &= name "iverilog-dir"
@@ -71,30 +63,28 @@ verylogArgs = IodineArgs { fileName    = def
                           , printIR     = def
                                           &= explicit &= name "print-ir"
                                           &= help "just run the verilog parser"
-                          , ir          = def
-                                          &= explicit &= name "ir"
-                                          &= help "just generate the IR file"
                           , vcgen       = def
                                           &= explicit &= name "vcgen"
                                           &= help "just generate the .fq file"
-                          , minimize    = def
-                                          &= explicit &= name "minimize"
-                                          &= help "run delta-debugging of fixpoint"
                           , noSave      = def
                                           &= explicit &= name "no-save"
                                           &= help "do not save the fq file"
+                          , noFPOutput  = def
+                                          &= explicit &= name "no-fp-output"
+                                          &= help "disable the output from fixpoint"
+                          , enableTrace = def
+                                          &= explicit &= name "trace"
+                                          &= help "disable the debug trace"
                           , abduction   = def
                                           &= explicit &= name "abduction"
                                           &= help "run abduction algorithm"
-                          , time        = def
-                                          &= explicit &= name "time"
-                                          &= help "print the runtime"
-                          , noFPOutput  = def
-                                          &= explicit &= name "no-output"
-                                          &= help "disable the output from fixpoint"
                           , verbose     = def
                                           &= explicit &= name "verbose"
                                           &= help "enable verbose output"
+                          , moduleName  = def
+                                          &= explicit &= name "top-module"
+                                          &= help "name of the top module"
+                                          &= ignore
                           }
               &= program programName
               &= summary summaryText
@@ -102,12 +92,11 @@ verylogArgs = IodineArgs { fileName    = def
               &= helpArg [explicit, name "h", name "help"]
   where
     programName = "iodine"
-    summaryText = printf "%s v1.0, (C) Rami Gokhan Kici 2019" programName :: String
+    summaryText = printf "%s v2.0, (C) Rami Gokhan Kici 2019" programName :: String
     detailsText = [ "Verifies whether the given Verilog file runs in constant time."
                   , ""
                   , "First argument is the path the to the verilog file."
-                  , "Second argument is the name of the root Verilog module in that file."
-                  , "Third argument is a JSON file that contains the annotations."
+                  , "Second argument is a JSON file that contains the annotations."
                   ]
 
 

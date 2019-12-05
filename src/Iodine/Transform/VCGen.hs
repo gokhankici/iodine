@@ -32,7 +32,7 @@ import           Polysemy
 import qualified Polysemy.Error as PE
 import           Polysemy.Reader
 import           Polysemy.State
-import qualified Polysemy.Trace as PT
+import           Polysemy.Trace
 import           Text.Printf
 
 
@@ -365,8 +365,6 @@ interferenceCheckWR wSt rSt = do
       subs = toSubs moduleName rNext
       rId = stmtData rStmt
       wId = stmtData wStmt
-      _rAlwaysEqs = HS.foldl' mkAEs mempty (aeVars wSt `HS.union` aeVars rSt)
-      rAlwaysEqs = dt_trace (printf "w:%d, r:%d, %s" wId rId (show _rAlwaysEqs)) _rAlwaysEqs
       mkAEs acc v =
         (case HM.lookup v rNext of
            Just n  -> acc
@@ -375,6 +373,8 @@ interferenceCheckWR wSt rSt = do
            Nothing -> acc)
         |> (HVarTL0 v moduleName, HVarTR0 v moduleName)
         |> (HVarVL0 v moduleName, HVarVR0 v moduleName)
+      rAlwaysEqs = HS.foldl' mkAEs mempty (aeVars wSt `HS.union` aeVars rSt)
+  trace (printf "w:%d, r:%d, %s" wId rId (show rAlwaysEqs))
   return $
     Horn { hornHead   = KVar rId subs
          , hornBody   = HAnd
@@ -423,7 +423,7 @@ newtype NextVars = NextVars { getNextVars :: IM.IntMap Substitutions }
 
 type G r = Members '[ Reader AnnotationFile
                     , PE.Error IodineException
-                    , PT.Trace
+                    , Trace
                     ] r
 
 type FD r  = (G r,   Members '[Reader NextVars] r)      -- FD  = global effects + next var map

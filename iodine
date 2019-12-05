@@ -26,6 +26,6 @@ else:
     cmd += ["--", "--iverilog-dir", IVERILOG_DIR]
     cmd += unknown_args
 
-print(" ".join(str(a) for a in cmd))
+# print(" ".join(str(a) for a in cmd))
 r = subprocess.run(cmd, cwd=THIS_DIR)
 sys.exit(r.returncode)

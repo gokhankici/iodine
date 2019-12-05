@@ -20,7 +20,6 @@ import qualified Data.Sequence as SQ
 import qualified Data.Text as T
 import           Polysemy
 import           Polysemy.State
-import           Text.Printf
 import           Text.Read (readEither)
 
 type S = Stmt Int
@@ -42,13 +41,7 @@ transitionRelation' conds r stmt =
     Assignment {..} ->
       HAnd $
       HBinary HEquals (val assignmentLhs) (val assignmentRhs) |:>
-      let result = HBinary HIff (tag assignmentLhs) (tagWithCond conds assignmentRhs)
-      in case r of
-           LeftRun ->
-             dt_trace
-             (printf "%s <- %s" (show $ tag assignmentLhs) (show $ tagWithCond conds assignmentRhs))
-             result
-           RightRun -> result
+      HBinary HIff (tag assignmentLhs) (tagWithCond conds assignmentRhs)
 
     IfStmt {..} ->
       let conds' = ifStmtCondition <| conds

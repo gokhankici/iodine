@@ -18,6 +18,7 @@ import qualified Data.HashSet as HS
 import qualified Data.Sequence as SQ
 import           Polysemy
 import qualified Polysemy.Error as PE
+import qualified Polysemy.Output as PO
 import           Polysemy.Reader
 import           Polysemy.State
 import           Text.Printf
@@ -33,6 +34,7 @@ makeSem ''UniqueUpdateCheck
 type SC r = Members '[ PE.Error IodineException   -- sanity error
                      , Reader ParsedIR            -- parsed IR
                      , Reader AnnotationFile      -- parsed annotation file
+                     , PO.Output String              -- output to stderr
                      ] r
 
 type S  = Stmt ()
@@ -164,7 +166,16 @@ checkVariables = do
         let srcs = af ^. sources
             snks = af ^. sinks
             vars = foldr' HS.insert HS.empty (variableName <$> variables)
-            isVar vs = vs `subset` vars
+            (inputs, outputs) =
+              foldl'
+              (\(is, os) -> \case
+                  Input p  -> (HS.insert (variableName p) is, os)
+                  Output p -> (is, HS.insert (variableName p) os))
+              (mempty, mempty)
+              ports
+            areVars vs = vs `subset` vars
+            isInput v = v `HS.member` inputs
+            isOutput v = v `HS.member` outputs
 
         when (HS.null srcs) $
           throw "No source variable is given!"
@@ -178,7 +189,7 @@ checkVariables = do
               , af ^. alwaysEquals
               , af ^. assertEquals
               ] $ \vs ->
-          unless (isVar vs) $
+          unless (areVars vs) $
           throw $ printf "element(s) in %s is not a valid variable" (show vs)
 
         clk  <- getClock moduleName
@@ -208,6 +219,20 @@ checkVariables = do
                   throw $ "always block has bad event: " ++ show abEvent
                 _ ->
                   throw $ "always block has bad event: " ++ show abEvent
+
+        when (any isOutput (af ^. alwaysEquals)) $
+          throw "an output port cannot be always_eq"
+
+        when (any isInput (af ^. assertEquals)) $
+          throw "an input port cannot be assert_eq"
+
+        let nonInputAEs = (af ^. alwaysEquals) `HS.difference` inputs
+        unless (HS.null nonInputAEs) $ do
+          let sep = replicate 80 '#'
+          PO.output sep
+          PO.output "non-input always_eq variables are given:"
+          PO.output (show nonInputAEs)
+          PO.output sep
 
     )
   where

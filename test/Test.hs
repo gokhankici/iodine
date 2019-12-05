@@ -67,7 +67,6 @@ runTestTree ta va = \case
                          in  dir </> "annot-" ++ name <.> "json"
               Just f  -> f
       va' = va { IA.fileName   = verilogFile
-               , IA.moduleName = moduleName
                , IA.annotFile  = af
                , IA.noSave     = True
                , IA.verbose    = ta ^. verbose
@@ -169,7 +168,7 @@ main = do
         else va
 
   -- hack: set the required first two positional arguments to empty list
-  va <- updateDef . invalidate <$> IA.parseArgs ("" : "" : "" : opts ^. iodineArgs)
+  va <- updateDef . invalidate <$> IA.parseArgs ("" : "" : opts ^. iodineArgs)
 
   catch (removeFile outputFile) (\(_ :: IOError) -> return ())
 
@@ -178,6 +177,5 @@ main = do
     >>= evaluateSummary
   where
     invalidate va = va { IA.fileName   = undefined
-                       , IA.moduleName = undefined
                        , IA.annotFile  = undefined
                        }

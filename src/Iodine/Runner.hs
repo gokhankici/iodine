@@ -17,11 +17,14 @@ import qualified Language.Fixpoint.Types as FT
 import qualified Language.Fixpoint.Types.Config as FC
 
 import qualified Control.Exception as E
+import           Control.Lens (view)
 import           Control.Monad
 import qualified Data.ByteString.Lazy as B
 import           Data.Function
+import qualified Data.Text as T
 import           Polysemy hiding (run)
 import           Polysemy.Error
+import           Polysemy.Output
 import           Polysemy.Trace
 import           System.Directory
 import           System.Environment
@@ -59,12 +62,19 @@ normalizePaths IodineArgs{..} = do
 
 
 -- -----------------------------------------------------------------------------
-generateIR :: IodineArgs -> IO IodineArgs
+generateIR :: IodineArgs -> IO (IodineArgs, AnnotationFile)
 -- -----------------------------------------------------------------------------
 generateIR IodineArgs{..} = do
   runPreProcessor
-  runIVL
-  return result
+  af <- parseAnnotations <$> B.readFile annotFile
+  let topModule =  T.unpack $ view afTopModule af
+  let result = IodineArgs { fileName   = irFile
+                          , moduleName = topModule
+                          , ..
+                          }
+  runIVL topModule
+  return (result, af)
+
 
   where
     -- run ivlpp preprocessor on the given verilog file
@@ -81,9 +91,9 @@ generateIR IodineArgs{..} = do
           exitFailure
 
     -- compile the Verilog file into IR
-    runIVL = do
+    runIVL topModule = do
       let ivl     = iverilogDir </> "ivl"
-          ivlArgs = [ "-M", moduleName
+          ivlArgs = [ "-M", topModule
                     , "-O", irFile
                     , preprocFile
                     ]
@@ -102,15 +112,12 @@ generateIR IodineArgs{..} = do
     filePrefix  = verilogDir </> "" <.> dropExtensions (takeFileName verilogFile)
     preprocFile = filePrefix <.> "preproc" <.> "v"
     irFile      = filePrefix <.> "pl"
-    result      = IodineArgs { fileName = irFile
-                              , ..
-                              }
 
 
 -- -----------------------------------------------------------------------------
-checkIR :: IodineArgs -> IO Bool
+checkIR :: (IodineArgs, AnnotationFile) -> IO Bool
 -- -----------------------------------------------------------------------------
-checkIR IodineArgs{..}
+checkIR (IodineArgs{..}, af)
   | printIR = do
       irFileContents <- readFile fileName
       putStrLn irFileContents
@@ -125,23 +132,26 @@ checkIR IodineArgs{..}
       finfo <- computeFInfo
       result <- F.solve config finfo
       let safe = FT.isSafe result
-      (readFile fqoutFile >>= putStrLn) `E.catch` (\(_ :: E.IOException) -> return ())
+      unless noFPOutput $
+        (readFile fqoutFile >>= putStrLn) `E.catch` (\(_ :: E.IOException) -> return ())
       return safe
   where
     computeFInfo :: IO FInfo
     computeFInfo = do
       irFileContents <- readFile fileName
-      annotFileContents <- B.readFile annotFile
-      mFInfo <- pipeline
-        (parse (fileName, irFileContents))            -- ir reader
-        (return $ parseAnnotations annotFileContents) -- anootation file reader
-        & traceToIO
+      mFInfo <- pipeline af
+        (parse (fileName, irFileContents)) -- ir reader
+        & handleTrace
         & errorToIOFinal
+        & runOutputSem (embed . hPutStrLn stderr)
         & embedToFinal
         & runFinal
       case mFInfo of
         Right finfo -> return finfo
         Left e      -> errorHandle e
+
+    handleTrace :: Member (Embed IO) r => Sem (Trace ': r) a -> Sem r a
+    handleTrace = if enableTrace then traceToIO else ignoreTrace
 
     config :: FC.Config
     config = FC.defConfig { FC.eliminate = FC.Some
