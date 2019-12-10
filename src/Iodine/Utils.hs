@@ -18,6 +18,9 @@ combine act as = foldl' (<>) mempty <$> traverse act as
 mfold :: (Foldable f, Monoid m) => (a -> m) -> f a -> m
 mfold f = foldl' (\ms a -> f a <> ms) mempty
 
+mfoldM :: (Foldable f, Monoid o, Monad m) => (a -> m o) -> f a -> m o
+mfoldM f as = foldlM' mempty as $ \acc a -> mappend acc <$> f a
+
 intersects :: HS.HashSet Id -> HS.HashSet Id -> Bool
 intersects s1 s2 = go (HS.toList s1)
  where
@@ -58,3 +61,7 @@ assert :: Member (Error IodineException) r
        -> String                -- ^ error message
        -> Sem r ()
 assert cond msg = unless cond $ throw (IE Assert msg)
+
+foldlM' :: (Foldable t, Monad m)
+       => b -> t a -> (b -> a -> m b) -> m b
+foldlM' b as act = foldlM act b as

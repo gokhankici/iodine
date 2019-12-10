@@ -350,22 +350,22 @@ generateQualifiers (QIff lhs rhss) = do
 {-|
 Creates the following qualifiers:
 
-1. VL_$1  ==  VR_$2
+1. VL_$1   =  VR_$1
 2. VLT_$1 <=> VRT_$2
 3. VLT_$1 <=> false
 4. VRT_$1 <=> false
 -}
 defaultQualifiers :: L FT.Qualifier
 defaultQualifiers =
-    mkEq "ValueEq" Value
-    |:> mkEq "TagEq" Tag
+    mkEq "ValueEq" Value True
+    |:> mkEq "TagEq" Tag False
     |> mkTagZero 0 LeftRun
     |> mkTagZero 1 RightRun
  where
-  mkEq name t =
+  mkEq name t sameSuffix =
     makeQualifier2 name t
     (FT.PatPrefix (symbol $ getVarPrefix t LeftRun) 1)
-    (FT.PatPrefix (symbol $ getVarPrefix t RightRun) 2)
+    (FT.PatPrefix (symbol $ getVarPrefix t RightRun) (if sameSuffix then 1 else 2))
 
   mkTagZero n r = FT.mkQual
     (FT.symbol @String (printf "TagZero%d" (n :: Int)))

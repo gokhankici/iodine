@@ -52,7 +52,7 @@ runTestTree ta va = \case
   SingleTest UnitTest{..} ->
     it testName $
     if   ta ^. dryRun
-    then printf "iodine %s %s %s\n" verilogFile moduleName af :: IO ()
+    then printf "sb && ./iodine %s %s\n" verilogFile af :: IO ()
     else
       let act = (withSilence $ R.run va') `shouldReturn` (testType == Succ)
       in  catch (act <* appendTestName "passed")

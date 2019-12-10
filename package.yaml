@@ -40,6 +40,7 @@ ghc-options:
 - -fwarn-unused-matches
 
 default-extensions:
+- ConstraintKinds
 - DataKinds
 - FlexibleContexts
 - GADTs
@@ -48,8 +49,8 @@ default-extensions:
 - RankNTypes
 - ScopedTypeVariables
 - TypeApplications
-- TypeOperators
 - TypeFamilies
+- TypeOperators
 
 dependencies:
 - base >= 4.7 && < 5

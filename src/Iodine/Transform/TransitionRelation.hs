@@ -55,11 +55,14 @@ transitionRelation' conds r stmt =
     Skip {..} ->
       HBool True
 
+    SummaryStmt {..} ->
+      undefined
+
  where
   ufVal :: Id -> HornAppReturnType -> L (Expr Int) -> HornExpr
   ufVal name t es = HApp name t hes
     where
-      hes = fmap val $ keepVariables es
+      hes = val <$> keepVariables es
 
   mkUFName n = "uf_noname_" <> T.pack (show n)
 

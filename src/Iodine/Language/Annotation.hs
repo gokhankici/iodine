@@ -23,6 +23,7 @@ data Annotations =
               , _initialEquals :: HS.HashSet Id
               , _alwaysEquals  :: HS.HashSet Id
               , _assertEquals  :: HS.HashSet Id
+              , _tagEquals     :: HS.HashSet Id
               }
   deriving (Show)
 
@@ -62,12 +63,17 @@ instance FromJSON Annotations where
         keyDiff   = HS.difference allKeys validKeys
     unless (HS.null keyDiff) $
       parserThrowError [] ("invalid keys " ++ show keyDiff)
-    Annotations
+    annot <-
+      Annotations
       <$> o .:  "source"
       <*> o .:  "sink"
       <*> o .:? "initial_eq" .!= mempty
       <*> o .:? "always_eq"  .!= mempty
       <*> o .:? "assert_eq"  .!= mempty
+      <*> o .:? "tag_eq"     .!= mempty
+    return $
+      annot & tagEquals %~ (mappend $ annot ^. sources <> annot ^. sinks)
+
 
 instance FromJSON Qualifier where
   parseJSON = withObject "Qualifier" $ \o -> do
@@ -98,6 +104,9 @@ toModuleAnnotations m = (^. afAnnotations . to find)
   where
     errMsg = "Module " ++ show m ++ " not found in annotations"
     find   = HM.lookupDefault (error errMsg) m
+
+getModuleAnnotations :: Member (Reader AnnotationFile) r => Id -> Sem r ModuleAnnotations
+getModuleAnnotations = asks . toModuleAnnotations
 
 toAnnotations :: Id -> AnnotationFile -> Annotations
 toAnnotations m = view moduleAnnotations . toModuleAnnotations m

@@ -13,9 +13,12 @@ import           Iodine.Types
 
 import           Control.Lens
 import           Control.Monad
+import           Data.Maybe
 import           Data.Foldable
 import qualified Data.HashSet as HS
+import           Data.List
 import qualified Data.Sequence as SQ
+import qualified Data.Text as T
 import           Polysemy
 import qualified Polysemy.Error as PE
 import qualified Polysemy.Output as PO
@@ -68,7 +71,7 @@ checkModule :: (S -> SCM r ())
             -> Module ()
             -> Sem r ()
 checkModule goS m@Module{..} =
-  ( do (traverse_ goS gateStmts) & runReader @MA Nothing
+  ( do traverse_ goS gateStmts & runReader @MA Nothing
        let goAB ab@AlwaysBlock{..} = goS abStmt & runReader (Just ab)
        traverse_ goAB alwaysBlocks
   ) & runReader m
@@ -100,6 +103,7 @@ handleAssignment handler = go
     go IfStmt{..}         = gos (ifStmtThen SQ.<| ifStmtElse SQ.<| SQ.empty)
     go Assignment{..}     = handler assignmentType assignmentLhs assignmentRhs
     go Skip{..}           = pure ()
+    go SummaryStmt{..}    = error "unreachable"
 
 -- -----------------------------------------------------------------------------
 checkSameAssignmentType :: SC r => Sem r ()
@@ -146,6 +150,7 @@ checkUniqueUpdateLocationOfVariables =
     asgnVars IfStmt{..}         = asgnVars ifStmtThen <> asgnVars ifStmtElse
     asgnVars Assignment{..}     = HS.singleton (varName assignmentLhs, varModuleName assignmentLhs)
     asgnVars Skip{..}           = mempty
+    asgnVars SummaryStmt{..}    = error "unreachable"
 
 runUniqueUpdateCheck :: SC r => Sem (UniqueUpdateCheck ': r) a -> Sem (State S1 ': r) a
 runUniqueUpdateCheck = reinterpret $ \case
@@ -159,7 +164,7 @@ runUniqueUpdateCheck = reinterpret $ \case
 -- -----------------------------------------------------------------------------
 checkVariables :: SC r => Sem r ()
 -- -----------------------------------------------------------------------------
-checkVariables = do
+checkVariables =
   ask @ParsedIR >>= traverse_
     (\Module{..} -> do
         af <- getAnnotations moduleName
@@ -205,7 +210,7 @@ checkVariables = do
 
         -- sinks have to be registers
         for_ snks $ \snk ->
-          when (Register snk `SQ.elemIndexL` variables == Nothing) $
+          when (isNothing $ Register snk `SQ.elemIndexL` variables) $
           throw $ printf "Sink %s is not found or not a register" snk
 
         -- always block events only refer to specified clocks
@@ -215,7 +220,7 @@ checkVariables = do
             _    ->
               case eventExpr abEvent of
                 Variable{..} ->
-                  when (isNotClock varName || varModuleName /= moduleName) $
+                  unless (clk == Just varName && varModuleName == moduleName) $
                   throw $ "always block has bad event: " ++ show abEvent
                 _ ->
                   throw $ "always block has bad event: " ++ show abEvent
@@ -231,7 +236,7 @@ checkVariables = do
           let sep = replicate 80 '#'
           PO.output sep
           PO.output "non-input always_eq variables are given:"
-          PO.output (show nonInputAEs)
+          PO.output (intercalate ", " $ T.unpack <$> toList nonInputAEs)
           PO.output sep
 
     )

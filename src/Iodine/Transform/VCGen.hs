@@ -23,6 +23,7 @@ import           Iodine.Utils
 import           Control.Lens
 import           Control.Monad
 import           Data.Foldable
+import           Data.Maybe
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import qualified Data.IntMap as IM
@@ -35,8 +36,6 @@ import           Polysemy.State
 import           Polysemy.Trace
 import           Text.Printf
 
-
-type Ids = HS.HashSet Id
 
 -- | State relevant to statements
 data StmtSt = StmtSt { _currentVariables     :: Ids -- ^ all vars in this block
@@ -78,30 +77,33 @@ always have the same value.
 different always blocks are consistent under interference.
 -}
 vcgen :: G r => NormalizeOutput -> Sem r VCGenOutput
-vcgen (ssaIR, trNextVariables) = runReader (NextVars trNextVariables) $
-  do unless (SQ.length ssaIR == 1) $
-       throw $ printf "expecting a single module"
-     combine vcgenMod ssaIR
+vcgen (ssaIR, trNextVariables) =
+  combine vcgenMod ssaIR
+  & runReader (NextVars trNextVariables)
 
 vcgenMod :: FD r => Module Int -> Sem r Horns
 vcgenMod m@Module {..} = do
   annots <- getAnnotations moduleName
 
-  assert (SQ.null gateStmts) $
+  assert (SQ.null gateStmts)
     "Gate statements should have been merged into always* blocks"
-  assert singleBlockForEvent $
+  assert singleBlockForEvent
     "There should be at most one always block for each event type"
 
   combine regularChecks alwaysBlocks
     <||> interferenceChecks allStmts
-    <||> combine moduleInstanceChecks moduleInstances
     & runReader m
     & runReader annots
 
   where
-    allStmts = abStmt <$> alwaysBlocks
-    allEvents = fmap (const ()) <$> toList (abEvent <$> alwaysBlocks)
+    allStmts = (abStmt <$> alwaysBlocks) <> (mi2Stmt <$> moduleInstances)
+    allEvents = void <$> toList (abEvent <$> alwaysBlocks)
     singleBlockForEvent = length allEvents == length (nub allEvents)
+    mi2Stmt ModuleInstance{..} =
+      SummaryStmt { summaryType  = moduleInstanceType
+                  , summaryPorts = fmap (const 0) <$> moduleInstancePorts
+                  , stmtData     = moduleInstanceData
+                  }
 
 regularChecks :: FDM r => AlwaysBlock Int -> Sem r Horns
 regularChecks AlwaysBlock{..} =
@@ -113,9 +115,6 @@ regularChecks AlwaysBlock{..} =
   ||>  next abStmt
   <||> sinkCheck abStmt
   <||> assertEqCheck abStmt
-
-moduleInstanceChecks :: FD r => ModuleInstance Int -> Sem r Horns
-moduleInstanceChecks _ = notSupportedM
 
 
 -- -------------------------------------------------------------------------------------------------
@@ -327,6 +326,7 @@ interferenceCheck :: (FDM r, Members '[State ICSts, State Horns] r)
 interferenceCheck stmt = do
   -- traverse the statements we have looked at so far
   stmtSt <- computeStmtStM stmt
+  currentWrittenVars <- getUpdatedVariables stmt
   let currentSt =
         ICSt { icStmt      = stmt
              , writtenVars = currentWrittenVars
@@ -351,7 +351,6 @@ interferenceCheck stmt = do
  where
   stmtId = stmtData stmt
   currentAllVars = getVariables stmt
-  currentWrittenVars = getUpdatedVariables stmt
 
 -- return the write/read interference check
 interferenceCheckWR :: FDM r
@@ -421,9 +420,11 @@ type VCGenOutput = Horns
 type Substitutions = HM.HashMap Id Int
 newtype NextVars = NextVars { getNextVars :: IM.IntMap Substitutions }
 
+type ModuleMap = HM.HashMap Id (Module ())
 type G r = Members '[ Reader AnnotationFile
                     , PE.Error IodineException
                     , Trace
+                    , Reader ModuleMap
                     ] r
 
 type FD r  = (G r,   Members '[Reader NextVars] r)      -- FD  = global effects + next var map
@@ -452,13 +453,13 @@ computeStmtSt as Module{..} stmt =
   , _currentAssertEquals  = filterAs assertEquals
   }
   where
-    filterAs l = HS.intersection (as ^. l) vs 
+    filterAs l = HS.intersection (as ^. l) vs
     vs = getVariables stmt
     extraInitEquals =
       foldl'
       (\vars -> \case
           w@Wire{..} ->
-            if   ((Input w) `SQ.elemIndexL` ports == Nothing)
+            if   isNothing $ Input w `SQ.elemIndexL` ports
             then HS.insert variableName vars
             else vars
           Register{..} ->
@@ -466,12 +467,18 @@ computeStmtSt as Module{..} stmt =
       mempty
       variables
 
-getUpdatedVariables :: Stmt a -> Ids
+getUpdatedVariables :: G r => Stmt a -> Sem r Ids
 getUpdatedVariables = \case
-  Block {..}          -> mfold getUpdatedVariables blockStmts
-  Assignment {..}     -> HS.singleton $ varName assignmentLhs
-  IfStmt {..}         -> mfold getVariables [ifStmtThen, ifStmtElse]
-  Skip {..}           -> mempty
+  Block {..}          -> mfoldM getUpdatedVariables blockStmts
+  Assignment {..}     -> return . HS.singleton $ varName assignmentLhs
+  IfStmt {..}         -> return $ mfold getVariables [ifStmtThen, ifStmtElse]
+  Skip {..}           -> return mempty
+  SummaryStmt {..}    -> do
+    Module{..} <- asks (HM.! summaryType)
+    mfoldM (\case
+      Output o -> return . getVariables $ summaryPorts HM.! (variableName o)
+      Input _  -> return mempty
+      ) ports
 
 toSubs :: Id                     -- ^ module name
        -> Substitutions          -- ^ substitution map
@@ -495,6 +502,5 @@ toSubsTags m = HM.foldlWithKey' go mempty
       |> (HVar v m 0 Tag LeftRun,  HVar v m n Tag LeftRun)
       |> (HVar v m 0 Tag RightRun, HVar v m n Tag RightRun)
 
-throw :: G r => String -> Sem r a
-throw = PE.throw . IE VCGen
-
+-- throw :: G r => String -> Sem r a
+-- throw = PE.throw . IE VCGen

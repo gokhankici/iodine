@@ -50,42 +50,38 @@ data IodineArgs =
   deriving (Show, Data, Typeable)
 
 verylogArgs :: IodineArgs
-verylogArgs = IodineArgs { fileName    = def
-                                          &= argPos 0
-                                          &= typFile
-                          , annotFile   = def
-                                          &= argPos 1
-                                          &= typFile
-                          , iverilogDir = "iverilog-parser"
-                                          &= typDir
-                                          &= explicit &= name "iverilog-dir"
-                                          &= help "path of the iverilog-parser directory"
-                          , printIR     = def
-                                          &= explicit &= name "print-ir"
-                                          &= help "just run the verilog parser"
-                          , vcgen       = def
-                                          &= explicit &= name "vcgen"
-                                          &= help "just generate the .fq file"
-                          , noSave      = def
-                                          &= explicit &= name "no-save"
-                                          &= help "do not save the fq file"
-                          , noFPOutput  = def
-                                          &= explicit &= name "no-fp-output"
-                                          &= help "disable the output from fixpoint"
-                          , enableTrace = def
-                                          &= explicit &= name "trace"
-                                          &= help "disable the debug trace"
-                          , abduction   = def
-                                          &= explicit &= name "abduction"
-                                          &= help "run abduction algorithm"
-                          , verbose     = def
-                                          &= explicit &= name "verbose"
-                                          &= help "enable verbose output"
-                          , moduleName  = def
-                                          &= explicit &= name "top-module"
-                                          &= help "name of the top module"
-                                          &= ignore
-                          }
+verylogArgs = IodineArgs { fileName    = def &= argPos 0 -- &= typFile
+                         , annotFile   = def &= argPos 1 -- &= typFile
+                         , iverilogDir = "iverilog-parser"
+                                         &= typDir
+                                         &= explicit &= name "iverilog-dir"
+                                         &= help "path of the iverilog-parser directory"
+                         , printIR     = def
+                                         &= explicit &= name "print-ir"
+                                         &= help "just run the verilog parser"
+                         , vcgen       = def
+                                         &= explicit &= name "vcgen"
+                                         &= help "just generate the .fq file"
+                         , noSave      = def
+                                         &= explicit &= name "no-save"
+                                         &= help "do not save the fq file"
+                         , noFPOutput  = def
+                                         &= explicit &= name "no-fp-output"
+                                         &= help "disable the output from fixpoint"
+                         , enableTrace = def
+                                         &= explicit &= name "trace"
+                                         &= help "disable the debug trace"
+                         , abduction   = def
+                                         &= explicit &= name "abduction"
+                                         &= help "run abduction algorithm"
+                         , verbose     = def
+                                         &= explicit &= name "verbose"
+                                         &= help "enable verbose output"
+                         , moduleName  = def
+                                         &= explicit &= name "top-module"
+                                         &= help "name of the top module"
+                                         &= ignore
+                         }
               &= program programName
               &= summary summaryText
               &= details detailsText

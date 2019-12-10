@@ -7,14 +7,18 @@ module Iodine.Types where
 
 import           Control.Exception
 import qualified Data.Sequence as SQ
+import qualified Data.HashSet as HS
 import qualified Data.Text as T
 
-type Id = T.Text
-type L  = SQ.Seq
+type Id  = T.Text
+type Ids = HS.HashSet Id
+type L   = SQ.Seq
 
 data IodineExceptionType =
     IRParser
   | SanityCheck
+  | Merge
+  | Normalize
   | VCGen
   | Query
   | Assert

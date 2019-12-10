@@ -10,10 +10,10 @@ module Iodine.Transform.Horn where
 
 import           Iodine.Types
 
-import           GHC.Generics
 import           Control.DeepSeq
-import qualified Data.Text as T
 import           Data.Foldable
+import qualified Data.Text as T
+import           GHC.Generics
 import qualified Language.Fixpoint.Types as FT
 import qualified Text.PrettyPrint as PP
 

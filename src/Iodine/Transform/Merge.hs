@@ -7,11 +7,15 @@
 
 module Iodine.Transform.Merge (merge) where
 
-import           Iodine.Types
+import           Iodine.Analyze.ModuleSummary
+import           Iodine.Language.Annotation
 import           Iodine.Language.IR
 import           Iodine.Language.IRParser
+import           Iodine.Types
+import           Iodine.Utils
 
 import           Control.Lens
+import           Control.Monad
 import           Data.Foldable
 import qualified Data.Graph.Inductive as G
 import           Data.Graph.Inductive.PatriciaTree (Gr)
@@ -22,6 +26,8 @@ import qualified Data.IntSet as IS
 import           Data.List (elem, intercalate)
 import qualified Data.Sequence as SQ
 import           Polysemy
+import           Polysemy.Error
+import           Polysemy.Reader
 import           Polysemy.State
 
 type DepGraph = Gr () ()
@@ -35,39 +41,41 @@ data St =
 
 makeLenses ''St
 
-type FD r = Member (State St) r
+type G r = Members '[Reader AnnotationFile , Reader SummaryMap , Reader ModuleMap , Error IodineException] r
 
 -- -----------------------------------------------------------------------------
-merge :: ParsedIR -> ParsedIR
+merge :: G r => ParsedIR -> Sem r ParsedIR
 -- -----------------------------------------------------------------------------
-merge = fmap mergeModule
-
+merge = traverse mergeModule
 
 -- | make gate statements a always* block, and merge with the rest
-mergeModule :: Module () -> Module ()
-mergeModule Module {..} =
-  Module { alwaysBlocks = mergeAlwaysBlocks $ alwaysBlocks <> gateBlocks
-         , gateStmts    = mempty
-         , ..
-         }
+mergeModule :: G r => Module () -> Sem r (Module ())
+mergeModule Module {..} = do
+  (miBlocks, moduleInstances') <- tryToSummarize moduleInstances
+  alwaysBlocks' <- mergeAlwaysBlocks $ alwaysBlocks <> gateBlocks <> miBlocks
+  return $
+    Module { alwaysBlocks    = alwaysBlocks'
+           , gateStmts       = mempty
+           , moduleInstances = moduleInstances'
+           , ..
+           }
   where
     gateBlocks = makeStarBlock <$> gateStmts
-
 
 {- |
 All blocks with the same non-star event are merged into a single block (with
 random ordering). For the always* blocks, a dependency graph is created first
 and then they are merged according to their order in the directed-acyclic graph.
 -}
-mergeAlwaysBlocks :: L (AlwaysBlock ()) -> L (AlwaysBlock ())
-mergeAlwaysBlocks as = HM.foldlWithKey' (\acc e ss-> acc SQ.>< mkBlocks e ss) mempty eventMap
-  where
-    mkBlocks e stmts =
-      SQ.singleton $
+mergeAlwaysBlocks :: G r => L (AlwaysBlock ()) -> Sem r (L (AlwaysBlock ()))
+mergeAlwaysBlocks as =
+  foldlM' mempty (HM.toList eventMap) $ \acc (e, stmts) -> do
+    ab' <-
       case e of
-        Star        -> mergeAlwaysStarBlocks stmts
-        PosEdge{..} -> mergeAlwaysEventBlocks e stmts
-        NegEdge{..} -> mergeAlwaysEventBlocks e stmts
+        Star -> mergeAlwaysStarBlocks stmts
+        _    -> return $ mergeAlwaysEventBlocks e stmts
+    return $ acc |> ab'
+  where
     eventMap = foldl' updateM mempty as
     updateM m AlwaysBlock{..} = HM.alter (append (SQ.<|) abStmt) abEvent m
 
@@ -77,31 +85,23 @@ Merge every always* block into a single one. The statements that belong to the
 same connected components are ordered according to their topological sort.
 However, the order between connected components are random.
 -}
-mergeAlwaysStarBlocks :: L (Stmt ()) -> AlwaysBlock ()
-mergeAlwaysStarBlocks stmts =
-  if   G.noNodes depGraph == SQ.length stmts
-  then makeStarBlock (Block stmts' ())
-  else error $ "graph size does not match up with the initial statements"
-  where
-    (depGraph, stmtIds) = buildDependencyGraph stmts
-    components = G.components depGraph
-    graphs = (\ns -> G.nfilter (`elem` ns) depGraph) <$> components
-    stmts' =
-      foldl'
-      (\acc g ->
-         let _stmtOrder = GQ.topsort g
-             stmtOrder =
-               if hasCycle g
-               then error $
-                    "star dependency graph has a loop:\n" ++
-                    intercalate "\n" ((show . (stmtIds IM.!)) <$> _stmtOrder)
-               else _stmtOrder
-         in (stmtIds IM.!) <$> stmtOrder
-            & SQ.fromList
-            & (acc <>)
-      )
-      mempty
-      graphs
+mergeAlwaysStarBlocks :: G r => L (Stmt ()) -> Sem r (AlwaysBlock ())
+mergeAlwaysStarBlocks stmts = do
+  (depGraph, stmtIds) <- buildDependencyGraph stmts
+  unless (G.noNodes depGraph == SQ.length stmts) $
+    throw . IE Merge  $ "graph size does not match up with the initial statements"
+  let components = G.components depGraph
+      graphs = (\ns -> G.nfilter (`elem` ns) depGraph) <$> components
+  stmts' <- foldlM' mempty graphs $ \acc g -> do
+    let stmtOrder = GQ.topsort g
+    when (hasCycle g) $
+      throw . IE Merge $
+        "star dependency graph has a loop:\n" ++
+        intercalate "\n" (show . (stmtIds IM.!) <$> stmtOrder)
+    return $ (stmtIds IM.!) <$> stmtOrder
+             & SQ.fromList
+             & (acc <>)
+  return $ makeStarBlock (Block stmts' ())
 
 {- |
 merge the always blocks with the same non-star event after makign sure that
@@ -116,20 +116,21 @@ mergeAlwaysEventBlocks e stmts = AlwaysBlock e stmt'
         s SQ.:<| SQ.Empty -> s
         _                 -> Block stmts ()
 
+type ModuleMap = HM.HashMap Id (Module ())
+type FD r = Members '[State St, Reader ModuleMap] r
 
 {- |
 builds a dependency graph where (s1, s2) \in G iff there exists a variable v
 such that s1 updates v and s2 reads v
 -}
-buildDependencyGraph :: L (Stmt ()) -> (DepGraph, StmtMap)
+buildDependencyGraph :: Member (Reader ModuleMap) r
+                     => L (Stmt ()) -> Sem r (DepGraph, StmtMap)
 buildDependencyGraph stmts =
   traverse_ update stmts
   & runState initialState
-  & run
-  & \(st, _) -> ( buildGraph (st ^. readBy) (st ^. writtenBy) (st ^. stmtMap & IM.keysSet)
-                , st ^. stmtMap
-                )
-
+  & fmap (\(st, _) -> ( buildGraph (st ^. readBy) (st ^. writtenBy) (st ^. stmtMap & IM.keysSet)
+                      , st ^. stmtMap
+                      ))
   where
     buildGraph readMap writeMap nodes =
       HM.foldlWithKey'
@@ -170,6 +171,15 @@ buildDependencyGraph stmts =
       updateN n ifStmtThen
       updateN n ifStmtElse
     updateN _ Skip {..} = return ()
+    updateN n SummaryStmt {..} = do
+      Module{..} <- asks (HM.! summaryType)
+      for_ ports $ \case
+        Input i ->
+          for_ (getVariables (summaryPorts HM.! variableName i)) (insertToReads n)
+        Output o ->
+          for_ (getVariables (summaryPorts HM.! variableName o)) (insertToWrites n)
+
+
 
     insertToWrites n v =
       modify $ writtenBy %~ HM.alter (append IS.insert n) v
@@ -181,7 +191,7 @@ initialState :: St
 initialState = St mempty mempty 0 mempty
 
 makeStarBlock :: Stmt () -> AlwaysBlock ()
-makeStarBlock s = AlwaysBlock Star s
+makeStarBlock = AlwaysBlock Star
 
 {- |
 given a updater function and an element, create a helper function to be used

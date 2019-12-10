@@ -20,12 +20,14 @@ import           Iodine.Language.IRParser ( ParsedIR )
 import           Iodine.Types
 
 import           Control.Lens
+import           Control.Monad
 import qualified Data.Text as T
 import qualified Data.HashMap.Strict as HM
 import qualified Data.IntMap as IM
 import qualified Data.Sequence as SQ
 import           Polysemy
 import           Polysemy.State
+import           Polysemy.Error
 import           Polysemy.Reader
 import           Polysemy.Trace
 
@@ -74,17 +76,20 @@ assigned only in one of the branches of an if statement, the missing assignment
 is added to the corresponding branch. This way the substitutions that implement
 the transition relation in the kvars become simple.
 -}
-normalize :: Member Trace r => ParsedIR -> Sem r NormalizeOutput
+normalize :: Members '[Trace, Error IodineException] r
+          => ParsedIR -> Sem r NormalizeOutput
 normalize modules = traverse normalizeModule modules <* trace "SSA DONE!" & runNormalize
 
 -- | Run normalize on all the statements inside the given module.
 normalizeModule :: FD r => Module a -> Sem r (Module Int)
-normalizeModule Module {..} = runReader (ModuleName moduleName) $
+normalizeModule Module {..} = runReader (ModuleName moduleName) $ do
+  unless (SQ.null gateStmts) $
+    throw $ IE Normalize $ "gateStmts should be empty here"
   Module moduleName ports variables
-  <$> traverse normalizeStmtTop gateStmts
-  <*> traverse normalizeAB         alwaysBlocks
-  <*> traverse normalizeModuleInstance moduleInstances
-  <*> freshId ModId
+    <$> return mempty
+    <*> traverse normalizeAB alwaysBlocks
+    <*> traverse normalizeModuleInstance moduleInstances
+    <*> freshId ModId
 
 -- | Run normalize on all the statements inside the given always block.
 normalizeAB :: FDM r => AlwaysBlock a -> Sem r (AlwaysBlock Int)
@@ -160,6 +165,11 @@ normalizeStmt = \case
 
   Skip {..} ->
     Skip <$> freshId StmtId
+
+  SummaryStmt{..} ->
+    SummaryStmt summaryType
+    <$> traverse normalizeStmtExpr summaryPorts
+    <*> freshId StmtId
 
   where
     normalizeStmtExpr :: FDS r => Expr a -> Sem r (Expr Int)
@@ -280,7 +290,7 @@ normalizeExpr = \case
 
 -- #############################################################################
 
-type FD r   = Members '[State St, Trace] r
+type FD r   = Members '[State St, Trace, Error IodineException] r
 type FDR r  = (FD r, Members '[Reader StmtSt] r)
 type FDM r  = (FD r, Members '[Reader ModuleName] r)
 type FDS r  = (FDM r, Members '[State StmtSt] r)

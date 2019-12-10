@@ -9,7 +9,12 @@ def get_args():
     argparser = argparse.ArgumentParser(prog="iodine", add_help=False)
     argparser.add_argument("-b", "--build", action="store_true")
     argparser.add_argument("--profile", action="store_true")
-    return argparser.parse_known_args()
+    args, unknown_args = argparser.parse_known_args()
+    for i, arg in enumerate(unknown_args):
+        p = Path(arg)
+        if p.is_file():
+            unknown_args[i] = p.resolve()
+    return args, unknown_args
 
 args, unknown_args = get_args()
 
