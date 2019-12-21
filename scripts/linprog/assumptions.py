@@ -10,17 +10,23 @@ import cplex
 import subprocess
 import time
 
-from flow_capacity import get_edge_capacities
-from utils         import *
-from tests         import get_test
+from   flow_capacity import CplexFlowCapSolver
+from   utils         import *
+from   tests         import get_test
 
 class AssumptionSolver:
     def __init__(self, g, must_eq, cannot_be_eq):
-        self.g            = g
         self.must_eq      = list(set(must_eq))
         self.cannot_be_eq = list(set(cannot_be_eq))
-        self.cap          = get_edge_capacities(g)
-        self.shadow_nodes = [v for v in g.nodes() if len(g.succ[v]) > 0]
+
+        cc             = CplexFlowCapSolver().get_edge_capacities(g)
+        self.cap       = cc.capacities
+        self.cap_nodes = cc.extra_nodes
+        self.g         = cc.new_graph
+
+        self.shadow_nodes = [ v
+                              for v in g.nodes()
+                              if v not in self.cap_nodes and len(g.succ[v]) > 0 ]
 
         # give ids to the edges
         n = 0
@@ -134,28 +140,10 @@ class CplexAssumptionSolver(AssumptionSolver):
         prob.write("assumptions.lp")
         if status == "optimal":
             values = sol.get_values()
-            return {v : values[self.edge_id[v]] for v in self.shadow_nodes}
+            return set([ v for v in self.shadow_nodes if int(round(values[self.edge_id[v]])) > 0 ])
         else:
             print("linprog failed: {}".format(status))
             sys.exit(1)
-
-def suggest_assumptions(g, must_eq, cannot_be_eq):
-    defaultSolver = CplexAssumptionSolver(g, must_eq, cannot_be_eq)
-    return defaultSolver.suggest_assumptions()
-
-def main2(test_no):
-    test = get_test(test_no)
-    if test is None:
-        return
-
-    edges, must_eq, cannot_be_eq = test
-    g = make_test_graph(edges)
-    result = suggest_assumptions(g, must_eq, cannot_be_eq)
-    if result:
-        print("Marked nodes:\n{}".format([v for v,n in result.items() if int(round(n)) > 0]))
-        return result
-    else:
-        print("No solution exists...")
 
 def main(filename):
     parsed       = parse_cplex_input(filename)
@@ -163,19 +151,54 @@ def main(filename):
     must_eq      = parsed["must_eq"]
     cannot_be_eq = parsed["cannot_be_eq"]
     names        = parsed["names"]
+    inv_names    = parsed["inv_names"]
+
+    print("Must equal   :")
+    for v in sorted([names[v] for v in must_eq]):
+        print("  {}".format(v))
 
     def l2s(l):
         return ", ".join(l)
 
     write_dot_file(g, names)
-    # visualize_graph()
 
-    result = suggest_assumptions(g, must_eq, cannot_be_eq)
+    result = CplexAssumptionSolver(g, must_eq, cannot_be_eq).suggest_assumptions()
+
+    def validate_marked_nodes():
+        always_eq = result.copy()
+        # always_eq.add(inv_names["id_class"])
+
+        worklist = set([ w for v in result for w in g.succ[v] ])
+
+        while len(worklist) > 0:
+            v    = worklist.pop()
+            name = names[v]
+
+            before = v in always_eq
+            after  = all([u in always_eq for u in g.pred[v]])
+
+            if before:
+                continue
+            elif after:
+                always_eq.add(v)
+                print("[+++++] {:35}".format(name))
+                worklist.update(set(g.succ[v]))
+            else:
+                print("[-----] {:35} : {}".format(name, ", ".join([ names[u] for u in g.pred[v] if u not in always_eq ])))
+
+        print("\n\n\n")
+        err = False
+        for v in must_eq:
+            if v not in always_eq:
+                print("VALIDATION ERROR: {:<35} IS NOT ALWAYS EQUAL !".format(names[v]))
+                err = True
+        if err:
+            sys.exit(1)
+
+    validate_marked_nodes()
+
     if result:
-        print("Must equal   :")
-        for v in sorted([names[v] for v in must_eq]):
-            print("  {}".format(v))
-        print("Marked nodes : {}".format(l2s([names[v] for v,n in result.items() if round(n) > 0])))
+        print("Marked nodes : {}".format(l2s([ names[v] for v in result ])))
     else:
         print("No solution exists...")
     return result

@@ -6,14 +6,27 @@ import numpy          as np
 import networkx       as nx
 import cplex
 import json
-
-from utils import *
+from   collections    import namedtuple
+from   utils          import *
 
 class CplexFlowCapSolver:
+    def __init__(self):
+        self.result_type = namedtuple("CplexCapacity", ["capacities", "extra_nodes", "extra_edges", "new_graph"])
+
+    def to_result_type(self, *args):
+        nt = self.result_type
+        return nt(*args)
+
     def enum_edges(self, g):
+        """
+        Return a map that gives an id to every edge starting at 0
+        """
         return dict(map((lambda t: (t[1],t[0])), enumerate(g.edges())))
 
     def make_extra_edges(self, g):
+        """
+        Create extra edges that are useful when the capacity formulation is infeasible by default
+        """
         self.extra_nodes = set()
         self.extra_edges = {}
 
@@ -39,9 +52,28 @@ class CplexFlowCapSolver:
         u, v = e
         return u if u in self.extra_nodes else v
 
+    def make_result(self, edge_id, values, orig_graph):
+        new_graph   = orig_graph.copy()
+        capacities  = {}
+        extra_nodes = set()
+        extra_edges = {}
+        for e, i in edge_id.items():
+            cap = int(round(values[i]))
+            if cap < 1:
+                continue
+            elif self.is_extra_edge(e):
+                u,v = e
+                new_graph.add_edge(u, v, dict(type = "extra"))
+                ve = self.get_extra_node(e)
+                extra_nodes.add(ve)
+                extra_edges[e] = ve
+            capacities[e] = cap
+        return self.to_result_type(capacities, extra_nodes, extra_edges, new_graph)
+
     def get_edge_capacities(self, orig_g):
         g        = self.make_extra_edges(orig_g)
         edge_id  = self.enum_edges(g)
+        edge_cnt = len(edge_id)
 
         prob = cplex.Cplex()
         prob.set_results_stream(None)
@@ -50,12 +82,14 @@ class CplexFlowCapSolver:
         # objective is to minimize
         prob.objective.set_sense(prob.objective.sense.minimize)
 
-        obj = [1] * len(edge_id)
-        lb  = [1] * len(edge_id)
+        obj = [1] * edge_cnt
+        lb  = [1] * edge_cnt
         for e, i in edge_id.items():
             if self.is_extra_edge(e):
+                u, v   = e
+                ve     = self.get_extra_node(e)
                 lb[i]  = 0
-                obj[i] = len(edge_id) * 1000
+                obj[i] = edge_cnt * 5000 if u == ve else edge_cnt * 1000
 
         prob.variables.add(obj = obj, lb  = lb)
 
@@ -91,35 +125,20 @@ class CplexFlowCapSolver:
         prob.write("flow_capacity.lp")
         if status == "optimal":
             values = sol.get_values()
-            capacities = {}
-            extra_edges = {}
-            for e, i in edge_id.items():
-                cap = int(round(values[i]))
-                if cap < 1:
-                    continue
-                elif self.is_extra_edge(e):
-                    v = self.get_extra_node(e)
-                    extra_edges[e] = v
-                capacities[e] = cap
-            return { "capacities": capacities, "extra_edges": extra_edges }
+            return self.make_result(edge_id, values, orig_g)
         else:
             print("[Capacities] Linear programming failed: {}".format(status))
             sys.exit(1)
-
-def get_edge_capacities(g):
-    defaultSolver = CplexFlowCapSolver()
-    return defaultSolver.get_edge_capacities(g)
 
 if __name__ == "__main__":
     cplex_in   = parse_cplex_input(sys.argv[1])
     names      = cplex_in["names"]
     g          = cplex_in["graph"]
-    r          = get_edge_capacities(cplex_in["graph"])
-    capacities = r["capacities"]
+    cc         = CplexFlowCapSolver().get_edge_capacities(g)
+    capacities = cc.capacities
 
-    for e, ve in r["extra_edges"].items():
+    for e, ve in cc.extra_edges.items():
         u, v = e
-        g.add_edge(u, v)
         if u == ve:
             name = names[v]
             typ  = "incoming to"
@@ -129,10 +148,10 @@ if __name__ == "__main__":
         print("{:<15} {:<30} {:>}".format(typ, name, capacities[e]))
         names[ve] = "{}###{}".format(name, "in" if u == ve else "out")
 
-    for u,v,k in g.edges:
+    new_g = cc.new_graph
+    for u,v,k in new_g.edges:
         e = (u,v)
         if e in capacities:
-            g.edges[u,v,k]["label"] = capacities[e]
+            new_g.edges[u,v,k]["label"] = capacities[e]
 
-    components(g, names, visualize=False)
-
+    components(new_g, names, visualize=False)
