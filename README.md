@@ -1,10 +1,17 @@
 # Iodine
 
-## Instructions
+## Installation
 
-To build, you need to install
-[stack](https://docs.haskellstack.org/en/stable/README/#how-to-install). When
-installed, just run `./iodine`. For the test suite, run `./t`.
+```sh
+git clone --recursive https://github.com/gokhankici/iodine.git
+cd iodine
+make -C iverilog-parser
+stack build
+```
+
+## Usage
+
+When installed, just run `./iodine`. For the test suite, run `./t`.
 
 ## Command Line Options
 
@@ -37,3 +44,8 @@ Second argument is the name of the root Verilog module in that file.
 ```sh
 ./iodine -- examples/verilog/stall.v stalling_cpu
 ```
+
+### Dependencies
+
+- [stack](https://docs.haskellstack.org/en/stable/README/#how-to-install)
+- [z3 v4.8.1](https://github.com/Z3Prover/z3/releases/tag/z3-4.8.1)
